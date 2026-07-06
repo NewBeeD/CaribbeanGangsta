@@ -1,0 +1,1150 @@
+[
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3311350.3347180",
+    "quality": "primary",
+    "claim": "The defining engagement mechanic of idle games is an appointment/return loop: the game requires players to leave and rewards them for coming back, with the game progressing autonomously in their absence — designers balance rules that push players away against rules that reward return.",
+    "quote": "As our working definition we understand that the core feature of idle games is that they require players to leave the game and return to it at a later, unspecified point, where the game progresses on its own during that time and opens up different options for further play upon return. ... Idle games, in general, feature a balance between rules that encourage players to leave the game and rules that reward them for returning.",
+    "agent": "agent-a01565f0b0fbb3bc0.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3311350.3347180",
+    "quality": "primary",
+    "claim": "Escalating systemic complexity ('paradigm shifts' — new mechanics and interface layers unlocked over time) functions as narrative rising action and is the central device successful idle games use to create momentum and long-horizon retention.",
+    "quote": "The mechanics and interface undergo multiple paradigm-shifts that parallel this expansion of the narrative scope by progressively disclosing more aspects of the system to be manipulated. The ever-mounting complexity of these games helps to create a sense of narrative momentum and rising action—things start small, slow and simple but then become bigger, faster, and more consequential.",
+    "agent": "agent-a01565f0b0fbb3bc0.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3311350.3347180",
+    "quality": "primary",
+    "claim": "Designers themselves identify the core compulsion engine as a variable-reward ('dopamine') loop — a constant but slightly unpredictable reward schedule that drives frequent interaction — and acknowledge it is the same loop as in RPGs, distilled to a bare minimum.",
+    "quote": "[T]here is an absolute basic, the most primitive loop. semi-random reward that is constant, but a bit unpredictable. (...) [A]ll games operate on [a] dopamine mechanic. ... the only difference is that [Cookie Clicker] distilled this to the absolute bare minimum. – bloodrizer",
+    "agent": "agent-a01565f0b0fbb3bc0.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3311350.3347180",
+    "quality": "primary",
+    "claim": "The paper's design guidelines explicitly counter dark-pattern retention: designers should span narrative beats across larger time intervals and build deliberate plateaus that encourage temporary disengagement, because idle-style scheduling 'can be easily used to induce addiction in players and fuel microtransactions.'",
+    "quote": "{early} span narrative beats across larger time intervals for less addictive potential (Theme 4A), {early} design for plateaus that encourage players to disengage from the game temporarily (Theme 4A) ... Designers need to understand how scheduling within these games can be easily used to induce addiction in players and fuel microtransactions.",
+    "agent": "agent-a01565f0b0fbb3bc0.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3311350.3347180",
+    "quality": "primary",
+    "claim": "In idle/systems-driven games, the underlying economy math IS the narrative — narrative beats should be designed before the mathematical parameters, and games are more engaging when no unrecoverable fail state exists (progression is always possible and misallocated resources recover through time).",
+    "quote": "Narrative beats key off of the underlying mathematics, which are more important to storytelling than might be relevant to other genres. ... they profit from not be[ing] designed such that one can move into a bad state (e.g., one from which progression is not possible). Progression is always possible ... if a resource has been allocated sub-optimally, it makes for a more engaging game if it can be available in a needed quantity at a later point.",
+    "agent": "agent-a01565f0b0fbb3bc0.jsonl"
+  },
+  {
+    "source": "https://files01.core.ac.uk/download/pdf/301007767.pdf",
+    "quality": "primary",
+    "claim": "The paper defines a dark game design pattern by three jointly necessary conditions — creator intent, negative player experience against the player's best interests, and absence of player consent — meaning engagement mechanics are not 'dark' per se unless all three hold.",
+    "quote": "Final Definition: A dark game design pattern is a pattern used intentionally by a game creator to cause negative experiences for players which are against their best interests and likely to happen without their consent.",
+    "agent": "agent-a04ec2b440f5873f4.jsonl"
+  },
+  {
+    "source": "https://files01.core.ac.uk/download/pdf/301007767.pdf",
+    "quality": "primary",
+    "claim": "Appointment mechanics ('Playing by Appointment') are classified as a temporal dark pattern specifically when a punishment mechanism (e.g., FarmVille's crop withering) forces players to schedule real life around the game; the same mechanic is judged non-dark when the timed content is optional bonus material (e.g., Pokémon's nocturnal creatures, Animal Crossing's Gracie, WoW's rare spawn Humar) because 'the darkness of this pattern is nullified if completing appointments is not required for progression.'",
+    "quote": "This results in an obligation on the player to play according to the schedules the game offers (while a number of different schedules are available, most crops will wither within 24 hours), rather than their personal desires. In other words, players are forced to orient their realworld activities to meet the obligations of the game, rather than the other way around.",
+    "agent": "agent-a04ec2b440f5873f4.jsonl"
+  },
+  {
+    "source": "https://files01.core.ac.uk/download/pdf/301007767.pdf",
+    "quality": "primary",
+    "claim": "Grinding is identified as a temporal dark pattern that coerces time-spend by substituting time invested for skill, and the paper claims it degrades competitive games: in Call of Duty 4: Modern Warfare, time-gated unlocks 'tipped' a formerly skill-based game toward players with more hours, forcing others to grind.",
+    "quote": "GRINDING, as a dark pattern, is a way of coercing the player into needlessly spending time in a game for the sole purpose of extending the game's duration... What was once purely based on skill is now tipped towards players who have spent more time playing.",
+    "agent": "agent-a04ec2b440f5873f4.jsonl"
+  },
+  {
+    "source": "https://files01.core.ac.uk/download/pdf/301007767.pdf",
+    "quality": "primary",
+    "claim": "The paper argues 'Social Pyramid Schemes' retain players through out-of-game social obligation rather than intrinsic enjoyment, citing the specific claim that FarmVille progress is nearly impossible without at least eight in-game neighbors unless the player spends real money.",
+    "quote": "Without at least eight in-game neighbors, in fact, it is almost impossible to advance in Farmville without spending real money. ... they feel socially obliged to play, and must also start to invite more people to join the game.",
+    "agent": "agent-a04ec2b440f5873f4.jsonl"
+  },
+  {
+    "source": "https://files01.core.ac.uk/download/pdf/301007767.pdf",
+    "quality": "primary",
+    "claim": "Deceiving players is deemed acceptable when it serves the player's own experience (e.g., Eternal Darkness's fake crash messages, rubber-band AI in racing games), and a pattern ceases to be dark once players develop 'manipulation literacy' or the design follows the disclosure principle — i.e., informed consent converts a dark pattern into an ordinary one.",
+    "quote": "Returning to our conception of dark patterns, once players are literate enough to understand the effects of a pattern so that they can give consent (or the games follow the disclosure principle), the pattern is no longer dark.",
+    "agent": "agent-a04ec2b440f5873f4.jsonl"
+  },
+  {
+    "source": "https://files01.core.ac.uk/download/pdf/301007767.pdf",
+    "quality": "primary",
+    "claim": "The paper defines a dark game design pattern by three jointly necessary conditions — creator intentionality, a negative experience against the player's best interests, and lack of player consent — meaning engagement/retention mechanics are not inherently dark unless all three hold.",
+    "quote": "Final Definition: A dark game design pattern is a pattern used intentionally by a game creator to cause negative experiences for players which are against their best interests and likely to happen without their consent.",
+    "agent": "agent-a0b0bf3cca799972f.jsonl"
+  },
+  {
+    "source": "https://files01.core.ac.uk/download/pdf/301007767.pdf",
+    "quality": "primary",
+    "claim": "Appointment mechanics (Playing by Appointment) become a dark pattern only when tied to required progression with punishment for absence (e.g., FarmVille crop withering), and are explicitly NOT dark when the timed content is optional bonus content, as in Pokemon's nocturnal catches or Animal Crossing's visiting characters.",
+    "quote": "The darkness of this pattern is nullified if completing appointments is not required for progression. For example, this gameplay pattern can be seen in some Pokémon games... Most games in which the passage of time in-game is mapped to that in the real-world do so to provide additional options that are perceived as rewards or bonuses.",
+    "agent": "agent-a0b0bf3cca799972f.jsonl"
+  },
+  {
+    "source": "https://files01.core.ac.uk/download/pdf/301007767.pdf",
+    "quality": "primary",
+    "claim": "Grinding functions as a temporal dark pattern when it coerces time expenditure purely to extend play duration, exploiting players' (especially new players') inability to judge the true time commitment and their competitive nature (e.g., WoW PvP level disparities, Call of Duty 4 multiplayer unlocks shifting outcomes from skill to time invested).",
+    "quote": "GRINDING, as a dark pattern, is a way of coercing the player into needlessly spending time in a game for the sole purpose of extending the game's duration... many players – especially young or new ones – may have difficulties judging exactly how much time the game will actually demand.",
+    "agent": "agent-a0b0bf3cca799972f.jsonl"
+  },
+  {
+    "source": "https://files01.core.ac.uk/download/pdf/301007767.pdf",
+    "quality": "primary",
+    "claim": "Deceiving or tricking the player is legitimate design rather than a dark pattern when the subterfuge serves the player's own experience — the paper cites Eternal Darkness's fake crash/save-deletion messages and rubber-band AI in racing games as acceptable deception, which bears directly on games that deliberately hide numbers and stats behind prose.",
+    "quote": "These elements were designed to trick and mislead players, but were incorporated for the players' benefit: in this case to surprise and scare... we argued that the subterfuges were all in the player's best interest: the design goal seems to be one of creating an enjoyable and/or memorable experience for the player.",
+    "agent": "agent-a0b0bf3cca799972f.jsonl"
+  },
+  {
+    "source": "https://files01.core.ac.uk/download/pdf/301007767.pdf",
+    "quality": "primary",
+    "claim": "Transparency neutralizes darkness: once players develop 'manipulation literacy' or the game discloses its persuasive mechanisms, the same mechanic ceases to be a dark pattern — and designer Davidson warns that manipulative retention techniques are a tragedy of the commons that inures the audience ('poisoning the well').",
+    "quote": "once players are literate enough to understand the effects of a pattern so that they can give consent (or the games follow the disclosure principle), the pattern is no longer dark... \"[t]he long-term danger [of employing psychologically manipulative design techniques in games] is that we are poisoning the well\"",
+    "agent": "agent-a0b0bf3cca799972f.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/business/how-first-session-length-impacts-game-performance",
+    "quality": "blog",
+    "claim": "Roughly 20% of players who install a game churn within the first 2 minutes of the first launch, and only about half of first-session players return for a second session — making the opening minutes the single steepest drop-off point in the player funnel.",
+    "quote": "most games will lose 20% of installs within 2 minutes from first launch and the typical return rate for subsequent first session play hovers around 50%.",
+    "agent": "agent-a1056685f4b69337f.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/business/how-first-session-length-impacts-game-performance",
+    "quality": "blog",
+    "claim": "The mean first session length across the analyzed games is 9 minutes, and 90% of games have a median first session under 20 minutes.",
+    "quote": "The mean First Session Time across all games is 9 minutes. ... 90% of games have a median first session length of less than 20 minutes",
+    "agent": "agent-a1056685f4b69337f.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/business/how-first-session-length-impacts-game-performance",
+    "quality": "blog",
+    "claim": "First session length correlates strongly with Day 1 retention: games whose first sessions exceed the 9-minute mean average 31% Day 1 retention, versus only 20% for games with shorter first sessions — an 11-point retention gap tied to roughly 10 minutes of extra first-session engagement.",
+    "quote": "Games that have a longer first session than this average 31% Day 1 Retention. Those with an average First Session Time of less than 9 minutes only manage 20% Day 1 Retention.",
+    "agent": "agent-a1056685f4b69337f.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/business/how-first-session-length-impacts-game-performance",
+    "quality": "blog",
+    "claim": "The author's design recommendation is that a game's typical first session should run 10-20 minutes, and that this window must be frustration-free and leave the player in a state conducive to returning — a quantitative benchmark for the 'first 15 minutes' onboarding hook.",
+    "quote": "it is clear that ensuring the typical first session is between 10-20 minutes is vital to have any chance of F2P success.",
+    "agent": "agent-a1056685f4b69337f.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/business/how-first-session-length-impacts-game-performance",
+    "quality": "blog",
+    "claim": "The findings are based on proprietary deltaDNA analytics (not GameAnalytics, despite the search-result attribution) covering over 5,000 games on the platform, with the core comparison drawn from a sample of 275 comparable games, October 2015 to February 2016 — i.e., F2P mobile data, whose transferability to a slow-paced single-player narrative economic sim is an open question.",
+    "quote": "With over 5,000 games in our deltaDNA platform ... a sample of 275 comparable games",
+    "agent": "agent-a1056685f4b69337f.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/design/gdc-2012-10-tutorial-tips-from-i-plants-vs-zombies-i-creator-george-fan",
+    "quality": "secondary",
+    "claim": "George Fan argues that effective onboarding should make the tutorial invisible by blending instruction into normal gameplay, rather than presenting a separate instructional section — Plants vs. Zombies was designed so the tutorial does not feel like a tutorial.",
+    "quote": "We strive to make it not feel like a tutorial at all.",
+    "agent": "agent-a15d0b8a65c7a60c4.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/design/gdc-2012-10-tutorial-tips-from-i-plants-vs-zombies-i-creator-george-fan",
+    "quality": "secondary",
+    "claim": "Fan claims players learn best by performing actions in-game rather than reading instructions, and that a single demonstration of an action's result is usually sufficient for a player to understand a mechanic.",
+    "quote": "The best way for a player to learn is to actually perform actions in the game... Once they see the results of their action, that's often all it takes for them to understand.",
+    "agent": "agent-a15d0b8a65c7a60c4.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/design/gdc-2012-10-tutorial-tips-from-i-plants-vs-zombies-i-creator-george-fan",
+    "quality": "secondary",
+    "claim": "Plants vs. Zombies deliberately spread mechanic introduction across many levels to avoid overwhelming new players — PopCap delayed introducing even the core currency (sun/money) mechanic until around level 10.",
+    "quote": "quite conservative…we introduced peripheral mechanics very slowly",
+    "agent": "agent-a15d0b8a65c7a60c4.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/design/gdc-2012-10-tutorial-tips-from-i-plants-vs-zombies-i-creator-george-fan",
+    "quality": "secondary",
+    "claim": "Fan prescribes a strict limit on tutorial text to keep early-session cognitive load low: no more than eight words on screen at any given moment, delivered in an 'eloquent caveman' style, because excess messaging causes players to tune out.",
+    "quote": "a maximum of eight words on the screen at any given moment",
+    "agent": "agent-a15d0b8a65c7a60c4.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/design/gdc-2012-10-tutorial-tips-from-i-plants-vs-zombies-i-creator-george-fan",
+    "quality": "secondary",
+    "claim": "Fan advocates teaching through visual design and prior real-world knowledge instead of explicit instruction — e.g., Peashooters have prominent mouths signaling they shoot projectiles, and rooted plants/slow zombies match player expectations from existing knowledge.",
+    "quote": "Character design should visually represent function—Peashooters have prominent mouths for projectiles.",
+    "agent": "agent-a15d0b8a65c7a60c4.jsonl"
+  },
+  {
+    "source": "https://gdcvault.com/play/1019769/The-Sticky-Science-of-New",
+    "quality": "primary",
+    "claim": "More than 70% of free-to-play game players churn within the first few minutes of play, making the new user experience the single largest leak in the retention funnel.",
+    "quote": "Game designers spend a tremendous amount of development time crafting deep gameplay and spectacular visuals; however, more than 70% of players of free-to-play games never make it past the first few minutes.",
+    "agent": "agent-a15e701751696ec64.jsonl"
+  },
+  {
+    "source": "https://gdcvault.com/play/1019769/The-Sticky-Science-of-New",
+    "quality": "primary",
+    "claim": "Deliberately designed new-user-experience (onboarding) practices measurably increase both retention and monetization, i.e., onboarding is a tunable funnel stage rather than a fixed property of the game.",
+    "quote": "best practices towards building an engaging new user experience that increases the retention (and monetization) funnel",
+    "agent": "agent-a15e701751696ec64.jsonl"
+  },
+  {
+    "source": "https://gdcvault.com/play/1019769/The-Sticky-Science-of-New",
+    "quality": "primary",
+    "claim": "KIXEYE's onboarding recommendations are grounded in multi-year mixed-methods user research (both qualitative playtesting and quantitative telemetry), not just designer intuition.",
+    "quote": "years of qualitative and quantitative user testing research",
+    "agent": "agent-a15e701751696ec64.jsonl"
+  },
+  {
+    "source": "https://gdcvault.com/play/1019769/The-Sticky-Science-of-New",
+    "quality": "primary",
+    "claim": "Effective first-session design targets four specific experiential qualities — flow, fun, immersion, and playability — as the levers for hooking new players.",
+    "quote": "flow, fun, immersion and playability",
+    "agent": "agent-a15e701751696ec64.jsonl"
+  },
+  {
+    "source": "https://selfdeterminationtheory.org/SDT/documents/2010_PrzybylskiRigbyRyan_ROGP.pdf",
+    "quality": "primary",
+    "claim": "The appeal and well-being effects of video games derive from their capacity to satisfy the three basic psychological needs of self-determination theory — competence, autonomy, and relatedness — and this need-satisfaction model predicts sustained engagement over time.",
+    "quote": "Rooted in self-determination theory (Deci & Ryan, 2000; Ryan & Deci, 2000a), our approach suggests that both the appeal and well-being effects of video games are based in their potential to satisfy basic psychological needs for competence, autonomy, and relatedness... We suggest that the SDT model of need satisfaction predicts sustained engagement over time, as well as the short-term effects of game activities on players' well-being.",
+    "agent": "agent-a1d2f666e768b4866.jsonl"
+  },
+  {
+    "source": "https://selfdeterminationtheory.org/SDT/documents/2010_PrzybylskiRigbyRyan_ROGP.pdf",
+    "quality": "primary",
+    "claim": "In Ryan, Rigby & Przybylski's (2006) study of online game players, competence, autonomy, and relatedness need satisfaction each made independent contributions to game enjoyment, immersion, and players' intention to keep playing in the future.",
+    "quote": "Results demonstrated that all three needs made independent contributions to game enjoyment, immersion, and estimations of future engagement. Furthermore, although relatedness need satisfaction was correlated with positive well-being outcomes, only autonomy and competence need satisfaction derived from play accounted for unique incremental variance in player affect following play.",
+    "agent": "agent-a1d2f666e768b4866.jsonl"
+  },
+  {
+    "source": "https://selfdeterminationtheory.org/SDT/documents/2010_PrzybylskiRigbyRyan_ROGP.pdf",
+    "quality": "primary",
+    "claim": "Intuitive mastery of a game's controls/interface is a necessary-but-not-sufficient gate for engagement: players must feel intuitive command of basic mechanics before need satisfaction, enjoyment, and well-being benefits can occur, and failure to master controls (e.g., overly complex interfaces, no practice time) increases post-play aggression by frustrating competence.",
+    "quote": "Our main prediction was that mastery of controls constituted a necessary but not sufficient condition for video game engagement to satisfy psychological needs, be enjoyable, and bare positively on well-being. Results supported this... it was an inability to master the game controls instead of [violent content that drove aggression]",
+    "agent": "agent-a1d2f666e768b4866.jsonl"
+  },
+  {
+    "source": "https://selfdeterminationtheory.org/SDT/documents/2010_PrzybylskiRigbyRyan_ROGP.pdf",
+    "quality": "primary",
+    "claim": "Violent content is not, on average, a significant motivator of play once need satisfaction is accounted for — autonomy and competence satisfaction, not violence level, predict enjoyment, immersion, and preference for future play across genres and demographics.",
+    "quote": "Unlike basic need satisfaction, results suggested that violent game content is not, on average, a significant motivator of play... autonomy and competence need satisfaction derived from play accounted for increased levels of game enjoyment, immersion, and preference for future play.",
+    "agent": "agent-a1d2f666e768b4866.jsonl"
+  },
+  {
+    "source": "https://selfdeterminationtheory.org/SDT/documents/2010_PrzybylskiRigbyRyan_ROGP.pdf",
+    "quality": "primary",
+    "claim": "Players whose basic psychological needs are unmet in everyday life develop an 'obsessive passion' for games — a compulsive engagement pattern marked by MORE total play time but LESS enjoyment and worse post-play mood — whereas need-satisfied players show harmonious, volitional engagement; this distinguishes healthy compulsion from dark-pattern-exploitable compulsion.",
+    "quote": "low levels of need satisfaction predicted obsessive passion for play, which in turn was associated with a disordered pattern: less game enjoyment, negative postplay mood, and yet a higher overall amount of engagement.",
+    "agent": "agent-a1d2f666e768b4866.jsonl"
+  },
+  {
+    "source": "https://www.academia.edu/90071060/Designing_for_compatible_narrative_with_incremental_game_mechanics",
+    "quality": "primary",
+    "claim": "Incremental game mechanics can carry a full, imagery-rich narrative: the thesis built a prototype incremental game around a 'mechanic-driven narrative framework' and its playtest results showed the incremental main loop successfully actualized storytelling, directly supporting the feasibility of pairing idle/incremental engagement loops with narrative-heavy design.",
+    "quote": "Results demonstrate that not only a story but a good story that rich in imagery can be actualized by applying this narrative framework.",
+    "agent": "agent-a2990a3f6ae1057c4.jsonl"
+  },
+  {
+    "source": "https://www.academia.edu/90071060/Designing_for_compatible_narrative_with_incremental_game_mechanics",
+    "quality": "primary",
+    "claim": "Incremental games are structurally defined by a progression from active input to near-zero interaction — players click to accumulate currency early on, and the game increasingly plays itself — which is the core engagement pattern any narrative layered on the genre must be compatible with.",
+    "quote": "An incremental game is a subgenre under the nascent game genre of idle games. In such a game, players repeatedly click to accumulate currency, and it eventually requires less and even no interaction as the game progresses.",
+    "agent": "agent-a2990a3f6ae1057c4.jsonl"
+  },
+  {
+    "source": "https://www.academia.edu/90071060/Designing_for_compatible_narrative_with_incremental_game_mechanics",
+    "quality": "primary",
+    "claim": "Empirical playtest feedback on the prototype indicated that narrative delivered through incremental mechanics produced a highly engaging storied experience, i.e., story integration did not undermine (and plausibly enhanced) the genre's engagement pull.",
+    "quote": "The researcher found the present design to be efficacious in storytelling, with players' feedback suggesting a highly engaging storied experience.",
+    "agent": "agent-a2990a3f6ae1057c4.jsonl"
+  },
+  {
+    "source": "https://www.academia.edu/90071060/Designing_for_compatible_narrative_with_incremental_game_mechanics",
+    "quality": "primary",
+    "claim": "As of 2021 there was a research gap: no formal study had examined how narrative design integrates with incremental game mechanics, and this thesis proposes the mechanic-driven narrative framework specifically to fill it — meaning designers of narrative idle/economic sims were working without validated guidance before this work.",
+    "quote": "A formal study on how narrative design can be integrated with incremental game mechanics had not been conducted at the time of this thesis... The thesis proposes a mechanic-driven narrative framework and iteratively develops an incremental game based on that framework and player feedback, testing the complexity of story information the design is able to carry out and assessing the quality of the game narrative.",
+    "agent": "agent-a2990a3f6ae1057c4.jsonl"
+  },
+  {
+    "source": "https://www.academia.edu/90071060/Designing_for_compatible_narrative_with_incremental_game_mechanics",
+    "quality": "primary",
+    "claim": "Player comprehension of the game's narrative was affected by thematic preference: the study examined how the science-fiction theme influenced how well players understood the story, finding theme preference shapes narrative understanding — relevant to choosing setting/tone for a prose-driven sim.",
+    "quote": "The researcher developed a game prototype based on player feedback, tested its narrative capacity, and examined how science fiction themes influence player comprehension. Findings indicate the framework successfully supports rich, engaging storytelling and that player theme preferences affect narrative understanding.",
+    "agent": "agent-a2990a3f6ae1057c4.jsonl"
+  },
+  {
+    "source": "https://medium.com/ironsource-levelup/the-princess-is-in-another-castle-understanding-the-player-goals-9ea6bea36dcd",
+    "quality": "blog",
+    "claim": "Medium-term goals (the 'metagame') are the most important tier of a game's goal hierarchy for retention: they bridge moment-to-moment gameplay and long-term aspirations, and pursuing them occupies most of a player's time.",
+    "quote": "the medium term goals arguably have the biggest importance... they form the backbone of the retention structure and the pursuit of medium term goals will occupy the bulk of the player's time.",
+    "agent": "agent-a2ead749edffb400b.jsonl"
+  },
+  {
+    "source": "https://medium.com/ironsource-levelup/the-princess-is-in-another-castle-understanding-the-player-goals-9ea6bea36dcd",
+    "quality": "blog",
+    "claim": "Optimizing a game for player retention consists of structuring the player's time by shaping their aspirations across layered goal horizons, rather than any single mechanic.",
+    "quote": "Essentially when we are optimizing a game for player retention, what we are doing is actually structuring the player's time, by influencing his aspirations.",
+    "agent": "agent-a2ead749edffb400b.jsonl"
+  },
+  {
+    "source": "https://medium.com/ironsource-levelup/the-princess-is-in-another-castle-understanding-the-player-goals-9ea6bea36dcd",
+    "quality": "blog",
+    "claim": "Games typically reveal goals to new players in a specific non-chronological order: the long-term aspirational goal first (to establish context), then short-term goals during the tutorial, and medium-term goals only after the player has acquired rudimentary skill — a concrete onboarding/first-session pattern.",
+    "quote": "Typically, the player is presented with an aspirational goal, the ultimate prize, the longest term goal that game has to offer... Next, the player is presented with the short term goal... Finally and only after the player has established at least the rudimentary level of skill, medium term goals are gradually revealed.",
+    "agent": "agent-a2ead749edffb400b.jsonl"
+  },
+  {
+    "source": "https://medium.com/ironsource-levelup/the-princess-is-in-another-castle-understanding-the-player-goals-9ea6bea36dcd",
+    "quality": "blog",
+    "claim": "Only about 10% of players ever finish AAA games on average, implying long-term goals function as aspirational framing rather than content most players actually complete.",
+    "quote": "according to some estimates, even in the world of AAA games, on the average only about 10% of players ever reach the end of a game.",
+    "agent": "agent-a2ead749edffb400b.jsonl"
+  },
+  {
+    "source": "https://medium.com/ironsource-levelup/the-princess-is-in-another-castle-understanding-the-player-goals-9ea6bea36dcd",
+    "quality": "blog",
+    "claim": "Short-term goals are defined as the moment-to-moment or minute-to-minute interaction layer (core mechanics), distinct from the metagame layer — a taxonomy usable for layering goals in a slow-paced narrative life-sim.",
+    "quote": "Short term goals are what is usually referred to as moment to moment, or minute to minute interaction.",
+    "agent": "agent-a2ead749edffb400b.jsonl"
+  },
+  {
+    "source": "https://www.gdcvault.com/play/1024232/-RimWorld-Contrarian-Ridiculous-and",
+    "quality": "primary",
+    "claim": "RimWorld's designer Tynan Sylvester frames the game 'not as a game, but as a story generator,' and claims this framing opened up new mechanisms for creating compelling play — a design stance directly relevant to engagement in narrative-driven simulations.",
+    "quote": "Defining the game \"not as a game, but as a story generator\" to \"open up entirely new mechanisms for creating compelling play\"",
+    "agent": "agent-a31dbad666bbe8669.jsonl"
+  },
+  {
+    "source": "https://www.gdcvault.com/play/1024232/-RimWorld-Contrarian-Ridiculous-and",
+    "quality": "primary",
+    "claim": "Sylvester claims that strategically omitting features caused players to imaginatively engage with content and story elements that do not actually exist in the game — leveraging player imagination (apophenia) as an engagement mechanism.",
+    "quote": "By strategically leaving out features, they made players engage with features and story elements that aren't actually there",
+    "agent": "agent-a31dbad666bbe8669.jsonl"
+  },
+  {
+    "source": "https://www.gdcvault.com/play/1024232/-RimWorld-Contrarian-Ridiculous-and",
+    "quality": "primary",
+    "claim": "RimWorld shipped commercially successfully despite lacking many features that seemed critical, because the team used a methodology for selecting only features that materially affect the player experience — evidence that engagement depends on a small subset of high-impact features rather than feature completeness.",
+    "quote": "Shipping \"with many seemingly-critical features missing, but nobody cared, because they used a special methodology for selecting features that actually matter\"",
+    "agent": "agent-a31dbad666bbe8669.jsonl"
+  },
+  {
+    "source": "https://www.gdcvault.com/play/1024232/-RimWorld-Contrarian-Ridiculous-and",
+    "quality": "primary",
+    "claim": "RimWorld launched on Steam in summer 2016 and achieved notable commercial success as a small-team title in the colony-sim genre, which the talk characterizes as a genre with a high failure rate.",
+    "quote": "'RimWorld' hit Steam in summer 2016 with remarkable success, despite being developed by a tiny team and entering a genre littered with failures.",
+    "agent": "agent-a31dbad666bbe8669.jsonl"
+  },
+  {
+    "source": "https://www.gdcvault.com/play/1024232/-RimWorld-Contrarian-Ridiculous-and",
+    "quality": "primary",
+    "claim": "Sylvester advocates an anti-planning development philosophy, claiming the team made better design decisions by deliberately not planning despite external pressure to plan.",
+    "quote": "Making \"better decisions by not planning despite everyone wanting them to plan\"",
+    "agent": "agent-a31dbad666bbe8669.jsonl"
+  },
+  {
+    "source": "https://www.tandfonline.com/doi/full/10.1080/0144929X.2021.1928753",
+    "quality": "primary",
+    "claim": "In-game need frustration (thwarting of autonomy, competence, relatedness during play) is a psychometrically distinct construct from in-game need satisfaction, not merely its absence — meaning a game can simultaneously satisfy and frustrate players' basic psychological needs.",
+    "quote": "Path analyses showed that in-game need frustration is a distinct construct, predicting negative outcomes uniquely and more strongly than in-game need satisfaction",
+    "agent": "agent-a39c2af2fb91713dd.jsonl"
+  },
+  {
+    "source": "https://www.tandfonline.com/doi/full/10.1080/0144929X.2021.1928753",
+    "quality": "primary",
+    "claim": "In-game need satisfaction is a stronger predictor of positive player-experience outcomes — satisfaction, concentration (flow-like engagement), subjective vitality, and voice — than need frustration is, supporting self-determination theory's account of why need-satisfying design drives engagement.",
+    "quote": "in-game need satisfaction was more strongly associated with positive outcomes",
+    "agent": "agent-a39c2af2fb91713dd.jsonl"
+  },
+  {
+    "source": "https://www.tandfonline.com/doi/full/10.1080/0144929X.2021.1928753",
+    "quality": "primary",
+    "claim": "In-game need frustration predicts negative outcomes — problematic gaming, escapist motivations, real-life stress, and intentions to quit the game — more strongly than low need satisfaction does, implying compulsive 'problematic' play is driven by frustration mechanisms rather than the same mechanisms that produce healthy engagement.",
+    "quote": "it examines whether in-game need frustration is a stronger predictor for negative outcomes such as problematic gaming, escapist motivations, real-life stress and exit intentions",
+    "agent": "agent-a39c2af2fb91713dd.jsonl"
+  },
+  {
+    "source": "https://www.tandfonline.com/doi/full/10.1080/0144929X.2021.1928753",
+    "quality": "primary",
+    "claim": "The study's evidence base is a cross-sectional survey of online video gamers recruited via Amazon MTurk, analyzed with path analysis — so its claims are correlational, not causal.",
+    "quote": "We collected survey data from online video gamers. Path analyses showed that in-game need frustration is a distinct construct",
+    "agent": "agent-a39c2af2fb91713dd.jsonl"
+  },
+  {
+    "source": "https://www.tandfonline.com/doi/full/10.1080/0144929X.2021.1928753",
+    "quality": "primary",
+    "claim": "The authors conclude that gaming research (and by extension design evaluation) should measure need frustration and need satisfaction as separate dimensions rather than a single satisfaction scale.",
+    "quote": "The findings suggest that assessing both need satisfaction and frustration in gaming research could prove valuable.",
+    "agent": "agent-a39c2af2fb91713dd.jsonl"
+  },
+  {
+    "source": "https://www.gdcvault.com/play/1023231/The-Gamer-s-Brain-Part",
+    "quality": "primary",
+    "claim": "First-minutes onboarding is a gating factor for retention: if a game fails to captivate the player's attention quickly, downstream retention mechanics never get the chance to operate at all.",
+    "quote": "If the developers fail to captivate their audience's attention quickly, there won't even be any retention challenges to care about.",
+    "agent": "agent-a3f69253d5974b259.jsonl"
+  },
+  {
+    "source": "https://www.gdcvault.com/play/1023231/The-Gamer-s-Brain-Part",
+    "quality": "primary",
+    "claim": "Engaging players within the first minutes of play became a critical development priority specifically because of the rise of free-to-play games (where players have no sunk purchase cost keeping them in).",
+    "quote": "Engaging your audience within the first minutes of play is a delicate endeavor, and has become a critical aspect of development in the era of free-to-play games.",
+    "agent": "agent-a3f69253d5974b259.jsonl"
+  },
+  {
+    "source": "https://www.gdcvault.com/play/1023231/The-Gamer-s-Brain-Part",
+    "quality": "primary",
+    "claim": "Hodent's prescribed approach to onboarding design is to avoid a set of common, identifiable onboarding pitfalls and to ground tutorial/first-session design in UX guidelines derived from cognitive science of how the brain learns, rather than ad-hoc tutorial conventions.",
+    "quote": "This talk will cover the common onboarding pitfalls, provide guidelines from User Experience (UX), and discuss best-practices by using knowledge of how the brain learns.",
+    "agent": "agent-a3f69253d5974b259.jsonl"
+  },
+  {
+    "source": "https://www.gdcvault.com/play/1023231/The-Gamer-s-Brain-Part",
+    "quality": "primary",
+    "claim": "The talk is delivered by a practitioner with direct industry authority on the topic: Celia Hodent, then at Epic Games, presenting in the Design track at GDC 2016.",
+    "quote": "Speaker: Celia Hodent; Company: Epic Games; Event: GDC 2016; Track: Design",
+    "agent": "agent-a3f69253d5974b259.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3173574.3174195",
+    "quality": "primary",
+    "claim": "Idle games sustain engagement through a deliberate push-pull structure: rule systems that encourage players to leave the game combined with rules that reward returning, with escalating action costs making idling itself generate future options (a session-end hook and return incentive applicable to slow-paced sims).",
+    "quote": "Idle games, in general, feature a balance between rules that encourage players to leave the game and rules that reward them for returning. ... Typically, every activity in the game costs resources; these resources take time to accumulate but can be spent quickly, in just a few clicks. The costs of actions also increase with each interaction. ... Conversely, the longer players go without interacting with the game, the more options they have when they return.",
+    "agent": "agent-a4bceee052a894460.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3173574.3174195",
+    "quality": "primary",
+    "claim": "Idle games retain players without dark-pattern appointment pressure: absence from the game forgoes gains but never risks existing progress, in explicit contrast to social games like FarmVille where waiting is a penalty and players 'must check in at specified intervals or lose progress'.",
+    "quote": "A player who idles for too long may forgo opportunities to acquire new resources, but typically does not place their existing successes at risk. ... unlike idle games, social games do carry a penalty for players to wait too long: players must check in at specified intervals or lose progress.",
+    "agent": "agent-a4bceee052a894460.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3173574.3174195",
+    "quality": "primary",
+    "claim": "Prestige/New Game+ meta-progression is a defining retention mechanic of the genre: players voluntarily erase all current progress in exchange for bonuses that make each subsequent playthrough faster and richer, and games also grant performance-affecting returning bonuses for consecutive-day play.",
+    "quote": "NG+ mechanics let the player reset progress in the game, erasing all current resources and accomplishments in exchange for bonuses in a future playthrough. The more resets, the faster and richer future games become (e.g., [G16]). Players are also rewarded returning bonuses [39] when they return to the game for consecutive days",
+    "agent": "agent-a4bceee052a894460.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3173574.3174195",
+    "quality": "primary",
+    "claim": "Time-limited random events (e.g., Cookie Clicker's golden cookies) that offer bonus-only rewards within a few-second window function as re-engagement triggers that pull players back to the game while signaling attention is welcome but not required — a non-punitive variable-reward pattern.",
+    "quote": "Once an event takes place, the player has a short window (a few seconds) to click and get a special reward. These events can be useful for players to speed progression in the game and keep them coming back to the game. In idle games, these events provide bonuses but do not introduce penalties.",
+    "agent": "agent-a4bceee052a894460.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3173574.3174195",
+    "quality": "primary",
+    "claim": "Based on a grounded-theory analysis of 66 idle games (plus 10 non-idle comparators), the paper argues engagement shifts from tactics to planning as players progress: expert players interact less but invest more strategic attention, and gradual unlocking of interface features onboards players into deep systems while keeping decisions clear.",
+    "quote": "Expert players paradoxically engage in fewer direct interactions with gameplay than novice players because they spend more time waiting. ... the interface of these games gradually unfolds features to the player, allowing players to make clear decisions. Even though these features are gradually unfolded over time, the game keeps the player informed of what the next upgrades are and how to get them.",
+    "agent": "agent-a4bceee052a894460.jsonl"
+  },
+  {
+    "source": "https://www.frontiersin.org/journals/virtual-reality/articles/10.3389/frvir.2022.847120/full",
+    "quality": "primary",
+    "claim": "In a qualitative study of 77 undergraduates playing the educational interactive narrative game Academical, autonomy (choice and control) was the most frequently cited reason for enjoyment, appearing in 30% of 'most enjoyed' responses — supporting the claim that meaningful choice is the leading driver of enjoyment in narrative games.",
+    "quote": "autonomy was the most-cited reason that participants used to explain why they felt Academical was enjoyable to play (30% of responses)",
+    "agent": "agent-a51fadd4f4b045399.jsonl"
+  },
+  {
+    "source": "https://www.frontiersin.org/journals/virtual-reality/articles/10.3389/frvir.2022.847120/full",
+    "quality": "primary",
+    "claim": "Competence factors were the most common source of frustration (35% of 'least enjoyed' responses), driven by poorly scaled difficulty, confusing feedback, and unclear goals — indicating that mishandled challenge/feedback undermines engagement more than any other SDT need in narrative games.",
+    "quote": "How confusing it was to understand the way to reach the ideal endings for the second character of each chapter.",
+    "agent": "agent-a51fadd4f4b045399.jsonl"
+  },
+  {
+    "source": "https://www.frontiersin.org/journals/virtual-reality/articles/10.3389/frvir.2022.847120/full",
+    "quality": "primary",
+    "claim": "A single-player narrative game can satisfy the SDT relatedness need through connection with fictional characters, primarily via perspective-taking — nearly all relatedness-based enjoyment came from taking characters' perspectives, with no participants disliking perspective-taking itself.",
+    "quote": "it is possible for a single-player game (particularly one with a strong narrative and developed characters) to support enjoyment and/or engagement via each of the ARC factors described by SDT, including relatedness.",
+    "agent": "agent-a51fadd4f4b045399.jsonl"
+  },
+  {
+    "source": "https://www.frontiersin.org/journals/virtual-reality/articles/10.3389/frvir.2022.847120/full",
+    "quality": "primary",
+    "claim": "The authors hypothesize that role-playing as fictional characters is intrinsically motivating via the relatedness pathway, though they explicitly flag this extension of SDT as requiring further confirmation.",
+    "quote": "the act of role-playing and connecting with fictional characters is intrinsically motivating (i.e., via relatedness).",
+    "agent": "agent-a51fadd4f4b045399.jsonl"
+  },
+  {
+    "source": "https://www.frontiersin.org/journals/virtual-reality/articles/10.3389/frvir.2022.847120/full",
+    "quality": "primary",
+    "claim": "Forcing players to replay from the beginning after failure was perceived as excessive punishment that impeded both autonomy and competence satisfaction, leading the authors to recommend save states/checkpoints — a concrete, testable design prescription for reducing failure friction in narrative games.",
+    "quote": "The requirement to replay from the beginning after failure was perceived as \"too large a punishment\" and impeded both autonomy and competence satisfaction.",
+    "agent": "agent-a51fadd4f4b045399.jsonl"
+  },
+  {
+    "source": "https://www.researchgate.net/publication/225998888_The_Motivational_Pull_of_Video_Games_A_Self-Determination_Theory_Approach",
+    "quality": "primary",
+    "claim": "Across three experimental studies (players playing 1, 2, and 4 games), perceived in-game autonomy and competence were associated with game enjoyment, game preferences, and pre-to-post-play changes in well-being — establishing need satisfaction as a measurable predictor of what makes games compelling.",
+    "quote": "Studies 1–3 examine individuals playing 1, 2 and 4 games, respectively and show that perceived in-game autonomy and competence are associated with game enjoyment, preferences, and changes in well-being pre- to post-play.",
+    "agent": "agent-a521150f20b497a00.jsonl"
+  },
+  {
+    "source": "https://www.researchgate.net/publication/225998888_The_Motivational_Pull_of_Video_Games_A_Self-Determination_Theory_Approach",
+    "quality": "primary",
+    "claim": "In a survey of an online multiplayer community (Study 4), SDT's three needs — autonomy, competence, and relatedness — each independently predicted enjoyment and intention for future play, meaning each need contributes separately to retention-relevant motivation.",
+    "quote": "Study 4 surveys an on-line community with experience in multi-player games. Results show that SDT's theorized needs for autonomy, competence, and relatedness independently predict enjoyment and future game play.",
+    "agent": "agent-a521150f20b497a00.jsonl"
+  },
+  {
+    "source": "https://www.researchgate.net/publication/225998888_The_Motivational_Pull_of_Video_Games_A_Self-Determination_Theory_Approach",
+    "quality": "primary",
+    "claim": "Intuitive controls strongly predicted preference for continued play (beta = .57) and enjoyment (beta = .64), but this effect was fully mediated by in-game autonomy and competence: once those needs were entered into the regression, the control-to-outcome relationship dropped to non-significance — controls matter as the 'price of admission' that enables need satisfaction, not as a hook in themselves.",
+    "quote": "In step 3 when autonomy and competence (both significantly associated with outcomes) were entered into the predictive model, the relations between outcomes and intuitive controls was reduced to non-significance.",
+    "agent": "agent-a521150f20b497a00.jsonl"
+  },
+  {
+    "source": "https://www.researchgate.net/publication/225998888_The_Motivational_Pull_of_Video_Games_A_Self-Determination_Theory_Approach",
+    "quality": "primary",
+    "claim": "Competence was the strongest single driver of behavioral persistence and well-being gains: only competence (not autonomy) predicted whether players freely chose to continue with the assigned game rather than switch, and competence-satisfied players showed increased state self-esteem and mood after a 20-minute session.",
+    "quote": "only competence predicted whether people chose to continue with the target versus alternate game. Finally, although on average participants had neither increased nor decreased well-being after exposure to play, those who experienced competence showed higher state self-esteem and more positive mood pre- to post-play.",
+    "agent": "agent-a521150f20b497a00.jsonl"
+  },
+  {
+    "source": "https://www.researchgate.net/publication/225998888_The_Motivational_Pull_of_Video_Games_A_Self-Determination_Theory_Approach",
+    "quality": "primary",
+    "claim": "The paper specifies concrete design levers for autonomy: flexibility over movement and strategies, choice over tasks and goals, and rewards structured as informational feedback rather than as behavioral control — a directly applicable prescription for a choice-rich narrative life-sim that avoids controlling reward schedules.",
+    "quote": "we expect autonomy to be enhanced by game designs that provide considerable flexibility over movement and strategies, choice over tasks and goals, and those where rewards are structured so as to provide feedback rather than to control the player's behavior.",
+    "agent": "agent-a521150f20b497a00.jsonl"
+  },
+  {
+    "source": "https://medium.com/ironsource-levelup/the-princess-is-in-another-castle-understanding-the-player-goals-9ea6bea36dcd",
+    "quality": "blog",
+    "claim": "Medium-term goals (the metagame) are the most important tier for player retention, forming the backbone of the retention structure and occupying most of the player's time.",
+    "quote": "From the retention point of view, the medium term goals arguably have the biggest importance. ... In a way, they form the backbone of the retention structure and the pursuit of medium term goals will occupy the bulk of the player's time. This is what is usually referred to as the metagame.",
+    "agent": "agent-a536e1ca877ef699b.jsonl"
+  },
+  {
+    "source": "https://medium.com/ironsource-levelup/the-princess-is-in-another-castle-understanding-the-player-goals-9ea6bea36dcd",
+    "quality": "blog",
+    "claim": "Games should present goals in a specific onboarding sequence: the aspirational long-term goal first (to establish context), then short-term goals during the tutorial, and medium-term goals only after the player has developed rudimentary skill.",
+    "quote": "Typically, the player is presented with an aspirational goal, the ultimate prize, the longest term goal that game has to offer. ... Next, the player is presented with the short term goal. ... Finally and only after the player has established at least the rudimentary level of skill, medium term goals are gradually revealed.",
+    "agent": "agent-a536e1ca877ef699b.jsonl"
+  },
+  {
+    "source": "https://medium.com/ironsource-levelup/the-princess-is-in-another-castle-understanding-the-player-goals-9ea6bea36dcd",
+    "quality": "blog",
+    "claim": "Optimizing a game for retention is fundamentally an exercise in structuring the player's time by shaping their aspirations across layered goal horizons.",
+    "quote": "Essentially when we are optimizing a game for player retention, what we are doing is actually structuring the player's time, by influencing his aspirations.",
+    "agent": "agent-a536e1ca877ef699b.jsonl"
+  },
+  {
+    "source": "https://medium.com/ironsource-levelup/the-princess-is-in-another-castle-understanding-the-player-goals-9ea6bea36dcd",
+    "quality": "blog",
+    "claim": "Only about 10% of players ever finish AAA games on average, implying long-term/aspirational goals are not what actually retains most players and are not guaranteed to be reached.",
+    "quote": "Indeed, according to some estimates, even in the world of AAA games, on the average only about 10% of players ever reach the end of a game.",
+    "agent": "agent-a536e1ca877ef699b.jsonl"
+  },
+  {
+    "source": "https://medium.com/ironsource-levelup/the-princess-is-in-another-castle-understanding-the-player-goals-9ea6bea36dcd",
+    "quality": "blog",
+    "claim": "Player goals can be usefully taxonomized into three tiers by time investment: short-term goals are the moment-to-moment core gameplay, medium-term goals are the metagame, and long-term goals are aspirational.",
+    "quote": "Short-term goals - \"moment to moment, or minute to minute interaction\" constituting core gameplay; medium-term goals form \"the backbone of the retention structure\"; long-term goals are \"aspirational goals\" which players are \"by no means guaranteed to reach.\"",
+    "agent": "agent-a536e1ca877ef699b.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/fullHtml/10.1145/3491101.3519837",
+    "quality": "primary",
+    "claim": "Mobile game players, even when unfamiliar with the term 'dark patterns', readily identify a specific set of engagement/retention mechanics as manipulative: pay-to-win, appointment mechanics, daily rewards, artificial deficit, sunk-cost/invested-value loops, gacha, and loot boxes.",
+    "quote": "Asked about dark patterns, many players expressed a lack of familiarity with the term, although were able to easily identify mechanics meeting the definition encountered during game play. The patterns most often identified and discussed by participants included Pay to Win mechanics, Playing by Appointment, Daily Rewards, Artificial Deficit, Invested Value (Sunk Cost Fallacy), Gacha mechanics, and Loot Boxes.",
+    "agent": "agent-a617fc63e761224a1.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/fullHtml/10.1145/3491101.3519837",
+    "quality": "primary",
+    "claim": "Whether an engagement mechanic is harmful is not binary but depends on tuning and combination with other mechanics — the same pattern (e.g., appointment play or daily rewards) can support positive experiences or become exploitative depending on pricing and timing parameters.",
+    "quote": "participants also commented that not all patterns were equally 'dark,' and some only so when implemented in combination with other mechanics, otherwise supporting positive and fun experiences; \"there's not a moment when like this is good and this is bad. The small tricks you make, and the small economy changes you make to the prices and to the timing, etc. [define] how exploitative or harmful these things are\" (DS3).",
+    "agent": "agent-a617fc63e761224a1.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/fullHtml/10.1145/3491101.3519837",
+    "quality": "primary",
+    "claim": "Industry practitioners distinguish healthy from unhealthy engagement by felt emotion: 'interested' is treated as the marker of healthy engagement, while some negative emotions like frustration are deliberately designed in to drive further player investment.",
+    "quote": "Participants highlighted 'interested' as a felt experience \"very unique and hard to achieve,\" (DS3) and therefore an indicator of healthy engagement... whereas other negative feelings, such as 'frustrated,' could often be intentionally elicited to drive further investment from players.",
+    "agent": "agent-a617fc63e761224a1.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/fullHtml/10.1145/3491101.3519837",
+    "quality": "primary",
+    "claim": "Continuous-progress reward structures such as the battle pass are perceived by designers as enhancing rather than degrading the experience because they deliver a constant sense of earning — evidence that endowed-progress/reward layering can be framed as healthy engagement.",
+    "quote": "Several participants commented that monetization elements could even enhance the game experience, or add new aspects to a game, as in the case of the 'battle pass' model which allows players to pay money to gain more rewards while playing, providing \"constantly a feeling of earning something\" (DS2).",
+    "agent": "agent-a617fc63e761224a1.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/fullHtml/10.1145/3491101.3519837",
+    "quality": "primary",
+    "claim": "Across all four stakeholder workshops, gambling-style mechanics (loot boxes) and impersonation were unanimously ranked as the darkest engagement patterns, yet players admitted to willingly and enjoyably engaging with loot boxes while warning others away — illustrating the gap between judged harm and actual play behavior.",
+    "quote": "Participants unanimously agreed however that gambling mechanics including loot boxes and practices of impersonation were among the darkest patterns in mobile game experiences... And yet, many players admitted to willingly and often engaging with loot boxes in their favourite games, enjoying the time spent with these mechanics while warning others away.",
+    "agent": "agent-a617fc63e761224a1.jsonl"
+  },
+  {
+    "source": "https://www.gdcvault.com/play/1023231/The-Gamer-s-Brain-Part",
+    "quality": "primary",
+    "claim": "Onboarding is logically prior to retention: if a game fails to capture player attention in the first minutes, downstream retention mechanics never get a chance to operate, making the first-session hook the gating factor for all longer-horizon engagement structures.",
+    "quote": "If the developers fail to captivate their audience's attention quickly, there won't even be any retention challenges to care about.",
+    "agent": "agent-a64aa0ae487175fae.jsonl"
+  },
+  {
+    "source": "https://www.gdcvault.com/play/1023231/The-Gamer-s-Brain-Part",
+    "quality": "primary",
+    "claim": "Engaging players within the first minutes of play became a critical, explicitly-managed aspect of game development specifically because of the rise of free-to-play business models (where players have zero sunk cost and can churn instantly).",
+    "quote": "Engaging your audience within the first minutes of play is a delicate endeavor, and has become a critical aspect of development in the era of free-to-play games.",
+    "agent": "agent-a64aa0ae487175fae.jsonl"
+  },
+  {
+    "source": "https://www.gdcvault.com/play/1023231/The-Gamer-s-Brain-Part",
+    "quality": "primary",
+    "claim": "Effective onboarding design should be treated as a cognitive-science problem — there are identifiable common onboarding pitfalls, and best practices can be derived from UX guidelines plus knowledge of how the human brain learns, rather than from designer intuition alone.",
+    "quote": "cover the common onboarding pitfalls, provide guidelines from User Experience (UX), and discuss best-practices by using knowledge of how the brain learns",
+    "agent": "agent-a64aa0ae487175fae.jsonl"
+  },
+  {
+    "source": "https://www.gdcvault.com/play/1023231/The-Gamer-s-Brain-Part",
+    "quality": "primary",
+    "claim": "The talk's engagement and onboarding guidance is grounded in shipped-title case studies, including insights from Epic Games' development of Fortnite, indicating these UX onboarding principles were applied in commercial AAA/live-service production circa 2016.",
+    "quote": "examples from various titles (including insights from the development of Epic Games' Fortnite)",
+    "agent": "agent-a64aa0ae487175fae.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/game-platforms/just-one-more-turn---game-development-tips-and-tricks-from-the-creator-of-civilization-sid-meier-",
+    "quality": "blog",
+    "claim": "Sid Meier's core engagement principle is that a game is fundamentally a series of interesting decisions, and a decision is only interesting if the player perceives it as having impact — meaning engagement can be sustained even when actual consequences are modest, so long as perceived consequence exists.",
+    "quote": "\"A game is a series of interesting decisions.\" ... \"A decision needs to have some kind of impact (or at least the player should believe it has).\"",
+    "agent": "agent-a6b1d78d3217f4534.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/game-platforms/just-one-more-turn---game-development-tips-and-tricks-from-the-creator-of-civilization-sid-meier-",
+    "quality": "blog",
+    "claim": "The 'just one more turn' compulsion in Civilization is deliberately engineered through cliffhanger structure: the game rewards the player for reaching a milestone but immediately redirects attention to the next pending goal, keeping an open loop at every potential stopping point.",
+    "quote": "\"Like cliffhangers in series, tease the player enough so that he wants to see the next turn/level/corner.\" ... \"Reward him for getting there, but focus your attention on the next thing to do.\"",
+    "agent": "agent-a6b1d78d3217f4534.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/game-platforms/just-one-more-turn---game-development-tips-and-tricks-from-the-creator-of-civilization-sid-meier-",
+    "quality": "blog",
+    "claim": "Meier prioritizes psychological hooks over simulation realism: a compelling game does not need to be realistic, it needs emotional and psychological hooks that make the player believe they are the agent driving events — directly relevant to a prose-driven life-sim that hides numbers.",
+    "quote": "Games don't need realism—they need \"a combination of emotional and psychological hooks that make you believe...that you yourself are the driver.\"",
+    "agent": "agent-a6b1d78d3217f4534.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/game-platforms/just-one-more-turn---game-development-tips-and-tricks-from-the-creator-of-civilization-sid-meier-",
+    "quality": "blog",
+    "claim": "Meier holds that decision fatigue is a real design constraint — each choice consumes player willpower — so designers should deliberately gate how much content and how many options are available at any moment rather than exposing everything at once (bearing on onboarding and first-session design).",
+    "quote": "\"Each decision we take consumes a bit of our willpower.\" ... \"We need to control how much content is available at all times and guide the player.\"",
+    "agent": "agent-a6b1d78d3217f4534.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/game-platforms/just-one-more-turn---game-development-tips-and-tricks-from-the-creator-of-civilization-sid-meier-",
+    "quality": "blog",
+    "claim": "Civilization's randomness is designed to be estimable but uncertain, combining suspense with perceived fairness: displayed odds match actual outcomes (a 50% chance wins about half the time; at 90% the player loses very rarely), and negative outcomes are sequenced after rewards are established.",
+    "quote": "\"The system is partly random, you can estimate the outcome, but you can't be sure of it.\" ... \"Losing comes later, after the rewards have been established.\"",
+    "agent": "agent-a6b1d78d3217f4534.jsonl"
+  },
+  {
+    "source": "https://gamedesignskills.com/game-design/text-based/",
+    "quality": "blog",
+    "claim": "In text-based games, every player action must produce narrative feedback from the game — including failed actions — and enriching failure text (e.g., adding sensory detail to a locked-door message) sustains immersion and player motivation better than bare state reports.",
+    "quote": "Every action the player takes must elicit feedback from the game, even if it's not the outcome the player wanted. ... When the player attempts to open a locked door, for example, give more detail than simply 'the door is locked'. Instead, try 'the door is locked, but you hear muffled voices stop suddenly on the other side.'",
+    "agent": "agent-a6e3f90cd4a68c950.jsonl"
+  },
+  {
+    "source": "https://gamedesignskills.com/game-design/text-based/",
+    "quality": "blog",
+    "claim": "Reward pacing in narrative games should be structured so the best rewards are withheld until the most significant story beats, which drives players' forward momentum and desire to continue.",
+    "quote": "Reserve the best rewards for the most deserving story beats to keep players excited to push forward.",
+    "agent": "agent-a6e3f90cd4a68c950.jsonl"
+  },
+  {
+    "source": "https://gamedesignskills.com/game-design/text-based/",
+    "quality": "blog",
+    "claim": "Player agency — the perception that choices have consequences and the fictional world reacts to input — is the core engagement driver that distinguishes interactive fiction from passive narrative media.",
+    "quote": "Player agency allows players to feel their choices have consequences and that the world is reactive.",
+    "agent": "agent-a6e3f90cd4a68c950.jsonl"
+  },
+  {
+    "source": "https://gamedesignskills.com/game-design/text-based/",
+    "quality": "blog",
+    "claim": "Early-session clarity about what actions are possible is necessary to prevent abandonment: players in text/parser games must never be left blindly guessing which inputs (verbs) the game accepts.",
+    "quote": "The player must understand what actions are possible and how to achieve them...The player must never be left blindly guessing which verb works in parser-based games.",
+    "agent": "agent-a6e3f90cd4a68c950.jsonl"
+  },
+  {
+    "source": "https://gamedesignskills.com/game-design/text-based/",
+    "quality": "blog",
+    "claim": "Varying prose rhythm in a text-heavy game controls pacing the way editing tempo does in film, and constraining player experimentation to a predictable range improves engagement.",
+    "quote": "Varying the rhythm of prose has a similar effect to a film director choosing fast edits versus slow, deliberate ones. ... Effective games narrow the purview subtly so that the player experiments within a predictable but fun range.",
+    "agent": "agent-a6e3f90cd4a68c950.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/business/how-first-session-length-impacts-game-performance",
+    "quality": "primary",
+    "claim": "Free-to-play mobile games typically lose about 20% of installs within the first two minutes of the first launch, making the immediate opening of the first session a critical churn point.",
+    "quote": "most games will lose 20% of installs within 2 minutes from first launch",
+    "agent": "agent-a6efacc208e34a048.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/business/how-first-session-length-impacts-game-performance",
+    "quality": "primary",
+    "claim": "First session length correlates strongly with next-day retention: games whose average first session exceeds the 9-minute mean achieve 31% Day 1 retention, versus only 20% for games with first sessions under 9 minutes.",
+    "quote": "The mean First Session Time across all games is 9 minutes. ... Games that have a longer first session than this average 31% Day 1 Retention. Those with an average First Session Time of less than 9 minutes only manage 20% Day 1 Retention.",
+    "agent": "agent-a6efacc208e34a048.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/business/how-first-session-length-impacts-game-performance",
+    "quality": "primary",
+    "claim": "The author concludes from deltaDNA's cross-game data that a typical first session of 10-20 minutes is a near-prerequisite for free-to-play success, and 90% of games have a median first session under 20 minutes.",
+    "quote": "It is clear that ensuring the typical first session is between 10-20 minutes is vital to have any chance of F2P success. ... 90% of games have a median first session length of less than 20 minutes.",
+    "agent": "agent-a6efacc208e34a048.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/business/how-first-session-length-impacts-game-performance",
+    "quality": "primary",
+    "claim": "The design prescription is that the first ~20 minutes of content must be engaging and frustration-free, and the session should end in a state that encourages return — supporting the idea of deliberate session-end hooks in onboarding.",
+    "quote": "those 20 minutes of content must be engaging and free from any frustration to ensure that players do hit that mark, and that they leave the game in a state that is conducive to them returning",
+    "agent": "agent-a6efacc208e34a048.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/business/how-first-session-length-impacts-game-performance",
+    "quality": "primary",
+    "claim": "Even among players who complete a reasonable first session, only about half come back for a second session, so first-session engagement alone does not guarantee retention.",
+    "quote": "the typical return rate for subsequent first session play hovers around 50%",
+    "agent": "agent-a6efacc208e34a048.jsonl"
+  },
+  {
+    "source": "https://smartseries.sportspromedia.com/features/football-manager-miles-jacobson-sports-interactive-interview",
+    "quality": "secondary",
+    "claim": "Football Manager's foundational engagement design is a persistent simulation — a 'living, breathing world' in which the game world continues across seasons rather than resetting, which the article credits as what differentiates FM from competitors and sustains long-term play (an open-loop/persistent-world retention mechanism).",
+    "quote": "they wanted to create a living, breathing world...rather than the game resetting at the end of every season",
+    "agent": "agent-a71df311e35de34ea.jsonl"
+  },
+  {
+    "source": "https://smartseries.sportspromedia.com/features/football-manager-miles-jacobson-sports-interactive-interview",
+    "quality": "secondary",
+    "claim": "Miles Jacobson treats believability and suspension of disbelief as an explicit retention mechanism: the design goal is to avoid anything that 'jolts' players out of immersion, because jarring inconsistencies cause player departure.",
+    "quote": "ensuring that we've got a game that when people escape into it it's believable, enjoyable, and they don't see things that are going to jolt them out",
+    "agent": "agent-a71df311e35de34ea.jsonl"
+  },
+  {
+    "source": "https://smartseries.sportspromedia.com/features/football-manager-miles-jacobson-sports-interactive-interview",
+    "quality": "secondary",
+    "claim": "Sports Interactive deliberately excluded real-world pandemic mechanics from Football Manager to preserve the game's function as escapism, indicating the designers consider escapist immersion (not stat optimization) a core driver of engagement.",
+    "quote": "when you are looking to escape from the real world, if you're then reminded inside the fake world...that doesn't do the job",
+    "agent": "agent-a71df311e35de34ea.jsonl"
+  },
+  {
+    "source": "https://smartseries.sportspromedia.com/features/football-manager-miles-jacobson-sports-interactive-interview",
+    "quality": "secondary",
+    "claim": "Football Manager's believability is underwritten by an enormous real-world data operation — a database of roughly 800,000 players and staff maintained by a network of over 1,000 scouts — showing that FM's compulsion is built on costly verisimilitude infrastructure rather than abstract reward loops.",
+    "quote": "a database of 800,000 players and staff around the world ... A network of over 1,000 scouts is also on call",
+    "agent": "agent-a71df311e35de34ea.jsonl"
+  },
+  {
+    "source": "https://smartseries.sportspromedia.com/features/football-manager-miles-jacobson-sports-interactive-interview",
+    "quality": "secondary",
+    "claim": "Community forums established in 1996 turned players into word-of-mouth advocates, which the article credits with organic acquisition strong enough that the game outsold its predecessor — community as a long-horizon retention/acquisition structure.",
+    "quote": "Those forums were set up in 1996",
+    "agent": "agent-a71df311e35de34ea.jsonl"
+  },
+  {
+    "source": "https://gdcvault.com/play/1019769/The-Sticky-Science-of-New",
+    "quality": "primary",
+    "claim": "More than 70% of free-to-play game players churn within the first few minutes of play, never getting past the initial new-user experience.",
+    "quote": "more than 70% of players of free-to-play games never make it past the first few minutes.",
+    "agent": "agent-a7ecac9d093f6ad3b.jsonl"
+  },
+  {
+    "source": "https://gdcvault.com/play/1019769/The-Sticky-Science-of-New",
+    "quality": "primary",
+    "claim": "The design of the new user experience (onboarding/first session) directly affects both retention and monetization funnels — i.e., better onboarding measurably increases retention and revenue.",
+    "quote": "best practices towards building an engaging new user experience that increases the retention (and monetization) funnel.",
+    "agent": "agent-a7ecac9d093f6ad3b.jsonl"
+  },
+  {
+    "source": "https://gdcvault.com/play/1019769/The-Sticky-Science-of-New",
+    "quality": "primary",
+    "claim": "Effective onboarding design can be evaluated along the specific dimensions of flow, fun, immersion, and playability, and there are identifiable design concepts that work and don't work for each.",
+    "quote": "different design concepts — what works and what doesn't — along with methodologies that enhance the overall user's experience with regards to flow, fun, immersion and playability.",
+    "agent": "agent-a7ecac9d093f6ad3b.jsonl"
+  },
+  {
+    "source": "https://gdcvault.com/play/1019769/The-Sticky-Science-of-New",
+    "quality": "primary",
+    "claim": "The talk's onboarding recommendations are grounded in empirical user research (both qualitative and quantitative testing) conducted at KIXEYE, not just designer intuition.",
+    "quote": "years of qualitative and quantitative user testing research",
+    "agent": "agent-a7ecac9d093f6ad3b.jsonl"
+  },
+  {
+    "source": "https://gdcvault.com/play/1014958/The-Turducken-Method-of-Game",
+    "quality": "primary",
+    "claim": "Compulsion loops are defined as activity/reward/reveal cycles, and these cycles are the core mechanism at the heart of successful games' engagement.",
+    "quote": "\"Compulsion loop\" is defined as \"activity/reward/reveal cycles that are at the heart of successful games.\"",
+    "agent": "agent-a82db48db76b25241.jsonl"
+  },
+  {
+    "source": "https://gdcvault.com/play/1014958/The-Turducken-Method-of-Game",
+    "quality": "primary",
+    "claim": "Compelling game designs are structured as three nested layers — a moment-to-moment micro-experience, wrapped in a progression system, wrapped in an epic narrative — and it is this layering that produces 'one more turn' compulsion.",
+    "quote": "a tasty micro-experience wrapped in a juicy progression stuffed inside a crispy epic narrative, all which drive us to play just one more turn, just one more minute",
+    "agent": "agent-a82db48db76b25241.jsonl"
+  },
+  {
+    "source": "https://gdcvault.com/play/1014958/The-Turducken-Method-of-Game",
+    "quality": "primary",
+    "claim": "Successful games across genres are built from 'layer upon layer of chained and nested compulsion loops', i.e., loop nesting/chaining is a genre-agnostic structural property of engaging games (illustrated with Monkey Island, World of Warcraft, Civilization, Call of Duty, Frontierville, Chess, and Blackjack).",
+    "quote": "successful games use \"layer upon layer of chained and nested compulsion loops\" as their foundational structure... using examples from Monkey Island, World of Warcraft, Civilization, Call of Duty, Frontierville, Chess, and Blackjack",
+    "agent": "agent-a82db48db76b25241.jsonl"
+  },
+  {
+    "source": "https://gdcvault.com/play/1014958/The-Turducken-Method-of-Game",
+    "quality": "primary",
+    "claim": "The compulsion loop can be treated as 'the atomic unit of gameplay' and used as a practical design methodology to analyze existing games and to accelerate, organize, and communicate new game designs — i.e., loop analysis is prescriptive, not just descriptive.",
+    "quote": "a structured methodology using compulsion loops as \"the atomic unit of gameplay\" for both analyzing game designs and accelerating their development... practical design techniques incorporating these loops to \"accelerate, organize, and communicate game designs.\"",
+    "agent": "agent-a82db48db76b25241.jsonl"
+  },
+  {
+    "source": "https://www.linkedin.com/pulse/ingenious-addiction-stardew-valley-abhishek-iyer",
+    "quality": "blog",
+    "claim": "Stardew Valley deliberately divides playtime into ~20-minute in-game days, and this short unit of engagement is the core mechanism behind the 'one more day' compulsion: because the commitment cost per cycle is low, players repeatedly extend sessions they would otherwise end.",
+    "quote": "One of the smartest things Eric Barone (sole creator of Stardew Valley) did with the game was divide the playtime into 20 minute in-game days. ... If one day were an hour long, players would think twice before continuing to play (I have a flight to catch in three hours!). But the deceptively short unit-time of engagement provides an easy escape (I'll stop after the next day, the airport isn't that far).",
+    "agent": "agent-a8b3d90324035c8a0.jsonl"
+  },
+  {
+    "source": "https://www.linkedin.com/pulse/ingenious-addiction-stardew-valley-abhishek-iyer",
+    "quality": "blog",
+    "claim": "Stardew Valley's engagement loop can be mapped onto BJ Fogg's behavior model, in which a behavior occurs only when motivation, ability, and a trigger co-occur — with the short day supplying ability (low friction to continue) and in-game prompts like bulletin boards and mailbox requests supplying triggers.",
+    "quote": "This model states that, for a behavior to occur, three things must be present: Motivation, Ability, and Trigger.",
+    "agent": "agent-a8b3d90324035c8a0.jsonl"
+  },
+  {
+    "source": "https://www.linkedin.com/pulse/ingenious-addiction-stardew-valley-abhishek-iyer",
+    "quality": "blog",
+    "claim": "Stardew Valley's fishing minigame implements all four of Csikszentmihalyi's flow conditions — concrete goals with manageable rules, achievements matched to player capability, clear and timely feedback, and diminished distraction — which the author credits for sustained absorbed play.",
+    "quote": "Concrete goals with manageable rules ... Goal achievements fit within player capabilities ... Clear and timely feedback on goals and performance ... Diminished extraneous distraction.",
+    "agent": "agent-a8b3d90324035c8a0.jsonl"
+  },
+  {
+    "source": "https://www.linkedin.com/pulse/ingenious-addiction-stardew-valley-abhishek-iyer",
+    "quality": "blog",
+    "claim": "Stardew Valley withholds convenience features (fast travel until end-game, no sprint) as an intentional design constraint that forces time-management tradeoffs against the day/energy systems, making each short day feel scarce and decision-rich.",
+    "quote": "Blocking fast travel until the end-game in order to challenge players' time management skills, foregoing the ability to sprint for the same reason.",
+    "agent": "agent-a8b3d90324035c8a0.jsonl"
+  },
+  {
+    "source": "https://www.linkedin.com/pulse/ingenious-addiction-stardew-valley-abhishek-iyer",
+    "quality": "blog",
+    "claim": "Stardew Valley ramps challenge gradually rather than front-loading difficulty, keeping early goals within a new player's capability — a first-session onboarding property that supports flow rather than frustration.",
+    "quote": "The game doesn't throw the biggest, baddest fish at you from the start",
+    "agent": "agent-a8b3d90324035c8a0.jsonl"
+  },
+  {
+    "source": "https://www.tandfonline.com/doi/full/10.1080/15213269.2023.2242260",
+    "quality": "primary",
+    "claim": "Variable-ratio (random) reward schedules are the dominant reward delivery mechanism in videogames and produce the most persistent play behavior, being the schedule most resistant to extinction (i.e., quitting the game) — the operant-conditioning basis of 'one more turn' compulsion.",
+    "quote": "Most rewards in games are delivered on variable ratio (=random) schedules. For instance, in a fantasy role playing game, players may find a valuable sword only in 1% of the enemies they defeat. Existing literature has shown that variable-ratio reinforcement produces the most consistent and steady response and is the least susceptible to extinction (e.g., quit playing a game).",
+    "agent": "agent-a8deba869cff4bc5c.jsonl"
+  },
+  {
+    "source": "https://www.tandfonline.com/doi/full/10.1080/15213269.2023.2242260",
+    "quality": "primary",
+    "claim": "In two independent adolescent cohorts (N=2,708 and N=1,616 Dutch secondary school students), playing games containing random rewards, contingency (log-in) rewards, or social rewards was significantly associated with higher problematic gaming behavior, replicated across both cohorts.",
+    "quote": "adolescents who played games including one (or more) of the following three rewarding features, i.e., random rewards, contingencies rewards, and social rewards, reported more problematic gaming behavior (Table 5).",
+    "agent": "agent-a8deba869cff4bc5c.jsonl"
+  },
+  {
+    "source": "https://www.tandfonline.com/doi/full/10.1080/15213269.2023.2242260",
+    "quality": "primary",
+    "claim": "Meta-achievement rewards (completion percentages, achievement points, trophies) were NOT significantly associated with problematic gaming in either cohort — suggesting long-horizon mastery/completion goals are less compulsion-forming than random, appointment, or social rewards.",
+    "quote": "In contrast, the effect of meta-achievements on problematic game use was not statistically significant, neither for C 1 nor C 2.",
+    "agent": "agent-a8deba869cff4bc5c.jsonl"
+  },
+  {
+    "source": "https://www.tandfonline.com/doi/full/10.1080/15213269.2023.2242260",
+    "quality": "primary",
+    "claim": "Daily log-in bonuses (contingency rewards / appointment mechanics) work by conditioning the log-in behavior itself: players associate the positive feedback with logging in, which increases log-in frequency and playtime; modern designs escalate this with tiered streak rewards (e.g., Fortnite's common/uncommon/rare rewards at 2, 3-6, and 7+ consecutive days).",
+    "quote": "While claiming the reward, users associate the positive feedback with the log-in behavior and tend to associate this positive feeling with the game. As a result, users log into the game more frequently and play more often (Hursh, 1984; Skinner, 1969; Staddon & Cerutti, 2003). Today, we can see an evolution of these mechanics; some games go beyond a simple daily reward cycle, offering a tiered reward for both cumulative and consecutive log-ins.",
+    "agent": "agent-a8deba869cff4bc5c.jsonl"
+  },
+  {
+    "source": "https://www.tandfonline.com/doi/full/10.1080/15213269.2023.2242260",
+    "quality": "primary",
+    "claim": "Reward-mechanic risk is moderated by individual vulnerability: the link between contingency (log-in/streak) rewards and problematic gaming was significantly stronger for adolescents with attentional (ADHD) problems in both cohorts (C1: b = 0.55, p < .001; C2: b = 0.20, p < .001), and the social-rewards link was stronger for adolescents with social problems — empirical grounding for dark-pattern criticism of streak mechanics.",
+    "quote": "in both cohorts, attentional disorder significantly moderated the effect of contingencies rewards on problematic gaming (C 1 : b = 0.55, p < .001; C 2 : b = 0.20, p < .001) (Figures S1-S2), indicating that particularly in players with attentional problems, contingencies reward elements were associated with problematic gaming.",
+    "agent": "agent-a8deba869cff4bc5c.jsonl"
+  },
+  {
+    "source": "https://www.academia.edu/90071060/Designing_for_compatible_narrative_with_incremental_game_mechanics",
+    "quality": "primary",
+    "claim": "A mechanic-driven narrative framework layered onto an incremental (idle/clicker) core loop produced storytelling that playtesters found highly engaging, indicating incremental mechanics and narrative delivery are compatible rather than in conflict.",
+    "quote": "I found the present design to be efficacious in storytelling. Players' feedback suggests a highly engaging storied experience",
+    "agent": "agent-aaacd8dfa790b4edd.jsonl"
+  },
+  {
+    "source": "https://www.academia.edu/90071060/Designing_for_compatible_narrative_with_incremental_game_mechanics",
+    "quality": "primary",
+    "claim": "A rich, imagery-heavy story can be delivered through the incremental main loop itself (accumulation with progressively less required interaction), supporting the viability of prose-forward, low-interaction narrative games built on incremental progression.",
+    "quote": "a good story that is rich in imagery can be actualized by applying this narrative framework",
+    "agent": "agent-aaacd8dfa790b4edd.jsonl"
+  },
+  {
+    "source": "https://www.academia.edu/90071060/Designing_for_compatible_narrative_with_incremental_game_mechanics",
+    "quality": "primary",
+    "claim": "Players' preference for the game's narrative theme (science fiction in this study) affects both their narrative comprehension performance and their perception of story quality — implying theme selection is an engagement lever in narrative-heavy games.",
+    "quote": "narrative theme predilection can affect storysense receiving and narrative understanding",
+    "agent": "agent-aaacd8dfa790b4edd.jsonl"
+  },
+  {
+    "source": "https://www.academia.edu/90071060/Designing_for_compatible_narrative_with_incremental_game_mechanics",
+    "quality": "primary",
+    "claim": "Incremental games are defined by a core loop in which players repeatedly click to accumulate currency and the game progressively demands less, and eventually no, player interaction — the structural basis of idle-game retention.",
+    "quote": "players repeatedly click to accumulate currency, and it eventually requires less and even no interaction as the game progresses",
+    "agent": "agent-aaacd8dfa790b4edd.jsonl"
+  },
+  {
+    "source": "https://www.academia.edu/90071060/Designing_for_compatible_narrative_with_incremental_game_mechanics",
+    "quality": "primary",
+    "claim": "The findings derive from an iterative design study: the author built an incremental game against the proposed framework, refined it via player feedback, and empirically tested how much story complexity the design could carry.",
+    "quote": "iteratively develop an incremental game based on that framework and player feedback ... test the complexity of story information the present design is able to carry out",
+    "agent": "agent-aaacd8dfa790b4edd.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/design/deep-dive-refreshing-the-crusader-kings-iii-tutorial-mode-through-optimized-ux",
+    "quality": "primary",
+    "claim": "Paradox's telemetry data shows that the tutorial has a significant impact on Crusader Kings III player retention rates, making onboarding a measurable retention lever rather than an optional extra.",
+    "quote": "The telemetry data we gather shows that the tutorial has a significant impact on the retention rates of our players.",
+    "agent": "agent-aabe740e066347046.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/design/deep-dive-refreshing-the-crusader-kings-iii-tutorial-mode-through-optimized-ux",
+    "quality": "primary",
+    "claim": "Merely finishing the tutorial did not predict whether a player kept playing CK3 — telemetry showed tutorial completion was not a major determinant of continued play, implying that comprehension/investment during onboarding matters more than completion of an exhaustive tutorial.",
+    "quote": "telemetry data indicated that finishing the tutorial wasn't a major determining factor in whether or not a player decided to keep playing.",
+    "agent": "agent-aabe740e066347046.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/design/deep-dive-refreshing-the-crusader-kings-iii-tutorial-mode-through-optimized-ux",
+    "quality": "primary",
+    "claim": "The original CK3 tutorial front-loaded 67 sequential explanatory message boxes; the redesign cut this to roughly one-third (~22 messages), treating information overload as the core first-session problem.",
+    "quote": "In total, the full tutorial presents the player with 67 sequential boxes full of explanatory information. [...] we were left with roughly one-third of the 67 messages mentioned prior.",
+    "agent": "agent-aabe740e066347046.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/design/deep-dive-refreshing-the-crusader-kings-iii-tutorial-mode-through-optimized-ux",
+    "quality": "primary",
+    "claim": "The redesign applied the interaction-design principle of progressive disclosure — introducing complexity incrementally so a complex system feels easy to interact with — as the primary UX mechanism for the new onboarding.",
+    "quote": "A key principle that we can utilize here is the idea of progressive disclosure. This is a fairly straightforward concept in interaction design, which posits that one way to make users feel like a complex interaction is easy to interact with is by adding complexity bit by bit.",
+    "agent": "agent-aabe740e066347046.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/design/deep-dive-refreshing-the-crusader-kings-iii-tutorial-mode-through-optimized-ux",
+    "quality": "primary",
+    "claim": "A survey of well-regarded strategy tutorials (Civilization VI, Against the Storm) found narrative framing was a common technique, and Paradox adopted story-driven tutorial events to teach mechanics through play — directly relevant to onboarding in narrative-heavy games.",
+    "quote": "A common theme we discovered in titles such as Civilization VI, and Against the Storm was the utilization of a narrative to frame the tutorialization.",
+    "agent": "agent-aabe740e066347046.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3173574.3174195",
+    "quality": "primary",
+    "claim": "Idle games sustain long-term engagement through a deliberate balance of rules that push players to leave the game and rules that reward them for coming back, making them easy to interleave with daily life.",
+    "quote": "Idle games, in general, feature a balance between rules that encourage players to leave the game and rules that reward them for returning. Being able to leave the game in the background, without interacting with it, makes these games easy to interleave with daily activities.",
+    "agent": "agent-ac0968b651be0195f.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3173574.3174195",
+    "quality": "primary",
+    "claim": "Idle games create a compulsion to return by making session-time interaction self-limiting: every action costs resources that accumulate slowly but are spent in a few clicks, and action costs escalate, so the longer a player stays away, the more options await on return.",
+    "quote": "Typically, every activity in the game costs resources; these resources take time to accumulate but can be spent quickly, in just a few clicks. The costs of actions also increase with each interaction. The more the player interacts with the game during a given session, the fewer options remain to them (e.g., [G16, G21, G50]). Conversely, the longer players go without interacting with the game, the more options they have when they return.",
+    "agent": "agent-ac0968b651be0195f.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3173574.3174195",
+    "quality": "primary",
+    "claim": "Idle games retain players without loss-aversion pressure: unlike social games such as FarmVille that penalize absence, idle games classified in the taxonomy impose 'minor or no penalty for not returning,' have no game-over condition, and an absent player forgoes gains but never risks existing progress.",
+    "quote": "A player who idles for too long may forgo opportunities to acquire new resources, but typically does not place their existing successes at risk. ... Further, unlike idle games, social games do carry a penalty for players to wait too long: players must check in at specified intervals or lose progress.",
+    "agent": "agent-ac0968b651be0195f.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3173574.3174195",
+    "quality": "primary",
+    "claim": "As players progress, incremental games shift engagement from moment-to-moment action to anticipation and planning; expert players paradoxically interact less than novices while devoting more strategic attention, and waiting phases are designed as time to think about future choices.",
+    "quote": "We argue that one of the central poetics of incremental games involves incentivizing players to play less and plan more as they progress through each game's growth curve. ... Expert players paradoxically engage in fewer direct interactions with gameplay than novice players because they spend more time waiting. However, while they are devoting less tactical interaction to the experience, their play requires more strategic attention.",
+    "agent": "agent-ac0968b651be0195f.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3173574.3174195",
+    "quality": "primary",
+    "claim": "Two concrete return-hook and meta-progression patterns are documented across the 66-game corpus: New Game+ reset mechanics that trade accumulated progress for compounding bonuses in future playthroughs, and consecutive-day returning bonuses that (unlike cosmetic achievements) directly boost in-game performance.",
+    "quote": "NG+ mechanics let the player reset progress in the game, erasing all current resources and accomplishments in exchange for bonuses in a future playthrough. ... The more resets, the faster and richer future games become (e.g., [G16]). Players are also rewarded returning bonuses [39] when they return to the game for consecutive days (e.g., Electric Rubber 2 [G7]). Unlike achievements, these bonuses directly affect the player's game performance.",
+    "agent": "agent-ac0968b651be0195f.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3311350.3347180",
+    "quality": "primary",
+    "claim": "The defining engagement structure of idle games is a deliberate balance between mechanics that push players out of a session and mechanics that reward returning later, with the game progressing autonomously in between — i.e., appointment/return mechanics are the genre's core retention device.",
+    "quote": "\"[O]ne of the main characteristics of idle games is a strong support for playing less. Idle games, in general, feature a balance between rules that encourage players to leave the game and rules that reward them for returning\" ... As our working definition we understand that the core feature of idle games is that they require players to leave the game and return to it at a later, unspecified point, where the game progresses on its own during that time and opens up different options for further play upon return.",
+    "agent": "agent-acf436955a9b88743.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3311350.3347180",
+    "quality": "primary",
+    "claim": "The most primitive compulsion loop underlying idle games (and, per designer bloodrizer, games generally) is a constant but slightly unpredictable semi-random reward schedule — a designer's articulation of variable-ratio reinforcement — and the paper links this plus continuous reward schemes to the genre's recognized addictive potential.",
+    "quote": "[T]here is an absolute basic, the most primitive loop. semi-random reward that is constant, but a bit unpredictable. (...) [A]ll games operate on [a] dopamine mechanic. [I]f you think of [Cookie Clicker] there is not much difference, from ... [Final Fantasy] ... you kill lvl1 monster, get 1gp, buy lvl1 sword, kill lvl2 monster. the only difference is that [Cookie Clicker] distilled this to the absolute bare minimum. – bloodrizer",
+    "agent": "agent-acf436955a9b88743.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3311350.3347180",
+    "quality": "primary",
+    "claim": "Escalating systemic complexity — progressively layering on new systems and interface 'paradigm shifts' — functions as narrative rising action and creates momentum, meaning the math/economy itself does the storytelling; narrative beats should key off underlying mathematical functions rather than scripted events.",
+    "quote": "The mechanics and interface undergo multiple paradigm-shifts that parallel this expansion of the narrative scope by progressively disclosing more aspects of the system to be manipulated. The ever-mounting complexity of these games helps to create a sense of narrative momentum and rising action—things start small, slow and simple but then become bigger, faster, and more consequential.",
+    "agent": "agent-acf436955a9b88743.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3311350.3347180",
+    "quality": "primary",
+    "claim": "Designers can ethically drive session-end and re-engagement by consciously pushing players away while promising delayed gratification on return; the paper's design guidelines recommend spanning narrative beats across larger time intervals and designing plateaus that encourage temporary disengagement to reduce addictive potential.",
+    "quote": "Acknowledging that players will leave the game regularly allows designers to consciously drive players away while simultaneously promising delayed gratification at a later time to invite them back. ... {early} span narrative beats across larger time intervals for less addictive potential (Theme 4A), {early} design for plateaus that encourage players to disengage from the game temporarily (Theme 4A)",
+    "agent": "agent-acf436955a9b88743.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/10.1145/3311350.3347180",
+    "quality": "primary",
+    "claim": "Engagement is enhanced by designing the game as a 'safe place' for systemic exploration with no unrecoverable fail states: sub-optimal resource decisions should be recoverable through time, progression should always remain possible, and players should be able to disengage at any point without substantial consequences.",
+    "quote": "While idle games do have goals, they profit from not be designed such that one can move into a bad state (e.g., one from which progression is not possible). Progression is always possible ... if a resource has been allocated sub-optimally, it makes for a more engaging game if it can be available in a needed quantity at a later point.",
+    "agent": "agent-acf436955a9b88743.jsonl"
+  },
+  {
+    "source": "https://gamedesignskills.com/game-design/text-based/",
+    "quality": "blog",
+    "claim": "In text-based games, every player action — including failed or invalid ones — must produce narrative feedback, and enriching failure messages with story detail (rather than flat refusals like 'the door is locked') maintains immersion and reduces friction.",
+    "quote": "Player feedback is crucial to maintaining an immersive, low-friction game environment in a text-based game. Every action the player takes must elicit feedback from the game, even if it's not the outcome the player wanted. When the player attempts to open a locked door, for example, give more detail than simply 'the door is locked'. Instead, try 'the door is locked, but you hear muffled voices stop suddenly on the other side.'",
+    "agent": "agent-ae14964b7d4ecce81.jsonl"
+  },
+  {
+    "source": "https://gamedesignskills.com/game-design/text-based/",
+    "quality": "blog",
+    "claim": "Players disengage from text-based games when the world's internal logic is inconsistent — actions that worked before feel arbitrarily blocked — and immersion increases when object states persist and NPCs remember prior player interactions.",
+    "quote": "Players get frustrated and disengage when something that worked before feels arbitrarily blocked in another context. ... Objects that players move or alter (switches, doors, faucets, candles, etc.) must remain in the state the player left them in. NPCs and environments shine when they remember previous interactions with the player and respond to events.",
+    "agent": "agent-ae14964b7d4ecce81.jsonl"
+  },
+  {
+    "source": "https://gamedesignskills.com/game-design/text-based/",
+    "quality": "blog",
+    "claim": "Stats and traits borrowed from RPGs (as in Fallen London, Sunless Sea, 80 Days) add interactivity to text games, but are most effective when kept lightweight rather than exposing long, complex simulation-style systems — supporting the case for hiding numeric complexity in a prose-driven life sim.",
+    "quote": "Stats and traits in text-based games add to the interactivity, but work best when they avoid the long, complex systems of CRPGs and simulations.",
+    "agent": "agent-ae14964b7d4ecce81.jsonl"
+  },
+  {
+    "source": "https://gamedesignskills.com/game-design/text-based/",
+    "quality": "blog",
+    "claim": "NPC memory that makes earlier choices ripple forward, and tying dialogue success/failure to the player's accumulated build and prior choices, increases players' felt connection to their decisions.",
+    "quote": "Players feel more connected to their choices when their failure or success is directly linked to their character build and previous choices. NPC's memories allow players' earlier choices to ripple forward, remembering a negative encounter or a time the player helped when they didn't have to.",
+    "agent": "agent-ae14964b7d4ecce81.jsonl"
+  },
+  {
+    "source": "https://gamedesignskills.com/game-design/text-based/",
+    "quality": "blog",
+    "claim": "A Dark Room demonstrates an onboarding/hook pattern for text-driven games: it opens with deliberately minimal prose that creates tension via unanswered questions, then organically reveals new options and expands into a full survival simulation as the player interacts.",
+    "quote": "Amir Rajan's A Dark Room uses minimal prose to create tension and urgency. Its story begins simply and grows organically as the player interacts with the game world and reveals more options. The designer leans into the limitations of the medium, building tension around the questions of where you are, who's outside the room, and what's happened to the rest of humanity.",
+    "agent": "agent-ae14964b7d4ecce81.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/design/gdc-2012-10-tutorial-tips-from-i-plants-vs-zombies-i-creator-george-fan",
+    "quality": "secondary",
+    "claim": "George Fan (Plants vs. Zombies designer) deliberately avoids labeling any part of his games as a 'tutorial,' arguing onboarding should be invisibly blended into normal gameplay so players learn without noticing they are being instructed.",
+    "quote": "I go out of my way to never call any sections of my game the tutorial.",
+    "agent": "agent-ae691b99a4d686fd5.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/design/gdc-2012-10-tutorial-tips-from-i-plants-vs-zombies-i-creator-george-fan",
+    "quality": "secondary",
+    "claim": "Fan prescribes a hard cap of roughly eight words of instructional text on screen at any given moment during onboarding, on the grounds that verbose instruction causes disengagement.",
+    "quote": "a maximum of eight words on the screen at any given moment",
+    "agent": "agent-ae691b99a4d686fd5.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/design/gdc-2012-10-tutorial-tips-from-i-plants-vs-zombies-i-creator-george-fan",
+    "quality": "secondary",
+    "claim": "Plants vs. Zombies spreads mechanic introduction across many levels rather than front-loading it, delaying even a core system (the sun/currency economy element) until level 10, showing that pacing out complexity is a viable first-session retention strategy.",
+    "quote": "Fan noted being \"quite conservative\" with introducing peripheral mechanics slowly, delaying even basic concepts like currency until level 10.",
+    "agent": "agent-ae691b99a4d686fd5.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/design/gdc-2012-10-tutorial-tips-from-i-plants-vs-zombies-i-creator-george-fan",
+    "quality": "secondary",
+    "claim": "Having the player perform an action once and see its result teaches a mechanic more effectively than written explanation — active 'doing' beats 'reading' for early investment.",
+    "quote": "Once they see the results of their action, that's often all it",
+    "agent": "agent-ae691b99a4d686fd5.jsonl"
+  },
+  {
+    "source": "https://www.gamedeveloper.com/design/gdc-2012-10-tutorial-tips-from-i-plants-vs-zombies-i-creator-george-fan",
+    "quality": "secondary",
+    "claim": "Adaptive messaging — showing hints only to players who are demonstrably making mistakes — preserves competence feelings for skilled players, aligning tutorial design with competence-based motivation.",
+    "quote": "Provide tips only to players making mistakes, allowing competent players to feel capable without unnecessary guidance.",
+    "agent": "agent-ae691b99a4d686fd5.jsonl"
+  },
+  {
+    "source": "https://selfdeterminationtheory.org/player-experience-of-needs-satisfaction-pens/",
+    "quality": "primary",
+    "claim": "The PENS (Player Experience of Need Satisfaction) measure was developed by Ryan, Rigby, and Przybylski in 2006 as the first empirical application of Self-Determination Theory to video games, assessing satisfaction of the basic psychological needs of autonomy, competence, and relatedness during play.",
+    "quote": "The beginning empirical work applying SDT to video games by Ryan, Rigby, and Przybylski (2006) led to a new measure of need satisfaction in play – the Player Experience of Need Satisfaction (PENS) model.",
+    "agent": "agent-af056294dfd0177f7.jsonl"
+  },
+  {
+    "source": "https://selfdeterminationtheory.org/player-experience-of-needs-satisfaction-pens/",
+    "quality": "primary",
+    "claim": "Satisfaction of basic psychological needs (autonomy, competence, relatedness) during play empirically predicts both game enjoyment and players' motivation to persist at a game — i.e., need satisfaction, not superficial reward mechanics alone, drives sustained engagement and retention.",
+    "quote": "basic need satisfaction was found to be the pathway to enjoyable and engaging game experiences and to people's motivation to persist at them.",
+    "agent": "agent-af056294dfd0177f7.jsonl"
+  },
+  {
+    "source": "https://selfdeterminationtheory.org/player-experience-of-needs-satisfaction-pens/",
+    "quality": "primary",
+    "claim": "Four concrete, testable design features were found to enhance psychological need satisfaction in games: easily mastered controls, clear and consistent feedback, player choice over goals and strategies, and opportunities for cooperative social interaction.",
+    "quote": "having controls that were easily mastered; feedback that was clear and consistent; choices regarding goals and strategies; and, opportunities for cooperative social interaction enhanced these need satisfactions.",
+    "agent": "agent-af056294dfd0177f7.jsonl"
+  },
+  {
+    "source": "https://selfdeterminationtheory.org/player-experience-of-needs-satisfaction-pens/",
+    "quality": "primary",
+    "claim": "A follow-up research program (Przybylski et al. 2009 in Personality and Social Psychology Bulletin; Przybylski et al. 2014 in Journal of Personality and Social Psychology; Peters et al. 2018 in Frontiers in Psychology) tested how specific game features evoke or undermine autonomy, competence, and relatedness satisfactions, and thereby affect intrinsic motivation, enjoyment, and sustained engagement.",
+    "quote": "how features of games either effectively evoke or undermine psychological satisfactions for autonomy, competence, and relatedness, and thus impact players' intrinsic motivation, enjoyment, and sustained engagement.",
+    "agent": "agent-af056294dfd0177f7.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/fullHtml/10.1145/3491101.3519837",
+    "quality": "primary",
+    "claim": "In this CHI 2022 study of 21 stakeholders (13 mobile game players, 3 designers, 3 developers, 2 business developers), the engagement mechanics participants most frequently identified as dark patterns were Pay to Win, Playing by Appointment, Daily Rewards, Artificial Deficit, Invested Value (sunk-cost fallacy), Gacha mechanics, and Loot Boxes — i.e., the core retention structures (appointment mechanics, daily/streak rewards, sunk-cost investment loops) are the very patterns players experience as manipulative.",
+    "quote": "The patterns most often identified and discussed by participants included Pay to Win mechanics, Playing by Appointment, Daily Rewards, Artificial Deficit, Invested Value (Sunk Cost Fallacy), Gacha mechanics, and Loot Boxes [52]. Many participants spoke of these mechanics as frustrating, eliciting a sense of being cheated, and situated in the context of an adversarial relationship between game professionals' striving for profit and players' desiring to avoid manipulative monetization.",
+    "agent": "agent-af562e1ce73435d36.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/fullHtml/10.1145/3491101.3519837",
+    "quality": "primary",
+    "claim": "Whether a retention mechanic is 'dark' depends on its implementation, tuning, and combination with other mechanics rather than the pattern itself; the authors propose redefining a dark game design pattern as a pattern or combination of patterns implemented so that it drives players toward experiences that negatively affect wellbeing. This implies appointment mechanics, daily rewards, and investment loops can be used healthily if tuned to avoid wellbeing harm.",
+    "quote": "participants also commented that not all patterns were equally 'dark,' and some only so when implemented in combination with other mechanics, otherwise supporting positive and fun experiences; \"there's not a moment when like this is good and this is bad. The small tricks you make, and the small economy changes you make to the prices and to the timing, etc. [define] how exploitative or harmful these things are\" (DS3).",
+    "agent": "agent-af562e1ce73435d36.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/fullHtml/10.1145/3491101.3519837",
+    "quality": "primary",
+    "claim": "Game creators reported that some negative emotions — specifically frustration — are often intentionally designed into games to drive further player investment, whereas the emotion 'interested' was singled out as rare, hard to achieve, and the marker of healthy engagement; emotions like 'annoyed', 'disappointed' and 'manipulated' were considered unintended failures.",
+    "quote": "Participants highlighted 'interested' as a felt experience \"very unique and hard to achieve,\" (DS3) and therefore an indicator of healthy engagement, and the negative emotions chosen as among \"the most unintentional things that might happen in the game,\" (DS3) noting that a game would never strive to entice such feelings in players, whereas other negative feelings, such as 'frustrated,' could often be intentionally elicited to drive further investment from players.",
+    "agent": "agent-af562e1ce73435d36.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/fullHtml/10.1145/3491101.3519837",
+    "quality": "primary",
+    "claim": "Players exhibit an awareness-behavior gap with compulsion mechanics: workshop participants unanimously rated gambling mechanics (loot boxes) as among the darkest patterns, yet many of the same players willingly and frequently engaged with loot boxes in their favorite games while warning others away — and players described a felt need to limit playtime due to 'burnout'.",
+    "quote": "Participants unanimously agreed however that gambling mechanics including loot boxes and practices of impersonation were among the darkest patterns in mobile game experiences (See Figure 2). And yet, many players admitted to willingly and often engaging with loot boxes in their favourite games, enjoying the time spent with these mechanics while warning others away.",
+    "agent": "agent-af562e1ce73435d36.jsonl"
+  },
+  {
+    "source": "https://dl.acm.org/doi/fullHtml/10.1145/3491101.3519837",
+    "quality": "primary",
+    "claim": "Dark patterns arise largely from commercial pressure and data-driven metrics rather than designer intent — designers described monetization as 'us against the business guy' and most mobile games as fundamentally healthy but wrapped in exploitative monetization; some monetization structures (e.g., the battle pass) were cited as enhancing engagement by providing a constant feeling of earning, suggesting reward-cadence loops can add rather than extract value.",
+    "quote": "one designer describing \"the majority [of mobile games]\" as \"healthy . . . just wrapped in unhealthy wrapping paper . . . in order to make money\" (DS1)... as in the case of the 'battle pass' model which allows players to pay money to gain more rewards while playing, providing \"constantly a feeling of earning something\" (DS2).",
+    "agent": "agent-af562e1ce73435d36.jsonl"
+  }
+]

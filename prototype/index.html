@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Caribbean Gangsta — The File</title>
+
+  <!-- Cinematic-dossier type: Fraunces (display serif), Spectral (body serif),
+       Special Elite (typewriter stamps). Distinctive, non-generic pairing. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,500;1,9..144,700&family=Spectral:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Special+Elite&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Atmospheric overlays: film grain + vignette sit above everything -->
+  <div id="grain" aria-hidden="true"></div>
+  <div id="vignette" aria-hidden="true"></div>
+
+  <!-- The case file -->
+  <div id="folder">
+    <div id="phone">
+
+      <!-- Masthead / status bar -->
+      <header id="statusbar" class="hidden">
+        <button id="backBtn" class="ghost" title="Back">‹</button>
+        <span class="masthead">
+          <span class="file-no">CASE&nbsp;№&nbsp;0007</span>
+          <span id="locationName">KINGSTON DOCKS</span>
+        </span>
+        <span id="heatDots" class="heat" title="Heat">HEAT ▪▫▫</span>
+      </header>
+
+      <!-- Screen host -->
+      <main id="screen"></main>
+
+      <!-- Bottom nav (unlocks via progressive disclosure) -->
+      <nav id="bottomnav" class="hidden">
+        <button data-nav="deal"><span>Deals</span></button>
+        <button data-nav="crew" disabled><span>Crew</span></button>
+        <button data-nav="money" disabled><span>Money</span></button>
+        <button data-nav="heat" disabled><span>Heat</span></button>
+      </nav>
+    </div>
+  </div>
+
+  <!-- Field log / telemetry (doc 06) -->
+  <aside id="telemetry">
+    <button id="telToggle">◦ FIELD LOG</button>
+    <div id="telBody" class="hidden">
+      <div class="tel-row"><span>session</span><b id="telTime">0s</b></div>
+      <div class="tel-row"><span>screen</span><b id="telScreen">boot</b></div>
+      <div class="tel-row"><span>deals</span><b id="telDeals">0</b></div>
+      <div class="tel-row"><span>busts</span><b id="telBusts">0</b></div>
+      <div class="tel-row"><span>clean $/h</span><b id="telIdle">0</b></div>
+      <hr />
+      <div id="telLog"></div>
+      <button id="telReset" class="ghost small">reset session</button>
+    </div>
+  </aside>
+
+  <script src="game.js"></script>
+</body>
+</html>

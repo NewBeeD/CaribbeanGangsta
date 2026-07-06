@@ -1,0 +1,375 @@
+{
+  "summary": "Deep research harness — fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report.",
+  "agentCount": 105,
+  "logs": [
+    "Q: What are the evidence-backed design elements that make games compelling and habi…",
+    "Decomposed into 5 angles: Academic motivation psychology of games, Designer post-mortems on compulsion loops in named titles, First-session onboarding and early hook design, Retention structures, goal layering, and dark-pattern critique, Applying engagement mechanics to numberless narrative/idle life sims",
+    "Academic motivation psychology of games: 6 results",
+    "Designer post-mortems on compulsion loops in named titles: 6 results",
+    "Retention structures, goal layering, and dark-pattern critique: 6 results",
+    "Retention structures, goal layering, and dark-pattern critique: 3 novel (3 filtered)",
+    "First-session onboarding and early hook design: 6 results",
+    "First-session onboarding and early hook design: 4 novel (2 filtered)",
+    "Applying engagement mechanics to numberless narrative/idle life sims: 6 results",
+    "Applying engagement mechanics to numberless narrative/idle life sims: 4 novel (2 filtered)",
+    "Fetched 23 sources → 111 claims → verifying top 25",
+    "\"The appeal and well-being effects of video games d…\": 3-0 ✓",
+    "\"In Ryan, Rigby & Przybylski's (2006) study of onli…\": 3-0 ✓",
+    "[v1:Intuitive mastery of a game's controls/i] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:Intuitive mastery of a game's controls/i] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v0:Players whose basic psychological needs ] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v1:Players whose basic psychological needs ] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v0:Intuitive mastery of a game's controls/i] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"Intuitive mastery of a game's controls/interface i…\": 0-0 (3 abstain) ✗",
+    "[v2:Players whose basic psychological needs ] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"Players whose basic psychological needs are unmet …\": 0-0 (3 abstain) ✗",
+    "[v1:Across three experimental studies (playe] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v0:Across three experimental studies (playe] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:Across three experimental studies (playe] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"Across three experimental studies (players playing…\": 0-0 (3 abstain) ✗",
+    "[v0:In a survey of an online multiplayer com] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v1:In a survey of an online multiplayer com] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:In a survey of an online multiplayer com] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"In a survey of an online multiplayer community (St…\": 0-0 (3 abstain) ✗",
+    "[v0:Intuitive controls strongly predicted pr] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v1:Intuitive controls strongly predicted pr] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:Intuitive controls strongly predicted pr] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"Intuitive controls strongly predicted preference f…\": 0-0 (3 abstain) ✗",
+    "[v0:The PENS (Player Experience of Need Sati] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v1:The PENS (Player Experience of Need Sati] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:The PENS (Player Experience of Need Sati] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"The PENS (Player Experience of Need Satisfaction) …\": 0-0 (3 abstain) ✗",
+    "[v0:Satisfaction of basic psychological need] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v1:Satisfaction of basic psychological need] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:Satisfaction of basic psychological need] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"Satisfaction of basic psychological needs (autonom…\": 0-0 (3 abstain) ✗",
+    "[v0:Four concrete, testable design features ] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v1:Four concrete, testable design features ] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:Four concrete, testable design features ] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"Four concrete, testable design features were found…\": 0-0 (3 abstain) ✗",
+    "[v0:Variable-ratio (random) reward schedules] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v1:Variable-ratio (random) reward schedules] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:Variable-ratio (random) reward schedules] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"Variable-ratio (random) reward schedules are the d…\": 0-0 (3 abstain) ✗",
+    "[v0:In two independent adolescent cohorts (N] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v1:In two independent adolescent cohorts (N] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:In two independent adolescent cohorts (N] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"In two independent adolescent cohorts (N=2,708 and…\": 0-0 (3 abstain) ✗",
+    "[v0:Daily log-in bonuses (contingency reward] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:Daily log-in bonuses (contingency reward] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v1:Daily log-in bonuses (contingency reward] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"Daily log-in bonuses (contingency rewards / appoin…\": 0-0 (3 abstain) ✗",
+    "[v0:In a qualitative study of 77 undergradua] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v1:In a qualitative study of 77 undergradua] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:In a qualitative study of 77 undergradua] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"In a qualitative study of 77 undergraduates playin…\": 0-0 (3 abstain) ✗",
+    "[v0:Competence factors were the most common ] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v1:Competence factors were the most common ] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:Competence factors were the most common ] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"Competence factors were the most common source of …\": 0-0 (3 abstain) ✗",
+    "[v0:A single-player narrative game can satis] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v1:A single-player narrative game can satis] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v0:In-game need frustration (thwarting of a] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:A single-player narrative game can satis] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"A single-player narrative game can satisfy the SDT…\": 0-0 (3 abstain) ✗",
+    "[v1:In-game need frustration (thwarting of a] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:In-game need frustration (thwarting of a] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"In-game need frustration (thwarting of autonomy, c…\": 0-0 (3 abstain) ✗",
+    "[v0:In-game need satisfaction is a stronger ] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v1:In-game need satisfaction is a stronger ] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:In-game need satisfaction is a stronger ] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"In-game need satisfaction is a stronger predictor …\": 0-0 (3 abstain) ✗",
+    "[v0:RimWorld's designer Tynan Sylvester fram] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v1:RimWorld's designer Tynan Sylvester fram] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:RimWorld's designer Tynan Sylvester fram] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"RimWorld's designer Tynan Sylvester frames the gam…\": 0-0 (3 abstain) ✗",
+    "[v0:Sylvester claims that strategically omit] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v1:Sylvester claims that strategically omit] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:Sylvester claims that strategically omit] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"Sylvester claims that strategically omitting featu…\": 0-0 (3 abstain) ✗",
+    "[v0:Compulsion loops are defined as activity] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:Compulsion loops are defined as activity] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v1:Compulsion loops are defined as activity] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"Compulsion loops are defined as activity/reward/re…\": 0-0 (3 abstain) ✗",
+    "[v1:Compelling game designs are structured a] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v0:Compelling game designs are structured a] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:Compelling game designs are structured a] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"Compelling game designs are structured as three ne…\": 0-0 (3 abstain) ✗",
+    "[v0:Successful games across genres are built] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v1:Successful games across genres are built] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:Successful games across genres are built] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"Successful games across genres are built from 'lay…\": 0-0 (3 abstain) ✗",
+    "[v0:Paradox's telemetry data shows that the ] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v1:Paradox's telemetry data shows that the ] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:Paradox's telemetry data shows that the ] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"Paradox's telemetry data shows that the tutorial h…\": 0-0 (3 abstain) ✗",
+    "[v0:Merely finishing the tutorial did not pr] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v2:Merely finishing the tutorial did not pr] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "[v1:Merely finishing the tutorial did not pr] failed: You've hit your session limit · resets 4:40am (America/La_Paz)",
+    "\"Merely finishing the tutorial did not predict whet…\": 0-0 (3 abstain) ✗",
+    "Verify done: 25 claims → 2 confirmed, 23 killed",
+    "[synthesize] failed: You've hit your session limit · resets 4:40am (America/La_Paz)"
+  ],
+  "result": {
+    "question": "What are the evidence-backed design elements that make games compelling and habit-forming — the mechanisms behind player engagement, retention, and \"one more turn\" compulsion? Cover: (1) motivation psychology applied to games (self-determination theory, flow, variable-ratio reinforcement, Zeigarnik/open-loop effects, loss aversion, endowed progress, appointment mechanics, sunk-cost/investment loops); (2) concrete design patterns from genre-leading titles known for compulsion — Stardew Valley, RimWorld, Football Manager, Crusader Kings, incremental/idle games, roguelites (meta-progression), and narrative life-sims; (3) onboarding & the first-session hook — what gets a player invested in the first 15 minutes; (4) retention structures — short/medium/long-horizon goal layering, session-end hooks, cliffhangers, streaks vs. their dark-pattern criticisms; (5) how these apply to a slow-paced, text/narrative-heavy, single-player economic life simulation with no scores or explicit stats (the game deliberately hides numbers and communicates through prose). Prioritize game-design literature (GDC talks, designer post-mortems, academic work on player motivation like Ryan/Rigby/Przybylski, Lazzaro's 4 keys of fun, Hunicke MDA, hook model criticism) over pop-science listicles.",
+    "summary": "Synthesis step was skipped or failed — returning 2 verified claims unmerged.",
+    "findings": [],
+    "confirmed": [
+      {
+        "claim": "The appeal and well-being effects of video games derive from their capacity to satisfy the three basic psychological needs of self-determination theory — competence, autonomy, and relatedness — and this need-satisfaction model predicts sustained engagement over time.",
+        "source": "https://selfdeterminationtheory.org/SDT/documents/2010_PrzybylskiRigbyRyan_ROGP.pdf",
+        "quote": "Rooted in self-determination theory (Deci & Ryan, 2000; Ryan & Deci, 2000a), our approach suggests that both the appeal and well-being effects of video games are based in their potential to satisfy basic psychological needs for competence, autonomy, and relatedness... We suggest that the SDT model of need satisfaction predicts sustained engagement over time, as well as the short-term effects of game activities on players' well-being.",
+        "vote": "3-0"
+      },
+      {
+        "claim": "In Ryan, Rigby & Przybylski's (2006) study of online game players, competence, autonomy, and relatedness need satisfaction each made independent contributions to game enjoyment, immersion, and players' intention to keep playing in the future.",
+        "source": "https://selfdeterminationtheory.org/SDT/documents/2010_PrzybylskiRigbyRyan_ROGP.pdf",
+        "quote": "Results demonstrated that all three needs made independent contributions to game enjoyment, immersion, and estimations of future engagement. Furthermore, although relatedness need satisfaction was correlated with positive well-being outcomes, only autonomy and competence need satisfaction derived from play accounted for unique incremental variance in player affect following play.",
+        "vote": "3-0"
+      }
+    ],
+    "refuted": [
+      {
+        "claim": "Intuitive mastery of a game's controls/interface is a necessary-but-not-sufficient gate for engagement: players must feel intuitive command of basic mechanics before need satisfaction, enjoyment, and well-being benefits can occur, and failure to master controls (e.g., overly complex interfaces, no practice time) increases post-play aggression by frustrating competence.",
+        "vote": "0-0",
+        "source": "https://selfdeterminationtheory.org/SDT/documents/2010_PrzybylskiRigbyRyan_ROGP.pdf"
+      },
+      {
+        "claim": "Players whose basic psychological needs are unmet in everyday life develop an 'obsessive passion' for games — a compulsive engagement pattern marked by MORE total play time but LESS enjoyment and worse post-play mood — whereas need-satisfied players show harmonious, volitional engagement; this distinguishes healthy compulsion from dark-pattern-exploitable compulsion.",
+        "vote": "0-0",
+        "source": "https://selfdeterminationtheory.org/SDT/documents/2010_PrzybylskiRigbyRyan_ROGP.pdf"
+      },
+      {
+        "claim": "Across three experimental studies (players playing 1, 2, and 4 games), perceived in-game autonomy and competence were associated with game enjoyment, game preferences, and pre-to-post-play changes in well-being — establishing need satisfaction as a measurable predictor of what makes games compelling.",
+        "vote": "0-0",
+        "source": "https://www.researchgate.net/publication/225998888_The_Motivational_Pull_of_Video_Games_A_Self-Determination_Theory_Approach"
+      },
+      {
+        "claim": "In a survey of an online multiplayer community (Study 4), SDT's three needs — autonomy, competence, and relatedness — each independently predicted enjoyment and intention for future play, meaning each need contributes separately to retention-relevant motivation.",
+        "vote": "0-0",
+        "source": "https://www.researchgate.net/publication/225998888_The_Motivational_Pull_of_Video_Games_A_Self-Determination_Theory_Approach"
+      },
+      {
+        "claim": "Intuitive controls strongly predicted preference for continued play (beta = .57) and enjoyment (beta = .64), but this effect was fully mediated by in-game autonomy and competence: once those needs were entered into the regression, the control-to-outcome relationship dropped to non-significance — controls matter as the 'price of admission' that enables need satisfaction, not as a hook in themselves.",
+        "vote": "0-0",
+        "source": "https://www.researchgate.net/publication/225998888_The_Motivational_Pull_of_Video_Games_A_Self-Determination_Theory_Approach"
+      },
+      {
+        "claim": "The PENS (Player Experience of Need Satisfaction) measure was developed by Ryan, Rigby, and Przybylski in 2006 as the first empirical application of Self-Determination Theory to video games, assessing satisfaction of the basic psychological needs of autonomy, competence, and relatedness during play.",
+        "vote": "0-0",
+        "source": "https://selfdeterminationtheory.org/player-experience-of-needs-satisfaction-pens/"
+      },
+      {
+        "claim": "Satisfaction of basic psychological needs (autonomy, competence, relatedness) during play empirically predicts both game enjoyment and players' motivation to persist at a game — i.e., need satisfaction, not superficial reward mechanics alone, drives sustained engagement and retention.",
+        "vote": "0-0",
+        "source": "https://selfdeterminationtheory.org/player-experience-of-needs-satisfaction-pens/"
+      },
+      {
+        "claim": "Four concrete, testable design features were found to enhance psychological need satisfaction in games: easily mastered controls, clear and consistent feedback, player choice over goals and strategies, and opportunities for cooperative social interaction.",
+        "vote": "0-0",
+        "source": "https://selfdeterminationtheory.org/player-experience-of-needs-satisfaction-pens/"
+      },
+      {
+        "claim": "Variable-ratio (random) reward schedules are the dominant reward delivery mechanism in videogames and produce the most persistent play behavior, being the schedule most resistant to extinction (i.e., quitting the game) — the operant-conditioning basis of 'one more turn' compulsion.",
+        "vote": "0-0",
+        "source": "https://www.tandfonline.com/doi/full/10.1080/15213269.2023.2242260"
+      },
+      {
+        "claim": "In two independent adolescent cohorts (N=2,708 and N=1,616 Dutch secondary school students), playing games containing random rewards, contingency (log-in) rewards, or social rewards was significantly associated with higher problematic gaming behavior, replicated across both cohorts.",
+        "vote": "0-0",
+        "source": "https://www.tandfonline.com/doi/full/10.1080/15213269.2023.2242260"
+      },
+      {
+        "claim": "Daily log-in bonuses (contingency rewards / appointment mechanics) work by conditioning the log-in behavior itself: players associate the positive feedback with logging in, which increases log-in frequency and playtime; modern designs escalate this with tiered streak rewards (e.g., Fortnite's common/uncommon/rare rewards at 2, 3-6, and 7+ consecutive days).",
+        "vote": "0-0",
+        "source": "https://www.tandfonline.com/doi/full/10.1080/15213269.2023.2242260"
+      },
+      {
+        "claim": "In a qualitative study of 77 undergraduates playing the educational interactive narrative game Academical, autonomy (choice and control) was the most frequently cited reason for enjoyment, appearing in 30% of 'most enjoyed' responses — supporting the claim that meaningful choice is the leading driver of enjoyment in narrative games.",
+        "vote": "0-0",
+        "source": "https://www.frontiersin.org/journals/virtual-reality/articles/10.3389/frvir.2022.847120/full"
+      },
+      {
+        "claim": "Competence factors were the most common source of frustration (35% of 'least enjoyed' responses), driven by poorly scaled difficulty, confusing feedback, and unclear goals — indicating that mishandled challenge/feedback undermines engagement more than any other SDT need in narrative games.",
+        "vote": "0-0",
+        "source": "https://www.frontiersin.org/journals/virtual-reality/articles/10.3389/frvir.2022.847120/full"
+      },
+      {
+        "claim": "A single-player narrative game can satisfy the SDT relatedness need through connection with fictional characters, primarily via perspective-taking — nearly all relatedness-based enjoyment came from taking characters' perspectives, with no participants disliking perspective-taking itself.",
+        "vote": "0-0",
+        "source": "https://www.frontiersin.org/journals/virtual-reality/articles/10.3389/frvir.2022.847120/full"
+      },
+      {
+        "claim": "In-game need frustration (thwarting of autonomy, competence, relatedness during play) is a psychometrically distinct construct from in-game need satisfaction, not merely its absence — meaning a game can simultaneously satisfy and frustrate players' basic psychological needs.",
+        "vote": "0-0",
+        "source": "https://www.tandfonline.com/doi/full/10.1080/0144929X.2021.1928753"
+      },
+      {
+        "claim": "In-game need satisfaction is a stronger predictor of positive player-experience outcomes — satisfaction, concentration (flow-like engagement), subjective vitality, and voice — than need frustration is, supporting self-determination theory's account of why need-satisfying design drives engagement.",
+        "vote": "0-0",
+        "source": "https://www.tandfonline.com/doi/full/10.1080/0144929X.2021.1928753"
+      },
+      {
+        "claim": "RimWorld's designer Tynan Sylvester frames the game 'not as a game, but as a story generator,' and claims this framing opened up new mechanisms for creating compelling play — a design stance directly relevant to engagement in narrative-driven simulations.",
+        "vote": "0-0",
+        "source": "https://www.gdcvault.com/play/1024232/-RimWorld-Contrarian-Ridiculous-and"
+      },
+      {
+        "claim": "Sylvester claims that strategically omitting features caused players to imaginatively engage with content and story elements that do not actually exist in the game — leveraging player imagination (apophenia) as an engagement mechanism.",
+        "vote": "0-0",
+        "source": "https://www.gdcvault.com/play/1024232/-RimWorld-Contrarian-Ridiculous-and"
+      },
+      {
+        "claim": "Compulsion loops are defined as activity/reward/reveal cycles, and these cycles are the core mechanism at the heart of successful games' engagement.",
+        "vote": "0-0",
+        "source": "https://gdcvault.com/play/1014958/The-Turducken-Method-of-Game"
+      },
+      {
+        "claim": "Compelling game designs are structured as three nested layers — a moment-to-moment micro-experience, wrapped in a progression system, wrapped in an epic narrative — and it is this layering that produces 'one more turn' compulsion.",
+        "vote": "0-0",
+        "source": "https://gdcvault.com/play/1014958/The-Turducken-Method-of-Game"
+      },
+      {
+        "claim": "Successful games across genres are built from 'layer upon layer of chained and nested compulsion loops', i.e., loop nesting/chaining is a genre-agnostic structural property of engaging games (illustrated with Monkey Island, World of Warcraft, Civilization, Call of Duty, Frontierville, Chess, and Blackjack).",
+        "vote": "0-0",
+        "source": "https://gdcvault.com/play/1014958/The-Turducken-Method-of-Game"
+      },
+      {
+        "claim": "Paradox's telemetry data shows that the tutorial has a significant impact on Crusader Kings III player retention rates, making onboarding a measurable retention lever rather than an optional extra.",
+        "vote": "0-0",
+        "source": "https://www.gamedeveloper.com/design/deep-dive-refreshing-the-crusader-kings-iii-tutorial-mode-through-optimized-ux"
+      },
+      {
+        "claim": "Merely finishing the tutorial did not predict whether a player kept playing CK3 — telemetry showed tutorial completion was not a major determinant of continued play, implying that comprehension/investment during onboarding matters more than completion of an exhaustive tutorial.",
+        "vote": "0-0",
+        "source": "https://www.gamedeveloper.com/design/deep-dive-refreshing-the-crusader-kings-iii-tutorial-mode-through-optimized-ux"
+      }
+    ],
+    "sources": [
+      {
+        "url": "https://selfdeterminationtheory.org/SDT/documents/2010_PrzybylskiRigbyRyan_ROGP.pdf",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://www.researchgate.net/publication/225998888_The_Motivational_Pull_of_Video_Games_A_Self-Determination_Theory_Approach",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://selfdeterminationtheory.org/player-experience-of-needs-satisfaction-pens/",
+        "quality": "primary",
+        "claimCount": 4
+      },
+      {
+        "url": "https://www.tandfonline.com/doi/full/10.1080/15213269.2023.2242260",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://www.frontiersin.org/journals/virtual-reality/articles/10.3389/frvir.2022.847120/full",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://www.tandfonline.com/doi/full/10.1080/0144929X.2021.1928753",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://www.gdcvault.com/play/1024232/-RimWorld-Contrarian-Ridiculous-and",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://gdcvault.com/play/1014958/The-Turducken-Method-of-Game",
+        "quality": "primary",
+        "claimCount": 4
+      },
+      {
+        "url": "https://www.gamedeveloper.com/game-platforms/just-one-more-turn---game-development-tips-and-tricks-from-the-creator-of-civilization-sid-meier-",
+        "quality": "blog",
+        "claimCount": 5
+      },
+      {
+        "url": "https://www.linkedin.com/pulse/ingenious-addiction-stardew-valley-abhishek-iyer",
+        "quality": "blog",
+        "claimCount": 5
+      },
+      {
+        "url": "https://smartseries.sportspromedia.com/features/football-manager-miles-jacobson-sports-interactive-interview",
+        "quality": "secondary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://www.gamedeveloper.com/design/deep-dive-refreshing-the-crusader-kings-iii-tutorial-mode-through-optimized-ux",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://www.gamedeveloper.com/design/gdc-2012-10-tutorial-tips-from-i-plants-vs-zombies-i-creator-george-fan",
+        "quality": "secondary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://www.gdcvault.com/play/1023231/The-Gamer-s-Brain-Part",
+        "quality": "primary",
+        "claimCount": 4
+      },
+      {
+        "url": "https://gdcvault.com/play/1019769/The-Sticky-Science-of-New",
+        "quality": "primary",
+        "claimCount": 4
+      },
+      {
+        "url": "https://www.gamedeveloper.com/business/how-first-session-length-impacts-game-performance",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://files01.core.ac.uk/download/pdf/301007767.pdf",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://dl.acm.org/doi/fullHtml/10.1145/3491101.3519837",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://medium.com/ironsource-levelup/the-princess-is-in-another-castle-understanding-the-player-goals-9ea6bea36dcd",
+        "quality": "blog",
+        "claimCount": 5
+      },
+      {
+        "url": "https://dl.acm.org/doi/10.1145/3173574.3174195",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://dl.acm.org/doi/10.1145/3311350.3347180",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://www.academia.edu/90071060/Designing_for_compatible_narrative_with_incremental_game_mechanics",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://gamedesignskills.com/game-design/text-based/",
+        "quality": "blog",
+        "claimCount": 5
+      }
+    ],
+    "stats": {
+      "angles": 5,
+      "sources": 23,
+      "claims": 111,
+      "verified": 25,
+      "confirmed": 2,
+      "killed": 23,
+      "afterSynthesis": 0
+    }
+  }
+}
