@@ -44,6 +44,40 @@ export {
 } from './config/rivals';
 export type { RivalArchetype } from './config/rivals';
 
+// Core run state + reducer (Prompt 03).
+export {
+  SCHEMA_VERSION,
+  createInitialState,
+  applyIntent,
+  emptyInventory,
+  totalDirtyCash,
+  netWorth,
+  empireSize,
+  rngFor,
+  withRngState,
+} from './state';
+export type {
+  GameState,
+  Intent,
+  RunStatus,
+  Clock,
+  Reputation,
+  Inventory,
+  Stash,
+  Front,
+  CrewMember,
+  OfficialTie,
+  Corruption,
+  Debt,
+  RivalState,
+  PendingChoice,
+  HighScore,
+} from './state';
+
+// Injected-time clock + per-tick pipeline (Prompt 03).
+export { tick, settleOffline, TICK_STEPS } from './clock';
+export type { TickMode, TickStep } from './clock';
+
 export const ENGINE_VERSION = '0.0.0' as const;
 
 export interface Game {

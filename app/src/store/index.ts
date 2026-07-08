@@ -1,5 +1,21 @@
 /**
  * Zustand store bridging the pure engine <-> React, plus save/load and
- * leaderboard adapters. Populated in later prompts (03+).
+ * leaderboard adapters. Leaderboard adapters arrive in Prompt 23.
  */
-export {};
+
+export { useGameStore } from './gameStore';
+export type { GameStore } from './gameStore';
+
+export {
+  LocalSaveStore,
+  CloudSaveStore,
+  NotImplementedError,
+  migrateEnvelope,
+  MIGRATIONS,
+} from './persistence';
+export type {
+  SaveStore,
+  SlotMeta,
+  Migration,
+  LocalSaveStoreOptions,
+} from './persistence';
