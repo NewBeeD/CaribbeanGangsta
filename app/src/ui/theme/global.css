@@ -1,0 +1,546 @@
+/* ==========================================================================
+   Caribbean Gangsta — global styles & primitive component classes
+   Aesthetic: CINEMATIC DOSSIER — warm charcoal, film grain, brass foil,
+   serif display + typewriter stamps. Refined, not maximalist.
+
+   The palette/spacing/type live as tokens in `tokens.ts` and are injected as
+   `:root { --cg-* }` custom properties by `GlobalStyles`. This file only uses
+   `var(--cg-*)`; it never hard-codes the palette. Fonts load online and fall
+   back to Georgia/Courier offline (design/01 acceptance).
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Spectral:ital,wght@0,400;0,600;0,700;1,400&family=Special+Elite&display=swap');
+
+/* ------------------------------------------------------------------- reset */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(120% 90% at 50% -10%, #241c14 0%, var(--cg-ink-900) 60%),
+    var(--cg-ink-900);
+  color: var(--cg-paper);
+  font-family: var(--cg-font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  min-height: 100vh;
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button {
+  font-family: inherit;
+  color: inherit;
+}
+
+/* Mobile-first / portrait: primary content column caps at a phone width. */
+.cg-app {
+  width: 100%;
+  max-width: 430px;
+  margin: 0 auto;
+  padding: var(--cg-space-xl) var(--cg-space-md) var(--cg-space-xxl);
+}
+
+/* ------------------------------------------------ atmosphere: grain + vignette */
+.cg-grain {
+  position: fixed;
+  inset: 0;
+  z-index: var(--cg-z-grain);
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: cg-grain 640ms steps(2) infinite;
+}
+.cg-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: var(--cg-z-vignette);
+  pointer-events: none;
+  background: radial-gradient(115% 80% at 50% 42%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cg-grain {
+    animation: none;
+  }
+}
+
+/* ----------------------------------------------------------- type utilities */
+.cg-label {
+  font-family: var(--cg-font-stamp);
+  font-size: 0.58rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cg-paper-dim);
+}
+.cg-kicker {
+  font-family: var(--cg-font-stamp);
+  font-size: 0.58rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--cg-brass);
+}
+.cg-title {
+  font-family: var(--cg-font-display);
+  font-weight: 900;
+  font-size: 1.9rem;
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+  color: var(--cg-paper);
+}
+
+/* Visually hidden but exposed to assistive tech. */
+.cg-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* tone helpers — always paired with a glyph/label, never color alone */
+.cg-tone-gold {
+  color: var(--cg-brass-hi);
+}
+.cg-tone-green {
+  color: var(--cg-green-hi);
+}
+.cg-tone-red {
+  color: var(--cg-red-hi);
+}
+.cg-tone-dim {
+  color: var(--cg-paper-dim);
+}
+
+/* -------------------------------------------------------------- containers */
+/* Optional dossier frame with a CONFIDENTIAL tab (for framing whole screens). */
+.cg-dossier {
+  position: relative;
+  padding: var(--cg-space-md);
+  background: linear-gradient(155deg, #241b12, #1a130c);
+  border: 1px solid #4a3a25;
+  border-radius: var(--cg-radius-xl);
+}
+.cg-dossier__tab {
+  position: absolute;
+  top: -13px;
+  left: 22px;
+  font-family: var(--cg-font-stamp);
+  font-size: 0.58rem;
+  letter-spacing: 0.28em;
+  color: var(--cg-brass);
+  background: #241b12;
+  padding: 3px 12px;
+  border: 1px solid #4a3a25;
+  border-bottom: none;
+  border-radius: 5px 5px 0 0;
+}
+
+/* Card = dossier index panel */
+.cg-card {
+  position: relative;
+  background: linear-gradient(180deg, var(--cg-ink-800), var(--cg-ink-750));
+  border: 1px solid var(--cg-line);
+  border-radius: var(--cg-radius-md);
+  padding: 15px 16px;
+  margin-bottom: 15px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 230, 180, 0.04),
+    0 8px 20px rgba(0, 0, 0, 0.35);
+}
+.cg-card__head {
+  display: block;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--cg-line-soft);
+}
+
+/* Panel = inset/raised sub-box (e.g. the "RISK THIS RUN" block) */
+.cg-panel {
+  background: var(--cg-ink-850);
+  border: 1px solid var(--cg-line);
+  border-radius: var(--cg-radius-md);
+  padding: 13px 14px;
+}
+
+/* ----------------------------------------------------------------- buttons */
+.cg-btn {
+  display: inline-block;
+  background: var(--cg-ink-750);
+  border: 1px solid var(--cg-line);
+  border-radius: var(--cg-radius-md);
+  color: var(--cg-paper);
+  cursor: pointer;
+  padding: 12px 16px;
+  font-family: var(--cg-font-stamp);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  transition:
+    transform 0.06s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+.cg-btn:active {
+  transform: translateY(1px);
+}
+.cg-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.cg-btn--block {
+  display: block;
+  width: 100%;
+}
+
+/* Primary = brass foil with a moving sheen. One primary per screen state. */
+.cg-btn--primary {
+  padding: 16px;
+  color: #211703;
+  border: 1px solid var(--cg-brass-hi);
+  background: linear-gradient(
+    180deg,
+    var(--cg-brass-hi) 0%,
+    var(--cg-brass) 46%,
+    var(--cg-brass-lo) 100%
+  );
+  box-shadow:
+    0 6px 18px rgba(180, 130, 40, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  position: relative;
+  overflow: hidden;
+}
+.cg-btn--primary::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -60%;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  transform: skewX(-18deg);
+  animation: cg-sheen 3.6s ease-in-out infinite;
+}
+.cg-btn--primary:hover:not(:disabled) {
+  box-shadow:
+    0 8px 26px rgba(210, 160, 60, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+.cg-btn--primary:disabled::after {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cg-btn--primary::after {
+    animation: none;
+  }
+}
+
+/* Secondary = index-card option (left brass rule, prose face) */
+.cg-btn--secondary {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 15px 16px;
+  font-family: var(--cg-font-body);
+  font-size: 1.02rem;
+  letter-spacing: 0;
+  text-transform: none;
+  background: var(--cg-ink-800);
+  border: 1px solid var(--cg-line);
+  border-left: 2px solid var(--cg-brass-lo);
+}
+.cg-btn--secondary:hover:not(:disabled) {
+  border-left-color: var(--cg-brass);
+  background: var(--cg-ink-750);
+}
+.cg-btn--secondary small {
+  display: block;
+  margin-top: 5px;
+  font-size: 0.82rem;
+  color: var(--cg-paper-dim);
+}
+
+/* Ghost = recessive text action */
+.cg-btn--ghost {
+  background: none;
+  border: none;
+  color: var(--cg-paper-dim);
+  letter-spacing: 0.12em;
+}
+.cg-btn--ghost:hover:not(:disabled) {
+  color: var(--cg-paper);
+}
+
+/* ------------------------------------------------------ Stat / dotted rows */
+.cg-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 7px 0;
+}
+.cg-stat__value {
+  font-family: var(--cg-font-display);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.cg-stat--big .cg-stat__value {
+  font-size: 1.4rem;
+}
+
+/* Dotted leader: label · · · · · · value (the case-file row) */
+.cg-dotted {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 7px 0;
+}
+.cg-dotted__label {
+  white-space: nowrap;
+}
+.cg-dotted__fill {
+  flex: 1;
+  border-bottom: 1px dotted var(--cg-line);
+  transform: translateY(-3px);
+}
+.cg-dotted__value {
+  white-space: nowrap;
+  font-family: var(--cg-font-display);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------- RiskMeter */
+/* Risk shown as dots + inked bar + the EXACT % (odds shown = odds rolled). */
+.cg-riskmeter__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.cg-riskmeter__pct {
+  font-family: var(--cg-font-display);
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--cg-paper);
+}
+.cg-riskmeter__dots {
+  display: inline-flex;
+  gap: 3px;
+  margin: 8px 0 2px;
+  font-size: 0.7rem;
+  line-height: 1;
+  letter-spacing: 0;
+}
+.cg-dot--on {
+  color: var(--cg-brass-hi);
+}
+.cg-dot--off {
+  color: var(--cg-paper-ghost);
+}
+.cg-riskmeter__bar {
+  height: 7px;
+  background: #0c0906;
+  border: 1px solid var(--cg-line-soft);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 9px;
+}
+.cg-riskmeter__bar > i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--cg-brass-lo), var(--cg-brass));
+}
+.cg-riskmeter__note {
+  margin-top: 8px;
+  font-family: var(--cg-font-stamp);
+  font-size: 0.62rem;
+  letter-spacing: 0.05em;
+  color: var(--cg-paper-ghost);
+}
+
+/* -------------------------------------------------------------- TrendArrow */
+/* Direction carried by glyph + optional text, not color alone (colorblind). */
+.cg-trend {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 0.9em;
+}
+.cg-trend__glyph {
+  font-size: 0.8em;
+}
+.cg-trend--up {
+  color: var(--cg-green-hi);
+}
+.cg-trend--down {
+  color: var(--cg-red-hi);
+}
+.cg-trend--flat {
+  color: var(--cg-paper-dim);
+}
+
+/* ---------------------------------------------------------------- HeatDots */
+.cg-heatdots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  line-height: 1;
+}
+.cg-heatdots__dot--on {
+  color: var(--cg-red-hi);
+}
+.cg-heatdots__dot--off {
+  color: var(--cg-paper-ghost);
+}
+
+/* --------------------------------------------------------------- SceneText */
+/* Failure/story renders as a typed case note — never a toast (design/07). */
+.cg-scene {
+  position: relative;
+  font-family: var(--cg-font-body);
+  font-size: 1.06rem;
+  line-height: 1.62;
+  color: #ded3bf;
+  padding: 4px 2px 6px 20px;
+  margin: 6px 0 22px;
+  border-left: 2px solid var(--cg-brass-lo);
+}
+.cg-scene::before {
+  content: '\275D';
+  position: absolute;
+  left: -4px;
+  top: -14px;
+  font-family: var(--cg-font-display);
+  font-size: 2.4rem;
+  color: var(--cg-brass-lo);
+  opacity: 0.5;
+}
+.cg-scene__who {
+  font-family: var(--cg-font-display);
+  font-weight: 700;
+  font-style: italic;
+  color: var(--cg-brass-hi);
+}
+.cg-scene em {
+  color: var(--cg-brass-hi);
+  font-style: italic;
+}
+.cg-scene--win {
+  border-left-color: var(--cg-green);
+}
+.cg-scene--win::before {
+  color: var(--cg-green);
+}
+.cg-scene--bust {
+  border-left-color: var(--cg-red);
+}
+.cg-scene--bust::before {
+  color: var(--cg-red);
+}
+
+/* ------------------------------------------------------------- StampBadge */
+.cg-stamp {
+  display: inline-block;
+  font-family: var(--cg-font-stamp);
+  font-size: 0.64rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 5px 11px;
+  border-radius: 3px;
+  transform: rotate(-6deg);
+  opacity: 0.85;
+}
+.cg-stamp--confidential {
+  color: var(--cg-brass-hi);
+  border: 2px solid var(--cg-brass-lo);
+  box-shadow: inset 0 0 0 1px rgba(143, 109, 40, 0.3);
+}
+.cg-stamp--filed {
+  color: var(--cg-green-hi);
+  border: 2px solid var(--cg-green);
+  box-shadow: inset 0 0 0 1px rgba(138, 154, 91, 0.3);
+}
+.cg-stamp--danger {
+  color: var(--cg-red-hi);
+  border: 2px solid var(--cg-red);
+  box-shadow: inset 0 0 0 1px rgba(178, 65, 47, 0.3);
+}
+
+/* -------------------------------------------------------------- BottomNav */
+.cg-bottomnav {
+  display: flex;
+  border-top: 1px solid var(--cg-line);
+  background: linear-gradient(180deg, transparent, rgba(40, 31, 20, 0.5));
+}
+.cg-bottomnav__btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--cg-paper-ghost);
+  padding: 15px 0 16px;
+  cursor: pointer;
+  font-family: var(--cg-font-stamp);
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.cg-bottomnav__btn > span {
+  position: relative;
+  padding-bottom: 5px;
+}
+.cg-bottomnav__btn:not(:disabled).is-active {
+  color: var(--cg-brass);
+}
+.cg-bottomnav__btn:not(:disabled).is-active > span::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--cg-brass);
+  box-shadow: 0 0 8px var(--cg-brass-lo);
+}
+.cg-bottomnav__btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* ---------------------------------------------------------------- keyframes */
+@keyframes cg-grain {
+  0% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(-6px, 4px);
+  }
+  100% {
+    transform: translate(4px, -5px);
+  }
+}
+@keyframes cg-sheen {
+  0%,
+  72% {
+    left: -60%;
+  }
+  90%,
+  100% {
+    left: 130%;
+  }
+}
