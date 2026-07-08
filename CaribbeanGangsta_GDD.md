@@ -1,13 +1,38 @@
 # Caribbean Gangsta — Rise of the Drug Lord
 
-## Game Design Document (v1.0 — Engagement-Grounded)
+## Game Design Document (v1.1 — Roguelike pivot)
 
-> Supersedes `DrugLord_Rising_GDD.md` (v0.1). This version keeps that document's
-> vision and systems, and rebuilds the progression/retention layer on top of the
-> engagement research in `research/` (164 extracted claims, ~91 verified, 0
-> refuted). Every retention mechanic below cites the finding it rests on so the
-> design can be defended, tuned, or cut on evidence rather than intuition.
-> Sources are given inline as short tags; full URLs are in `research/checkpoints/claims-slim.json`.
+> Supersedes `DrugLord_Rising_GDD.md` (v0.1) and the v1.0 engagement-grounded pass.
+> It keeps that document's vision, systems, and research spine, but **re-genres the
+> game** per the design decisions in `Ideas.md`. Every retention mechanic below still
+> cites the finding it rests on; where the pivot changes a mechanic, the citation is
+> re-interpreted, not deleted. Sources are inline short tags; full URLs are in
+> `research/checkpoints/claims-slim.json`.
+
+---
+
+## Design direction (v1.1 — what changed and why)
+
+The v1.0 identity was an **ethical idle/incremental sim** (deterministic spine, no
+in-game wipe, Legacy New Game+). Per `Ideas.md`, the identity is now a
+**realistic roguelike drug-trading game**. Four pillars flip:
+
+| # | v1.0 (parked) | v1.1 (this doc) |
+|---|---|---|
+| **Randomness** | Deterministic spine; same play → same result | **Random world per run** — starting country, prices, rivals, and events differ every run. Skill still reads the odds; the *world*, not the player's mastery, is what's random. |
+| **Fail state** | No unrecoverable loss; every setback recovers | **Permadeath.** Lose everything → you can't pay crew/loans → no protection → you get killed. A **line of credit / someone who still trusts you** is the *only* lifeline out of the spiral. |
+| **Meta-loop** | Legacy / heir inheritance (compounding NG+) | **High-score chase** — money made and empire size. Beat your last run. (Legacy is **parked**, not deleted — see §7.) |
+| **Prices** | Scaled game units, real prices as reference only | **Real-life prices are the actual units** (see doc 01 §2). |
+
+**Why this is still ethical (the research survives the pivot).** The dark-pattern
+literature condemns two specific things: *punishing real-world absence* and
+*real-money gambling on the progression path*. Roguelike permadeath does **neither** —
+you die from **in-game decisions you consented to** (the explicit genre contract, à la
+Spelunky / FTL / Hades), and **being away never kills you** (offline is frozen/safe,
+§6). We keep every guardrail in §8 except "no in-game death," which the genre replaces
+with **consensual, telegraphed, skill-expressible death**. Randomness stays
+**estimable-but-fair**: odds are always shown, so a run is lost to a *read you got
+wrong*, never to a hidden dice roll.
 
 ---
 
@@ -25,8 +50,9 @@ focused companion docs, each grounded in the same research:
 | [`design/05_Narrative_Beats_and_Simulation_Triggers.md`](design/05_Narrative_Beats_and_Simulation_Triggers.md) | Macro arc + which sim thresholds fire which story beats |
 | [`design/06_Playtest_and_Telemetry.md`](design/06_Playtest_and_Telemetry.md) | Turns every retention claim into a measured, falsifiable metric |
 | [`design/07_Wireframes.md`](design/07_Wireframes.md) | Text/layout sketches of every core screen + the first-session flow (input to the art/mockup pass) |
-| [`design/08_Story_Cards_Template_and_Examples.md`](design/08_Story_Cards_Template_and_Examples.md) | The story-writing form + 5 worked example beats (input to content authoring) |
+| [`design/08_Story_Cards_Template_and_Examples.md`](design/08_Story_Cards_Template_and_Examples.md) | The story-writing form + 19 worked example beats (5 core + 5 realism + 5 failure-side + 4 payoff) (input to content authoring) |
 | [`design/09_Storage_and_Corruption.md`](design/09_Storage_and_Corruption.md) | Contraband storage (vaults/secret places) + the corruption network (variable port bribes, politician/police payroll) |
+| [`design/10_Debt_and_Loan_Sharks.md`](design/10_Debt_and_Loan_Sharks.md) | Borrowing at interest from loan sharks + the growing-debt pressure engine (the early-game capital source; ethical contract) |
 
 ---
 
@@ -64,22 +90,26 @@ loss, and gambling.**
 | | |
 |---|---|
 | **Title** | Caribbean Gangsta — Rise of the Drug Lord |
-| **Genre** | Crime-empire management sim with idle/incremental progression |
+| **Genre** | **Roguelike crime-empire trading sim** — high-variance runs, permadeath, high-score chase |
 | **Platform** | Web-first (HTML5/JS, cloud save) → PWA → native mobile |
-| **Audience** | 18+. Fans of Dope Wars, Cartel Tycoon, Football Manager, idle tycoons, RimWorld-style story generators |
-| **Core fantasy** | Rise from a small-time Caribbean hustler to an international drug lord through smart deals, ruthless calls, and empire management |
-| **Session shape** | 5–20 min core sessions, playable in the gaps of daily life; progresses while you're away |
-| **End conditions** | Death or long-term imprisonment; **legacy/heir mode** continues the bloodline (a New Game+ that keeps this from being an unrecoverable fail state — see §7) |
+| **Audience** | 18+. Fans of Dope Wars / Drug Lord 2, Cartel Tycoon, roguelikes (Spelunky, FTL), RimWorld-style story generators |
+| **Core fantasy** | Rise from a small-time Caribbean hustler to an international drug lord through smart deals, ruthless calls, and empire management — knowing one bad run can end you |
+| **Session shape** | 5–20 min core sessions, playable in the gaps of daily life; progresses while you're away (offline is safe — it never kills you) |
+| **End conditions** | **Permadeath** — killed (broke, unprotected, no lifeline) or long-term imprisonment. A run ends; your **high score** (money made / empire size) persists to beat next time (§7). Death is the genre contract, not a punishment for absence. |
 
 **Unique selling points**
 - A **story generator**, not a script: emergent rise-and-fall tales from system
   interaction (rivals, crew, weather, markets, heat). RimWorld's designer credits
   exactly this framing — "not a game, but a story generator" — with unlocking
   compelling play. (gdcvault 1024232)
-- **Idle progression done ethically**: the empire runs while you're offline and
-  *rewards* your return without *punishing* your absence.
+- **A different run every time**: randomized world (country, prices, rivals, events)
+  means last run's plan won't win this one — you master the *odds*, not a script.
+- **Real stakes**: permadeath. Bet everything on one shipment and lose it, and the
+  spiral is real — no protection, hunted, dead unless someone still fronts you.
+- **Real economics**: real-life drug and arms prices with real supply/demand swings
+  (Drug Lord 2-style), not made-up numbers.
 - **Deep, human crew**: NPCs you actually care about — the relatedness engine.
-- **Modern crime realism**: laundering, arms, global law enforcement, crypto.
+- **The high-score chase**: every run feeds one number — beat your best.
 
 ---
 
@@ -91,6 +121,15 @@ loss, and gambling.**
   whether or not you're watching. Football Manager credits its persistent
   "living, breathing world" as the thing that differentiates it and sustains
   long-term play. (smartseries.sportspromedia)
+- **Grounded in the real transit model.** The Caribbean's real role is a
+  **cocaine transit corridor** — product sourced from the Andean region moves
+  through Caribbean hubs toward US and European markets, greased by port
+  corruption and financed by US-sourced firearms flowing south (the "Iron
+  River"). We model that: **cocaine-dominant** trade, secondary synthetics and
+  arms, and networks that **adapt** — when one route is disrupted, traffic shifts
+  (e.g., toward the Guyana/Suriname corridor). This grounding is a *believability*
+  investment (see Tone below), not a documentary. (UNODC, DEA, InSight Crime
+  trafficking research — see `realism_recommendations.md`)
 - **Protagonist:** Customizable Caribbean gangsta; background choice (dock worker,
   fisherman's kid, deported hustler, ex-soldier, resort insider) sets starting
   bonuses and opening story hooks.
@@ -136,11 +175,13 @@ Territory, supply chains, laundering fronts, crew development, the tech tree.
 moment-to-moment play and long-term aspiration and occupy most of the player's
 time. Invest design effort here. (medium.com ironsource "player goals")
 
-**Loop 4 — Epic (weeks+): The Legacy.**
-Become the untouchable kingpin / topple the cartel above you / die rich and
-feared. Long-term goals are *aspirational framing* — only ~10% of players finish
-AAA games, so this tier sets direction; it is not content most players complete.
-(medium.com ironsource)
+**Loop 4 — Epic (across runs): The High Score.**
+Become the untouchable kingpin / topple the cartel above you / die rich and feared —
+then do it *bigger* next run. In the roguelike frame (v1.1) this tier is the
+**cross-run chase**: each run feeds one number (peak net worth / empire size) and the
+run-end screen dares you to beat it. Long-term in-run goals are *aspirational framing*
+(only ~10% of players finish AAA games); the high score is what actually pulls the
+*next* run. (medium.com ironsource; §7)
 
 > **Design rule:** at every potential stopping point, close one loop and open the
 > next in the same beat — reward the milestone, then immediately point at the next
@@ -155,10 +196,14 @@ The systems below are inherited from v0.1; the **"Engagement hook"** notes are n
 and tie each to a research finding.
 
 ### 4.1 Empire Building & Economy
-- Supply chain: farms/labs → smuggling (boats, planes, subs, drones) →
-  distribution.
-- Diversification: drugs (weed, cocaine, synthetics), arms, precursors.
-- **Dynamic markets:** prices move on supply, events, rivals, and law enforcement.
+- Supply chain: farms/labs (local cannabis, imported precursors) → smuggling
+  (go-fast boats, semi-submersibles, light aircraft/air drops, drones,
+  containerized cargo) → distribution through Caribbean hubs into US/Europe.
+- Diversification: **cocaine is primary** (the transit-corridor reality);
+  secondary lines are synthetics (pills/meth, plus fentanyl precursors sourced
+  from Asia), arms, and precursor chemicals, with extortion/side revenues later.
+- **Dynamic markets:** prices move on supply gluts, weather, events, rivals, and
+  law-enforcement pressure — and disruption **forces route shifts** (§4.7).
 - **Engagement hook:** markets are the primary source of **interesting decisions**
   — a decision is only interesting if the player perceives it as having impact, so
   surface consequence clearly even when the underlying swing is modest. (Sid Meier)
@@ -199,14 +244,21 @@ and tie each to a research finding.
   established**, never before. (Sid Meier) See §8 for the ethical line on loss.
 
 ### 4.6 Arms Dealing
-- Sourcing and trading weapons; synergies with protection and expansion.
+- Sourcing and trading weapons; synergies with protection, turf, and expansion.
+- **Real-world grounding:** guns flow *south* — US-sourced via straw purchases (the
+  "Iron River"), handguns and rifles moving into the Caribbean. Arms carry
+  **higher heat** than product and pair with the violent/protection playstyle.
 - **Engagement hook:** a **paradigm-shift unlock** — a whole new systems layer that
   arrives mid-game as "rising action," creating fresh momentum without new content
   art. (dl.acm 3311350)
 
 ### 4.7 Chaos Engine (Procedural & Emergent)
-- System-driven random events: hurricanes, betrayals, market crashes, rival moves,
-  windfalls.
+- System-driven random events: hurricanes, betrayals, market crashes/supply
+  gluts, rival moves, LE surges, windfalls.
+- **Adaptive routes (realism):** a major disruption (a big bust, a task-force
+  surge, a hurricane closing a port) pushes traffic onto **alternate corridors**
+  (e.g., Guyana/Suriname) — mirroring how real networks reroute rather than
+  collapse. This makes the world feel alive and keeps a setback recoverable (§6).
 - **Engagement hook:** this is the **variable-reward core** — powerful and
   double-edged. See §5 and §8 for how we use it *and* how we bound it.
 
@@ -214,12 +266,14 @@ and tie each to a research finding.
 - Store product across floor stashes, buried jungle caches, safehouse vaults, and
   port containers — each a different trade of **capacity vs. seizure risk vs. heat
   vs. access speed**.
-- **The anti-wipe rule:** a raid hits exactly *one* location, so diversifying caps
-  your maximum loss — a bad night is a setback, never a wipe.
+- **Diversification is survival (v1.1):** a raid hits exactly *one* location, so
+  spreading product caps a single night's loss. Concentrate everything in one place
+  to save on storage and a bad roll can wipe you — and a wipe starts the death spiral
+  (doc 09). Where you stash is now a *life-or-death* risk decision, not just a setback.
 - **Engagement hook:** *where to stash* is an **interesting decision with perceived
-  impact** (Sid Meier), and the anti-wipe rule keeps it a "safe place to
-  experiment" with **no unrecoverable loss** (dl.acm 3311350). Learning to spread
-  inventory is a **competence** track.
+  impact** (Sid Meier). The skill is reading exposure vs. cost; getting it wrong is
+  how runs end. Learning to spread inventory is a **competence** track with real
+  stakes. (dl.acm 3311350 — re-read for the roguelike frame)
 
 ### 4.9 The Corruption Network — *port bribes & payroll* → [`design/09`](design/09_Storage_and_Corruption.md)
 - **Port officials (variable bribes):** pay per shipment to cut seizure risk; the
@@ -229,7 +283,8 @@ and tie each to a research finding.
 - **Standing payroll (politicians & police):** put beat cops, a DEA insider, a
   customs chief, a politician, or a judge on a weekly retainer for standing
   protection — raid tip-offs, slowed escalation, dismissed charges. A **judge can
-  soften the imprisonment end-state**, feeding Legacy (§7).
+  soften the imprisonment end-state**, keeping a run alive for a comeback instead of
+  ending it (§7).
 - **Engagement hook:** deterministic *benefits* (buy safety) with a **telegraphed,
   readable betrayal risk** — a bought official can be underpaid, out-bid by a rival,
   or turned by LE into a wire (the snitch loop, §4.3). It's the **relatedness +
@@ -286,19 +341,31 @@ specific non-chronological order** (medium.com ironsource):
   gaming, unlike random/appointment/social rewards. Lean on these for the
   always-on progression scaffolding. (tandfonline 1521326)
 
-### 5.4 Variable rewards — use, but bound
+### 5.4 Randomness — a random world, not a slot machine (roguelike model)
 
 Variable-ratio (unpredictable) rewards are the most extinction-resistant schedule —
 the engine of "one more turn." They are also the reward type most strongly linked
-to *problematic* gaming, and the risk is **higher for vulnerable players (e.g.
-ADHD)**. (tandfonline 1521326; dl.acm 3311350)
+to *problematic* gaming, especially for **vulnerable players (e.g. ADHD)**, when the
+randomness is a **hidden dice roll the player can't read or a real-money gamble**.
+(tandfonline 1521326; dl.acm 3311350)
 
-So we use variable reward for **texture, not for the spine of progression**:
-- ✅ A deal occasionally pays out unusually well; a random windfall; a
-  golden-hour surprise buyer.
-- ❌ Never gate *core progress* behind a gamble. No loot boxes on the
-  progression path. Core advancement runs on **deterministic, competence-based**
-  tracks (§5.3) so a player is never *forced* to gamble to progress.
+The roguelike pivot leans *into* randomness — but on the healthy side of that line.
+The distinction is **estimable-but-fair**: the *world* is random, the *outcome* is a
+skill read.
+
+- ✅ **The world seed varies every run** — starting country, price boards, rival
+  personalities, the events that hit you. No two runs are the same, so mastery is
+  *transferable knowledge* (reading a market, spreading inventory, timing a bribe),
+  never a memorized optimal line.
+- ✅ **Every risk shows its odds before you commit** — a "70% clean" run busts ~30%
+  of the time, measured (§8, doc 01 §2a). You lose a run to a *read you got wrong*,
+  not to a concealed roll. That's what keeps high variance feeling *fair*.
+- ❌ **No real-money gambling on progress.** No loot boxes, no gacha, no paid
+  reroll. In-game risk is free and information-rich; the wallet is never the dice.
+
+> This is the difference between a roguelike and a slot machine: both are random,
+> but a roguelike **pays out to skill** and **shows you the odds**. We are the
+> former. (Sid Meier estimable-uncertainty; §8 guardrails.)
 
 ---
 
@@ -316,11 +383,16 @@ autonomously in between. (dl.acm 3173574; dl.acm 3311350)
 1. **Absence forgoes gains but never risks existing progress.** Idle games retain
    *without* loss-aversion pressure — unlike FarmVille, where you "must check in or
    lose progress." Your stash doesn't rot; your fronts don't burn down because you
-   slept. (dl.acm 3173574)
-2. **No unrecoverable fail state.** Sub-optimal decisions recover through time;
-   progression is always possible; the player can disengage at any point without
-   substantial consequence. Design the empire as a "safe place" to experiment.
-   (dl.acm 3311350)
+   slept; **and you never get killed while offline.** Death only ever comes from
+   *in-game decisions you made*, never from time away. (dl.acm 3173574)
+2. **The fail state is in-game, consensual, and telegraphed — never a punishment for
+   absence.** This is the roguelike contract (v1.1): over-expose yourself — bet the
+   whole bankroll on one shipment, run with no protection, default on a shark with no
+   lifeline — and a bad roll can spiral into death (see doc 09 death-spiral, doc 10
+   lifeline). But the spiral is always **readable before you enter it** (odds shown),
+   and **offline never advances it**. The empire is a "safe place to experiment"
+   *within a run*; the stakes are that the run itself can end. (dl.acm 3311350 —
+   re-read for the roguelike frame)
 3. **The longer you're away, the more *options* await on return** (accumulated
    cash to allocate, decisions queued, events to resolve) — return is rewarded with
    *interesting choices*, not just a bigger number. (dl.acm 3173574)
@@ -342,22 +414,35 @@ autonomously in between. (dl.acm 3173574; dl.acm 3311350)
 
 ---
 
-## 7. Progression, Legacy & Prestige
+## 7. Progression, High-Score & Prestige
 
-- **Legacy / Heir mode = ethical New Game+.** On death or imprisonment, continue
-  through an heir who inherits partial assets, reputation, and permanent bonuses.
-  This turns the "fail state" into voluntary meta-progression: players erase current
-  progress in exchange for compounding advantages next run — a defining, *voluntary*
-  retention mechanic of the idle/incremental genre, and the mechanism that makes
-  "death" not an unrecoverable loss. (dl.acm 3173574; dl.acm 3311350)
+**The meta-loop is the high-score chase (v1.1).** A run ends in death or prison; what
+persists is your **score** — and the whole game is built to make you say *"one more
+run, I can beat that."*
+
+- **The score = money made and/or empire size.** Track a primary leaderboard number
+  (peak net worth) and an empire-size composite (districts, routes, fronts, crew).
+  Surface a **personal best** prominently, plus global/seasonal boards (§12). The
+  run-end screen always reads "New best?" / "you were $X short" — the roguelike
+  cliffhanger that starts the next run.
 - **Prestige tracks** reward mastery across runs (routes mastered, empires built,
-  rivals toppled) as safe meta-achievement progression. (tandfonline 1521326)
-- **Research/tech tree** provides deterministic long-horizon competence goals.
+  rivals toppled, farthest act reached) as safe meta-achievement progression — the
+  *safe* compulsion, not linked to problematic play. (tandfonline 1521326)
+- **Research/tech tree** provides long-horizon competence goals *within* a run.
 - **Consecutive-day play:** if used at all, keep it a *bonus* (a small returning
   boost), never a *streak you can lose*. Streak/contingency rewards are among the
-  patterns players flag as manipulative and are the ones most linked to problematic
-  play, especially for ADHD players. Prefer "welcome back" over "don't break your
-  streak." (dl.acm 3491101; tandfonline 1521326)
+  patterns players flag as manipulative and most linked to problematic play,
+  especially for ADHD players. Prefer "welcome back" over "don't break your streak."
+  (dl.acm 3491101; tandfonline 1521326)
+
+> **Legacy / Heir mode is PARKED, not cut (v1.1).** The v1.0 plan — an heir inherits
+> partial assets and permanent bonuses on death — is shelved because it *dilutes* the
+> high-score stakes (if death compounds into an advantage, death stops mattering, and
+> the roguelike tension collapses). We keep the design on ice: if playtests show pure
+> permadeath is too punishing to retain players, Legacy returns as an **optional
+> lower-stakes mode** alongside the high-score mode, never replacing it. The
+> meta-achievement/prestige scaffolding above is the retention backbone in the
+> meantime. (dl.acm 3173574 preserved for that contingency.)
 
 ---
 
@@ -373,9 +458,10 @@ predatory path is also the churning path. (tandfonline 0144929X)
 | Guardrail | Rationale |
 |---|---|
 | No punishment for absence; timed content is always optional bonus | Appointment mechanics are dark only when absence is punished. (core.ac.uk 30100776; dl.acm 3173574) |
-| No loot boxes / gacha on the progression path | Gambling mechanics were unanimously rated the darkest pattern, and players regret them even while engaging. (dl.acm 3491101) |
+| No loot boxes / gacha / paid rerolls on the progression path | Gambling mechanics were unanimously rated the darkest pattern, and players regret them even while engaging. High variance is fine; a *real-money* gamble is not. (dl.acm 3491101) |
 | Streaks are "welcome back" bonuses, never losable | Contingency/streak rewards link to problematic play, worse for vulnerable players. (tandfonline 1521326) |
-| Core progression is deterministic & competence-based; variable reward is texture only | Keeps the healthy compulsion (mastery) as the spine, the risky compulsion (gambling) as garnish. (§5.4) |
+| Randomness is estimable-but-fair: odds always shown, skill reads them; never a hidden roll | Keeps the healthy compulsion (mastering the odds) and rejects the slot-machine one (a concealed dice roll). The world is random; the outcome is a skill read. (§5.4; Sid Meier) |
+| **Permadeath is consensual and in-game, never a punishment for absence** | The dark-pattern line is about punishing *real-world* absence; a roguelike death from *in-game* decisions the player opted into (and could read the odds of) is the genre contract, not a dark pattern. Offline never kills you. (core.ac.uk 30100776 re-read; §6) |
 | Frustration is allowed only as *challenge that resolves into competence*, never as artificial deficit | "Interested" marks healthy engagement; designed-in frustration to force investment is the failure mode. (dl.acm 3491101) |
 | Optional session-limit / well-being nudges; transparent about randomness (show real odds) | Disclosure/"manipulation literacy" neutralizes darkness; estimable-but-fair odds build trust. (core.ac.uk 30100776; Sid Meier) |
 | Monetization = acceleration & cosmetics only; never pay-to-win on leaderboards | Pay-to-win is a top player-flagged dark pattern; commercial pressure, not design, is the usual source of darkness. (dl.acm 3491101) |
@@ -486,10 +572,11 @@ gdcvault 1014958 nested loops)
 
 ## 14. Scope & Development Phases
 
-- **MVP (Web):** core deal loop (Loop 1–2), basic empire map, crew (relatedness
-  slice), idle/offline engine (§6), legacy mode (§7), the §9 onboarding, one
-  rival arc, leaderboards. Deliberately ship a *small subset of high-impact
-  features* well rather than everything thinly. (gdcvault 1024232 RimWorld)
+- **MVP (Web):** core deal loop (Loop 1–2), randomized run setup (country/prices/
+  rivals, §5.4), basic empire map, crew (relatedness slice), idle/offline engine
+  (§6), **permadeath + high-score/leaderboard loop (§7)**, the loan-shark lifeline
+  (doc 10), the §9 onboarding, one rival arc. Deliberately ship a *small subset of
+  high-impact features* well rather than everything thinly. (gdcvault 1024232 RimWorld)
 - **Expansion:** full simulation depth (laundering breadth, arms, international
   routes as paradigm-shift unlocks), action missions, more rival arcs, mobile port.
 - **Live Ops:** seasonal events (Cartel Wars, Carnival), balancing, new content —
@@ -505,8 +592,10 @@ gdcvault 1014958 nested loops)
   hypotheses to A/B test. (gamedeveloper "how first session length")
 - **Balancing depth vs. accessibility** — progressive disclosure (§9) is the
   primary tool.
-- **Procedural balance** — the Chaos Engine must avoid unrecoverable frustration
-  (§6 rule 2).
+- **Procedural balance (v1.1 critical)** — death must always feel *earned and
+  readable*, never an arbitrary dice roll. The Chaos Engine may end a run, but only
+  after telegraphed warnings and only when the player over-exposed themselves against
+  odds they could see (§5.4, §6 rule 2). "Cheap" deaths are the top churn risk here.
 - **Theme sensitivity** — fictional only; frame as crime *drama*, not instruction.
 - **The variable-reward temptation** — the biggest ongoing risk is that live-ops
   metrics push us toward the dark path (this is *why* dark patterns usually appear —
@@ -519,7 +608,7 @@ gdcvault 1014958 nested loops)
 **Strongest (multi-source / verified):**
 1. Satisfy competence, autonomy, relatedness — the spine of engagement. (SDT ×3)
 2. Nested, chained compulsion loops; close-one-open-one at every stop. (Turducken, Civ)
-3. Idle = reward return, never punish absence; no unrecoverable fail state. (idle CHI ×2)
+3. Idle = reward return, never punish absence; offline is always safe. Death is in-game & consensual (v1.1 roguelike), never from absence. (idle CHI ×2)
 4. First session 10–20 min, invisible tutorial, progressive disclosure, ≤8 words. (PvZ, CK3, first-session, Gamer's Brain)
 5. Layer goals; medium-term metagame is the retention backbone; reveal dream-first. (ironsource)
 
@@ -531,16 +620,16 @@ gdcvault 1014958 nested loops)
 10. Failed actions produce narrative feedback; world/NPCs remember. (text-based)
 
 **Guardrails (ethics = retention):**
-11. Variable reward as texture, not progression spine. (problematic-gaming study)
+11. Random *world*, fair *odds*: high variance is fine when odds are shown and skill reads them; no hidden roll, no real-money gamble. (v1.1; problematic-gaming study)
 12. No gambling on the progression path; streaks are welcome-back, not losable. (CHI'22, problematic-gaming)
 13. Prefer completion/mastery rewards (safe) over random/appointment/social (risky). (problematic-gaming)
 14. Frustration only as challenge-that-resolves-to-competence; transparency neutralizes darkness. (CHI'22, dark-patterns)
 
 ---
 
-**Version:** 1.0 (engagement-grounded)
-**Date:** 2026-07-05
-**Basis:** `DrugLord_Rising_GDD.md` v0.1 + `research/` engagement study (164 claims, ~91 verified, 0 refuted)
+**Version:** 1.1 (roguelike pivot)
+**Date:** 2026-07-08
+**Basis:** v1.0 engagement-grounded GDD + `Ideas.md` design decisions (random world, permadeath, high-score, real prices)
 **Author:** Danphil Daniel, with Claude
 
 *Living document — every retention claim above is falsifiable and cited; tune or

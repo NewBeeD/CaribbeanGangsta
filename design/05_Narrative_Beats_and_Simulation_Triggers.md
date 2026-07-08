@@ -28,7 +28,7 @@
 | I — Come-up | Small dirty cash, 1 district, 1 crew | Hope, first taste of power |
 | II — Contender | Multi-district, first front, a rival notices you | Rising heat, first real enemy |
 | III — Kingpin | Regional empire, laundering at scale, LE task force | Paranoia, the cost of the crown |
-| IV — The Fall / Legacy | Death, prison, or voluntary retirement | Reckoning → the heir inherits |
+| IV — The Fall | Death (the spiral, doc 01 §4a), prison, or voluntary retire | Reckoning → **your score banks; beat it next run** |
 
 ## 2. Trigger table (state → beat)
 
@@ -45,8 +45,12 @@ reference `01_Economy_and_Balancing.md` (all tunable).
 | Crew loyalty + agenda + opportunity align | Betrayal arc: warning signs → point of no return | Serialized tension (Sid Meier) |
 | Heat crosses CIA/Interpol threshold | The task-force antagonist gets a name and a face | Relatedness (hate object) + tension |
 | First international route opened | New region unlocks; scope widens (paradigm shift) | Long-horizon aspiration |
-| Peak net worth milestone | The crown-weighs-heavy beat: family/vice consequences surface | Personal layer (relatedness) |
-| Death / prison / retirement | The fall; heir inheritance scene | Legacy NG+ (GDD §7) |
+| Major route disruption (big bust / task-force surge / hurricane closes a port) | Networks **reroute** — the Guyana/Suriname corridor opens as an alternate | Adaptive world (GDD §4.7); recoverable setback |
+| Supply glut or crash (Chaos Engine) | Prices swing hard; a buyer's-market or fire-sale beat, rivals scramble | Market realism; interesting decision (Sid Meier) |
+| Peak net worth milestone | The crown-weighs-heavy beat: family/vice consequences surface | Personal layer (relatedness); also updates high score (GDD §7) |
+| **Wipe with no lifeline** (capital ~0, can't pay, no credit) | **Death-spiral arc:** protection collapses → hunted → the fall | Permadeath stakes (doc 01 §4a); run ends |
+| Wipe **with** a lifeline (a shark/contact still fronts you) | The comeback beat: you claw back from the brink on borrowed trust | Tension → relief; loan-shark arc (doc 10) |
+| Run ends (death / prison / retire) | The fall; **the tally** — score banks, "beat it next run" | High-score chase (GDD §7) |
 
 ## 3. Plateaus (deliberate rest)
 
@@ -56,14 +60,18 @@ create momentum *and* reduce addictive potential (dl.acm 3311350). A plateau is 
 good place to surface *quiet character beats* (a crew member's personal request, a
 family dinner) rather than escalation.
 
-## 4. Failure = story, never dead-end
+## 4. Failure = story (and, at the limit, the end of the run)
 
 - Every failed action produces **narrative feedback**, enriched with sensory detail,
   not a bare state report (gamedesignskills). A busted deal is a *scene*.
-- No failure is unrecoverable (dl.acm 3311350) — a raid, a betrayal, even prison
-  routes into a *new* arc (the comeback, the heir), never a hard wall.
-- **Sequence:** bad beats land *after* the player has banked some wins in the arc
-  (Sid Meier).
+- **Most failure is recoverable** (dl.acm 3311350) — a raid, a betrayal, a bad market,
+  even prison routes into a *new* arc (the comeback). These are setbacks, not walls.
+- **But the run itself can end (v1.1).** A total wipe with no lifeline is the
+  death-spiral arc (doc 01 §4a) — the roguelike wall. Even then it's *authored as a
+  fall*, not a bare "game over": a reckoning scene, then the score tally that dares
+  the next run. The wall is the *genre contract*, and it's always **telegraphed**.
+- **Sequence:** bad beats — and the fatal one — land *after* the player has banked
+  some wins in the arc, and only after readable warning signs (Sid Meier).
 
 ## 5. Apophenia budget (leave gaps on purpose)
 

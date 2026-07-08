@@ -10,16 +10,20 @@
 >   to buy are meaningful, consequential choices (Sid Meier).
 > - **Estimable-but-fair risk** — every seizure %, bribe price, and flip warning is
 >   shown; the number displayed is the number rolled (Sid Meier).
-> - **No unrecoverable loss** — a raid or a betrayal is a *setback that recovers
->   through time*, never a wipe (dl.acm 3311350).
+> - **Recoverable — until a wipe (v1.1).** A single raid or betrayal is a *setback*
+>   you recover from; that's what diversification buys you. But concentrate everything
+>   in one place and a raid can *wipe* you — and a wipe is the entry to the death
+>   spiral (doc 01 §4a). Storage is now a **survival skill**, not just loss-capping.
+>   (dl.acm 3311350 re-read for the roguelike frame.)
 > - **Relatedness** — bought officials are NPCs you manage, trust, and can be
 >   betrayed by (SDT; doc 02).
 > - **Autonomy** — these systems are the backbone of the *business/political* and
 >   *low-profile* playstyles, distinct from the *violent* path (GDD §10).
 >
-> Numbers below follow `01_Economy_and_Balancing.md` conventions (heat is 0–1,
-> weed 10/18, coke 200/480, front base $2,100/h). **All values are v1 hypotheses to
-> be tuned by telemetry (doc 06).**
+> Numbers below follow `01_Economy_and_Balancing.md` conventions (heat is 0–1;
+> **real-dollar prices per §2** — e.g. weed ~$700–1,500/kg at source, cocaine
+> ~$1,500–3,000/kg at source rising to $20k–60k+ wholesale; front/idle rates per §3).
+> **All values are v1 hypotheses to be tuned by telemetry (doc 06).**
 
 ---
 
@@ -31,15 +35,19 @@ risk decision**. Storage turns "how much product do I hold?" into "how much am I
 willing to expose, and where?" — a planning layer that rewards the shift from
 tactics to strategy the research says defines mature engagement (dl.acm 3173574).
 
-### A.2 The core rule (the anti-wipe guarantee)
-**A raid hits exactly ONE location.** So spreading inventory across stashes caps
-your maximum loss — a single bad night is a setback, never a total wipe. This is
-the "no unrecoverable fail state" principle made concrete (dl.acm 3311350), and it
-makes diversification a genuine, teachable skill (competence).
+### A.2 The core rule (diversification = survival, v1.1)
+**A raid hits exactly ONE location.** So spreading inventory across stashes caps a
+single night's loss to what's in one place. **This is your survival skill.** Play it
+right and any one raid is a *setback*; play it wrong — everything in one stash to save
+on storage cost — and a raid becomes a **wipe**, which starts the death spiral (doc 01
+§4a). The choice of *how much to expose, and where* is now life-or-death, not just
+loss-capping.
 
-Seizures only ever take **product + dirty cash stored at that location**. Clean
-assets, fronts, and crew are never seized (consistent with doc 01 §4). Core
-progression stays safe; only the risky, un-laundered layer is exposed.
+Seizures take **product + dirty cash stored at that location** (dirty cash has to
+live somewhere too — A.3a). Clean assets in fronts and crew are not *directly* seized
+(consistent with doc 01 §4) — but if a wipe leaves you unable to pay them, they walk,
+and that's the spiral. So "clean cash is safe" is true *only if you survive to launder
+and spend it*.
 
 ### A.3 Stash types
 
@@ -62,6 +70,21 @@ Design notes:
   3311350).
 - **Capacity pressure** is the sink: to stockpile for a price swing (doc 01 §2) or
   a big shipment, you must invest in storage first — a reason to spend and plan.
+
+### A.3a Dirty cash must be stored & guarded (v1.1)
+Un-laundered cash isn't safe just sitting in a "wallet" (`Ideas.md` Storage #2). Like
+product, **dirty cash lives in a location and shares that location's seizure %** — and
+large piles **need people guarding them**:
+
+- **Guarded stashes:** a safehouse/vault holding significant dirty cash needs a crew
+  guard (wages). An under-loyal guard raises effective seizure risk (an inside job —
+  A.3 note; doc 02) *and* is a theft/flip risk.
+- **The pressure to launder:** holding dirty cash is exposure — it can be seized in a
+  raid and it costs guard wages. That's the mechanical push toward the laundering
+  engine (doc 01 §3), and a real reason clean cash is worth the haircut.
+- **Wipe interaction:** a raid that hits your main cash stash can zero your operating
+  capital in one night → death spiral (doc 01 §4a). So *cash* diversification matters
+  as much as *product* diversification.
 
 ### A.4 Raid resolution (estimable-but-fair)
 - Each location shows its **current seizure %** on the storage screen — and that
@@ -99,7 +122,7 @@ base_bribe  ×  (1 + heat)  ×  (1 + rival_pressure)  ×  greed_trait  ×  rep_d
 
 | Driver | Effect | Why (research) |
 |---|---|---|
-| `base_bribe` | ~8% of shipment value | scales with what's at stake |
+| `base_bribe` | **~5–20%+ of shipment value** (starts ~8%) | real port-bribe range; scales with what's at stake (UNODC/InSight Crime) |
 | **Heat** | hotter empire → pricier (officials risk more) | consequence of your own play (perceived impact) |
 | **Rival pressure** | if a rival also buys this port, a bidding war raises the price | rivals as living pressure (GDD §4.4) |
 | **Greed trait** | 0.7–1.3 per official | NPCs are people (relatedness) |
@@ -129,7 +152,31 @@ uncertainty (texture, not gamble; GDD §5.4).
 | **Detective / DEA insider** | $8,000 | Advance warning on task-force moves; intel on which routes/ports are watched; bury one charge per season |
 | **Customs chief** | $6,000 | Standing low seizure on their port (a permanent version of B.1) |
 | **Local politician** | $12,000 | Protection for a front/territory; slows LE-tier escalation; permits that unlock new fronts; **+Political reputation** |
-| **Judge** | big retainer | Can dismiss charges — **softens the "imprisonment" end-state**, feeding Legacy mode (GDD §7) |
+| **Judge** | big retainer | Can dismiss charges — **softens the "imprisonment" end-state**, keeping a run alive for a comeback instead of ending it (GDD §7) |
+
+**"Plata o plomo" — the corruption dilemma made real.** The network runs on the
+classic transit-corridor logic (*silver or lead*): an official takes the money, or
+becomes a problem. The player wields it (buy an official, or — the violent path —
+remove one who won't take the deal), and can have it turned back on *them* by a
+rival or the state. It stays on the healthy side of the ethical line (B.3) — the
+menace is in-fiction and telegraphed, never aimed at the human player.
+
+**Retainers are not fixed — officials demand more as you grow (v1.1).** Any official
+can **ask for a raise at any moment**, and the ask scales realistically with your
+**reputation and business level** (`Ideas.md` Storage #3): the bigger and hotter your
+empire, the more they know they're worth — and the more they risk protecting you. A
+customs chief who took $6k/wk when you were a district hustler wants far more once
+you're moving international weight. Drivers of the ask:
+
+```
+new_ask = current_retainer × (1 + Δbusiness_level) × (1 + heat) × greed_trait × rival_pressure
+```
+
+You can **accept, negotiate, or refuse** — but refusing (or ignoring the ask) is
+exactly an *underpayment*, which feeds the flip risk below. This makes payroll a
+**growing, scaling clean-cash sink** that keeps pace with your income (so success
+doesn't trivialize protection) and a constant, in-fiction pressure — never a
+real-world guilt timer (B.3).
 
 **Benefits are the point; the flip is the drama.** Each official has hidden
 **loyalty**. Flip risk rises — and is *telegraphed* — when:
@@ -184,7 +231,8 @@ Three legible ways to play the same systems — the autonomy pillar in action.
 | A bought cop's tip fires before a raid | Payoff beat — the payroll pays off (competence + relatedness) |
 | An official's loyalty + rival bid align | **Flip arc** begins (warning signs → turned) |
 | Heat crosses a payrolled official's threshold | He asks for more, or starts to distance himself |
-| Prison end-state **with a judge on payroll** | Charges dismissed → comeback instead of Legacy reset |
+| Prison end-state **with a judge on payroll** | Charges dismissed → the run survives for a comeback instead of ending |
+| **A raid wipes an over-concentrated stash** | The death-spiral arc opens (doc 01 §4a) — protection starts to collapse |
 
 ### Story cards (doc 08) — beats to author
 - `CORR-01` — First port official's offer (the smuggling unlock).
@@ -193,9 +241,12 @@ Three legible ways to play the same systems — the autonomy pillar in action.
 - `RAID-01` — A stash gets hit; the anti-wipe rule felt in fiction.
 
 ### Telemetry (doc 06) — new signals
-- **Storage diversification index** & **average raid-loss %** (is the anti-wipe rule
-  landing? target: no raid ever removes >~40% of held product for a diversified
-  player).
+- **Storage diversification index** & **average raid-loss %** (is diversification
+  working as a survival skill? target: a *diversified* player loses <~40% of held
+  product to any one raid — while an *over-concentrated* player can still be wiped, by
+  design).
+- **Raid-induced wipe rate** — how often a raid tips a player into the death spiral
+  (doc 01 §4a); cross-check it correlates with over-concentration, not bad luck.
 - **Bribe spend / shipment** and **payroll as % of clean income** (sink health).
 - **Official-flip rate** and **intervention-success rate** (is the betrayal loop
   readable, per doc 02?).

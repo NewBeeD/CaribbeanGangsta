@@ -118,16 +118,16 @@ fall in Kingston."), assignment, and any active arc (e.g. a betrayal warning).
 |  MONEY                                   |
 +------------------------------------------+
 |   While you were gone (7h 20m):           |
-|      + $14,200 clean                      |   (return reward = cash + choices)
+|      + $10,800 clean                      |   (return reward = cash + choices)
 |                                          |
 |   ➜ A buyer is waiting on you.  [ See ]   |   (pending decision = return hook)
 |   ➜ Marco flagged a problem.    [ See ]   |
 |                                          |
 |  ----- FRONTS -----------------------     |
-|   Neon Club     $2,100/h   ==== Lvl 3     |
-|      [ Upgrade  $9,800 ]                   |   (1.15 curve — next step affordable)
-|   Car Wash      $  600/h   ==  Lvl 1      |
-|      [ Upgrade  $1,400 ]                   |
+|   Neon Club     $1,350/h   ==== Lvl 3     |   (nightclub: $450/level — doc 01 §3a)
+|      [ Upgrade  $18,300 ]                  |   (buy_in $12k × 1.15^3 — next step affordable)
+|   Car Wash      $  120/h   ==  Lvl 1      |   (starter front: $120/level)
+|      [ Upgrade  $2,300 ]                   |   ($2k × 1.15^1)
 |                                          |
 |   Dirty: $22k   Clean: $88k               |
 +------------------------------------------+
@@ -162,23 +162,25 @@ session-end hooks.*
 
 ---
 
-## 6. LEGACY (long-horizon aspiration / prestige)
+## 6. HIGH SCORE (run-end tally / cross-run chase)
 
-*Goal: reframe death/prison as voluntary meta-progression (ethical NG+).*
+*Goal: end the run on the "beat it next run" cliffhanger (roguelike, v1.1). Shown on
+death/prison and as a standalone screen.*
 
 ```
 +------------------------------------------+
-|  LEGACY                                  |
+|  THE FALL — RUN OVER                     |
 +------------------------------------------+
-|   Peak net worth:   $2.4M                 |
+|   Peak net worth:   $2.4M   ← banked      |
+|   Empire size:      Rank 7 (best: 9)      |
 |   Rivals toppled:   3                     |
-|   Years survived:   6                     |
+|   Farthest act:     III — Kingpin         |
 |                                          |
-|   Influence to inherit:  ●●●●●○○○○○       |
-|   Heir keeps: 25% assets, your name,      |
-|   permanent bonuses.                      |
+|   NEW PERSONAL BEST?   ✗  ($0.3M short)   |
+|   Leaderboard:  #142 this season          |
 |                                          |
-|   [ Retire & pass the crown ]  (optional) |   (voluntary reset, never punished)
+|   Prestige unlocked: "Guyana corridor"    |   (new starting scenario, not power)
+|   [ Start next run ]        [ Leaderboard ]|
 +------------------------------------------+
 ```
 
@@ -209,7 +211,7 @@ hook).*
 - Numbers stay **light** — dots/bars/arrows over raw figures wherever prose or a
   glyph conveys it (hide machinery, show consequence).
 - Every failure state needs **scene text** written (see `08_Story_Card...`).
-- Persistent bottom nav: Deals · Crew · Money · Heat (Empire/Legacy one level up).
+- Persistent bottom nav: Deals · Crew · Money · Heat (Empire/High Score one level up).
 - Next step: apply the Caribbean-noir visual direction (doc 04 §5) to these
   layouts → color mockups.
 ```

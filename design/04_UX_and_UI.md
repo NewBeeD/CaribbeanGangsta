@@ -32,7 +32,7 @@
 | **Crew** | Roster, assignments, prose status | Loyalty as behavior/dialogue, not bars (see doc 02) |
 | **Laundering / Money** | Fronts, clean-cash rate, offline accrual | The return payoff, framed as *decisions to allocate* |
 | **Heat / Threats** | Current LE tier, telegraphed pressure | Tension legible and estimable |
-| **Legacy** | Prestige/heir, influence spend | Long-horizon aspiration made concrete |
+| **High Score** | Personal best, leaderboards, prestige unlocks, run recap | Cross-run aspiration made concrete (the "beat it next run" chase) |
 
 ## 2. The first-session flow (wireframe intent)
 

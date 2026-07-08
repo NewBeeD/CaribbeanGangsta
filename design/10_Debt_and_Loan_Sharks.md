@@ -10,19 +10,32 @@
 > healthy side of it. The design rests on four non-negotiable guarantees — read
 > §4 (Ethical Contract) before tuning anything.
 >
-> Numbers follow `01_Economy_and_Balancing.md` (heat 0–1; weed 10/18; coke
-> 200/480; front base $2,100/h). **All values are v1 hypotheses for telemetry
-> tuning (doc 06).**
+> Numbers follow `01_Economy_and_Balancing.md` (heat 0–1; **real-dollar prices per
+> §2** — e.g. weed ~$700–1,500/kg source, cocaine ~$1,500–3,000/kg source rising to
+> $20k–60k+ wholesale; front/idle rates per §3). **All values are v1 hypotheses for
+> telemetry tuning (doc 06).**
 
 ---
 
-## 1. Why it exists — debt as the "come-up" hook
+## 1. Why it exists — the come-up hook *and* the lifeline (v1.1)
 
-Borrowing is the classic crime-fantasy rise: **leverage you can't afford yet, then
-sweat the repayment.** It solves a real gap the research identifies — an
-open-ended sim can feel *stakeless* in its first hour (no 30-day timer like Drug
-Wars). Debt supplies **voluntary, front-loaded tension** and an **endowed-progress
-head start**:
+Borrowing plays **two roles** in the roguelike design:
+
+1. **The come-up hook** — classic crime-fantasy leverage: buy the shipment you can't
+   afford yet, then sweat the repayment. Voluntary, front-loaded tension.
+2. **The lifeline out of the death spiral** — *the* thing that separates a scary
+   setback from a dead run (`Ideas.md` Storage #1; doc 01 §4a). When you're wiped —
+   capital ~0, can't pay crew/officials — **someone who still trusts you fronting cash
+   or product is the only way back.** No lifeline, no protection, and you're hunted.
+
+This is the central tension the shark embodies: **the same character who saves you
+from the spiral is the one who kills you if you can't repay.** Reputation and a
+history of paying up are what keep that door open — which is why rep is *survival*,
+not flavor. It also fixes the "stakeless first hour" gap (no 30-day timer like Drug
+Wars) with real, run-ending stakes.
+
+Debt supplies **voluntary, front-loaded tension** and an **endowed-progress head
+start**:
 
 - **Leverage (endowed progress):** a loan lets you buy a big shipment or open a
   front *now*, accelerating the come-up — a positive, forward-pulling hook, not a
@@ -68,11 +81,13 @@ a standing line of credit) or sour (he becomes a rival — doc 05).
 - **Collateral** (optional, for bigger loans): pledge a stash/front; default
   transfers *that one asset* — the anti-wipe rule (doc 09) still holds.
 
-### Example (street shark, illustrative)
-Borrow **$1,500** at 20%/wk. Play through one in-game week → owe **~$1,800**. Buy a
-coke shipment with it, clear ~$2,800 profit, repay $1,800 → net **+$1,000** and a
-happy shark who now lends you more. That's leverage working. Sit on it through three
-played-weeks without paying → owe **~$2,600** and Papa Cass sends someone.
+### Example (street shark, illustrative — real dollars)
+Borrow **$1,500** at 20%/wk. Play through one in-game week → owe **~$1,800**. At this
+tier you're still moving weed (coke needs a route you can't yet fund), so put it into
+a batch bought cheap in a glut and sold into a shortage (buy-low/sell-high, §2) for
+**~$3,300** gross; repay $1,800 → net **~+$1,500** and a happy shark who now lends you
+more. That's leverage working. Sit on it through three played-weeks without paying →
+owe **~$2,600** and Papa Cass sends someone.
 
 ---
 
@@ -95,10 +110,15 @@ they are what separate "tension" from "dark pattern" (GDD §8).
      The pressure lives inside the fiction, on the *character* — never on the human
      (contrast the streak-guilt patterns players flag — tandfonline 1521326).
 
-3. **No unrecoverable fail state.** You can always dig out. Missed payments escalate
-   *in fiction* (see §5) but never silently end the game; the worst case routes into
-   a story arc, and true death only ever becomes a **Legacy** reset (GDD §7), like
-   any other death (dl.acm 3311350).
+3. **Telegraphed, never silent — but the run *can* end (v1.1).** Missed payments
+   escalate *in fiction* along a readable ladder (§5) with agency at every rung — the
+   shark never *silently* zeroes you out, and you can always *attempt* to dig out.
+   But at the end of the ladder, an unpaid debt with no way to pay **can get you
+   marked and killed** — ending the *run*, which banks your high score (GDD §7). That
+   is the roguelike contract, and it is always the visible last rung, never a surprise.
+   What stays absolute: **absence never advances the ladder** (guarantee #2), and the
+   worst case is always *earned and foreseen*, never a hidden roll (dl.acm 3311350
+   re-read for the roguelike frame).
 
 4. **Frustration only as challenge that resolves into competence.** Managing debt is
    a *skill* the player masters, not an artificial deficit engineered to extract.
@@ -122,8 +142,10 @@ sudden punishment (estimable-but-fair; Sid Meier). Each rung is a **story beat**
 3. **Collateral / a stash taken** — he seizes *one* pledged stash or a cut of income
    (doc 09 anti-wipe rule intact).
 4. **A front / corner taken** — he moves on an asset; recoverable over time.
-5. **Marked** — he puts a price on you or becomes a **rival** (doc 05 rival arc);
-   lethal outcomes feed **Legacy**, never a silent game-over.
+5. **Marked** — he puts a price on you or becomes a **rival** (doc 05 rival arc). If
+   you have no way to pay and no protection, this is a fatal rung: it can **end the
+   run** (banking your high score, GDD §7) — the telegraphed last step, never a silent
+   game-over.
 
 At every rung the player has **agency**: pay, partial-pay, negotiate a new term, do
 the shark a *favor* instead of cash (a relationship branch), or — the violent path —
