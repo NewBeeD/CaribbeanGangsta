@@ -16,6 +16,7 @@ import {
   stashCost,
   getStashType,
   WIPED_CAPITAL_FLAG,
+  spawnCrew,
   type GameState,
   type Stash,
   type RaidEvent,
@@ -150,8 +151,8 @@ describe('effectiveSeizurePct — guard loyalty raises risk (design/09 A.3a)', (
     const state: GameState = {
       ...withStashes(createInitialState('guard'), [vault]),
       crew: [
-        { id: 'loyal', name: 'Loyal', loyalty: 100 },
-        { id: 'rat', name: 'Rat', loyalty: 0 },
+        spawnCrew('deon', { id: 'loyal', loyalty: 100 }),
+        spawnCrew('reyes', { id: 'rat', loyalty: 0 }),
       ],
     };
     const base = getStashType('safehouse').seizurePct;

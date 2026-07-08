@@ -75,6 +75,10 @@ export type {
   Stash,
   Front,
   CrewMember,
+  MemoryEntry,
+  BetrayalArc,
+  BetrayalStage,
+  CrewAssignment,
   OfficialTie,
   Corruption,
   Debt,
@@ -214,6 +218,70 @@ export type {
   PesoQuote,
   PesoExchangeResult,
 } from './laundering';
+
+// Crew & NPC relatedness engine — Prompt 08.
+export {
+  CREW_ARCHETYPES,
+  CREW_SKILLS,
+  getCrewArchetype,
+  findCrewArchetype,
+  emptyCrewSkills,
+  CREW_LOYALTY_MIN,
+  CREW_LOYALTY_MAX,
+  LOYALTY_EVENT_BASE,
+  LOYALTY_DOLLARS_PER_POINT,
+  TRAIT_EVENT_MULTIPLIER,
+  BETRAYAL_PRONE_AGENDAS,
+  BETRAYAL_WARNING_LOYALTY,
+  BETRAYAL_PONR_LOYALTY,
+  BETRAYAL_FLIP_LOYALTY,
+  WIRE_HEAT_PER_HOUR,
+  TRAIN_SKILL_GAIN,
+  TRAIN_COST,
+  CREW_SKILL_MAX,
+  LIEUTENANT_FRONT_BONUS,
+} from './config/crew';
+export type {
+  CrewArchetype,
+  CrewDialogue,
+  CrewSkill,
+  CrewSkills,
+  CrewTrait,
+  CrewAgenda,
+  CrewRole,
+  LoyaltyEventKind,
+} from './config/crew';
+export {
+  spawnCrew,
+  hydrateLegacyCrew,
+  recruit,
+  dismiss,
+  recordMemory,
+  readsMemory,
+  hasMemoryOf,
+  loyaltyDelta,
+  loyaltyDeltaValue,
+  describeLoyalty,
+  betrayalTarget,
+  advanceBetrayalArc,
+  advanceBetrayalArcs,
+  wireHeatPerHour,
+  applyWireHeat,
+  crewStep,
+  train,
+  promote,
+  assign,
+  frontLieutenantBonus,
+} from './crew';
+export type {
+  LoyaltyEvent,
+  LoyaltyResult,
+  RecruitResult,
+  TrainResult,
+  PromoteResult,
+  PromoteTarget,
+  CrewRejectReason,
+} from './crew';
 
 export const ENGINE_VERSION = '0.0.0' as const;
 

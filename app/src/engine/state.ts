@@ -29,6 +29,12 @@ import {
 } from './deals';
 import { setLieLow, tierForHeat, type LeTier, type LieLowIntent } from './heat';
 import { STARTING_STASH_TYPE, type StashType } from './config/stashes';
+import type {
+  CrewAgenda,
+  CrewRole,
+  CrewSkills,
+  CrewTrait,
+} from './config/crew';
 
 /**
  * Bump when the persisted `GameState` shape changes; add a matching entry to the
@@ -38,8 +44,10 @@ import { STARTING_STASH_TYPE, type StashType } from './config/stashes';
  * v2: added `markets` (live per-location price drift, Prompt 04).
  * v3: added `lyingLow` + `leTierAck` (heat/law-enforcement engine, Prompt 05).
  * v4: added `type` + `guardCrewId` to `Stash` (contraband storage, Prompt 06).
+ * v5: expanded `CrewMember` to the full relatedness model — traits/skills/agenda/
+ *     memory/betrayal arcs (crew engine, Prompt 08).
  */
-export const SCHEMA_VERSION = 4 as const;
+export const SCHEMA_VERSION = 5 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -88,11 +96,73 @@ export interface Front {
   readonly level: number;
 }
 
-/** An NPC crew member. Prompt 08 owns loyalty/memory/betrayal arcs. */
+/**
+ * One thing a crew member REMEMBERS you did (design/02 §3 — the world remembers).
+ * Every loyalty shift writes one; later dialogue/loyalty checks read the log, so a
+ * betrayed character never acts as if the wrong didn't happen (§3 consistency law).
+ */
+export interface MemoryEntry {
+  /** In-game hours when it happened (ordering; consistency across save/load). */
+  readonly atHours: number;
+  /** The loyalty-event kind that wrote it (`LoyaltyEventKind`), free-form here. */
+  readonly kind: string;
+  /** Prose, from the NPC's side ("You left Deon to take the fall in Kingston."). */
+  readonly note: string;
+  /** The loyalty delta this event applied (signed). */
+  readonly delta: number;
+}
+
+/**
+ * The betrayal arc — a TELEGRAPHED story beat, never a dice roll (design/02 §4).
+ * It steps `warning → point-of-no-return → flipped`, one stage at a time, driven
+ * purely by loyalty + agenda + how you treated them; each stage carries a readable
+ * `sign`, and raising loyalty (pay/promote/confront) walks it back down. When it
+ * reaches `flipped` the crew member becomes a wire (`CrewMember.isWire`).
+ */
+export type BetrayalStage = 'warning' | 'point-of-no-return' | 'flipped';
+
+export interface BetrayalArc {
+  readonly stage: BetrayalStage;
+  readonly startedAtHours: number;
+  readonly advancedAtHours: number;
+  /** The readable sign for the current stage (shown to the player as prose). */
+  readonly sign: string;
+}
+
+/** What a crew member is currently doing (design/02 §5). `targetId` names the asset. */
+export interface CrewAssignment {
+  readonly kind: 'idle' | 'guard' | 'front' | 'territory' | 'deal-crew';
+  /** The stash/front/territory id this assignment references, when applicable. */
+  readonly targetId?: string;
+}
+
+/**
+ * A crew member as a PERSON, not a stat line (design/02 §1). `loyalty` is hidden
+ * (0–100) and surfaced only through prose (`describeLoyalty`) — the UI never shows
+ * the number. Prompt 08 (`crew.ts`) owns loyalty shifts, memory, and betrayal arcs.
+ */
 export interface CrewMember {
   readonly id: string;
+  /** The config archetype this crew was spawned from (design/02 §7). */
+  readonly archetypeId: string;
   readonly name: string;
+  readonly role: CrewRole;
+  readonly traits: readonly CrewTrait[];
+  readonly skills: CrewSkills;
+  /** Hidden 0–100; surfaced via prose/behavior, NEVER as a bar (design/02 §1). */
   readonly loyalty: number;
+  /** Shared history with the player — the perspective-taking hook (design/02 §2). */
+  readonly bond: string;
+  /** Hidden goal — the emergent-conflict seed the player infers (design/02 §6). */
+  readonly agenda: CrewAgenda;
+  readonly memoryLog: readonly MemoryEntry[];
+  readonly assignment: CrewAssignment;
+  /** Present once a betrayal arc has begun (design/02 §4). Absent = no arc. */
+  readonly activeArc?: BetrayalArc;
+  /** True once flipped: an embedded wire feeding heat/LE (design/02 §4; Prompt 05/09). */
+  readonly isWire?: boolean;
+  /** The single family/personal high-stakes relationship (design/02 §7). */
+  readonly isFamily?: boolean;
 }
 
 /** A bought official. Prompt 09 owns bribes/payroll/flips. */

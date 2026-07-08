@@ -16,10 +16,17 @@
  * (the engine stays wall-clock-free; the store stamps time and injects it).
  */
 
-import { SCHEMA_VERSION, type GameState, type RunStatus, type Stash } from '@/engine/state';
+import {
+  SCHEMA_VERSION,
+  type CrewMember,
+  type GameState,
+  type RunStatus,
+  type Stash,
+} from '@/engine/state';
 import { createInitialMarkets, type Markets } from '@/engine/deals';
 import { tierForHeat, type LeTier } from '@/engine/heat';
 import { STARTING_STASH_TYPE } from '@/engine/config/stashes';
+import { hydrateLegacyCrew } from '@/engine/crew';
 
 /** Lightweight listing of a saved slot (no full state payload). */
 export interface SlotMeta {
@@ -102,6 +109,23 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
           const stash = s as Stash & { type?: Stash['type'] };
           return stash.type ? stash : { ...stash, type: STARTING_STASH_TYPE };
         }),
+      },
+    };
+  },
+  // 4 → 5: expand each crew member from the old `{ id, name, loyalty }` stub to
+  // the full relatedness model (traits/skills/agenda/memory/assignment — Prompt
+  // 08). Pre-Prompt-08 runs never seeded crew, so this is usually an empty map;
+  // any stub that exists is hydrated with neutral defaults preserving its loyalty.
+  4: (env) => {
+    const legacy = env.state as GameState & {
+      crew?: readonly { id: string; name: string; loyalty: number }[];
+    };
+    return {
+      ...env,
+      schemaVersion: 5,
+      state: {
+        ...legacy,
+        crew: (legacy.crew ?? []).map((c) => hydrateLegacyCrew(c) as CrewMember),
       },
     };
   },

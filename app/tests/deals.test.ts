@@ -14,6 +14,7 @@ import {
   DEFAULT_STASH_CAPACITY,
   LOCATION_IDS,
   PRODUCT_IDS,
+  spawnCrew,
   type GameState,
   type ProductId,
   type Stash,
@@ -88,7 +89,7 @@ describe('computeBustProbability — clamp and fairness', () => {
     // A loyal crew is the only input that can drive the raw value below the floor.
     const calm: GameState = {
       ...seed(createInitialState('floor'), { heat: 0 }),
-      crew: [{ id: 'c1', name: 'Loyal', loyalty: 100 }],
+      crew: [spawnCrew('deon', { id: 'c1', loyalty: 100 })],
     };
     expect(computeBustProbability(calm, 'weed', 1, 'source')).toBe(BUST_MIN);
     const hot = seed(createInitialState('ceil'), { heat: 100 });

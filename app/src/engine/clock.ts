@@ -21,6 +21,7 @@ import { driftPrices } from './deals';
 import { applyHeatEscalation, decayHeat } from './heat';
 import { raidStep } from './storage';
 import { accrue } from './laundering';
+import { crewStep } from './crew';
 
 const HOURS_PER_DAY = 24;
 const DAYS_PER_WEEK = 7;
@@ -70,6 +71,10 @@ export const TICK_STEPS: readonly TickStep[] = [
   // (design/01 §3). Prompt 07. Active-only: the offline return payoff is settled
   // separately by `laundering.settleOffline` on its own piecewise curve.
   { id: 'laundering-accrual', modes: ['active'], run: (s, dt) => accrue(s, dt) },
+  // Crew: advance betrayal arcs one telegraphed stage, then apply any flipped-wire
+  // heat (design/02 §4). Prompt 08. Active-only: offline never advances an arc or a
+  // wire's heat (GDD §6). Deterministic — the arc uses no randomness.
+  { id: 'crew', modes: ['active'], run: (s, dt) => crewStep(s, dt) },
   // Debt interest (design/10). Prompt 10. Active-only AND only when debt.active —
   // offline never advances what is owed.
   { id: 'debt-interest', modes: ['active'], run: (s) => s },

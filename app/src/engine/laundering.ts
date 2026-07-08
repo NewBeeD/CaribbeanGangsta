@@ -22,6 +22,7 @@
 import type { Rng } from './rng';
 import { restoreRng } from './rng';
 import { addHeat } from './heat';
+import { frontLieutenantBonus } from './crew';
 import { LIE_LOW_INCOME_MULTIPLIER } from './config/heat';
 import {
   CRYPTO_SWING,
@@ -56,11 +57,17 @@ export function cryptoSwingFactor(state: GameState): number {
   return 1 + CRYPTO_SWING * Math.sin(phase);
 }
 
-/** The clean $/hr a single front generates right now (`ratePerLevel × level`). */
+/**
+ * The clean $/hr a single front generates right now (`ratePerLevel × level`),
+ * with the crypto front's live swing and any promoted-lieutenant delegation bonus
+ * (design/02 §5 — a lieutenant running the front autonomously). With no crew the
+ * bonus is 0, so a crew-less run's rates are unchanged.
+ */
 function frontRate(state: GameState, front: Front): number {
   const cfg = getFrontType(front.type as FrontType);
   const base = cfg.ratePerLevel * front.level;
-  return cfg.swing > 0 ? base * cryptoSwingFactor(state) : base;
+  const swung = cfg.swing > 0 ? base * cryptoSwingFactor(state) : base;
+  return swung * (1 + frontLieutenantBonus(state, front.id));
 }
 
 /**
