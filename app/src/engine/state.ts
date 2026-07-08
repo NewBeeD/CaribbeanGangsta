@@ -20,13 +20,22 @@
 import { createRng, restoreRng, type Rng, type RngState } from './rng';
 import { generateWorld, type World } from './world';
 import { PRODUCT_IDS, type ProductId } from './config/countries';
+import {
+  createInitialMarkets,
+  resolveDeal,
+  type BuyIntent,
+  type Markets,
+  type SellIntent,
+} from './deals';
 
 /**
  * Bump when the persisted `GameState` shape changes; add a matching entry to the
  * migration table in `store/persistence.ts`. Older saves migrate or reject
  * cleanly (Prompt 03 acceptance).
+ *
+ * v2: added `markets` (live per-location price drift, Prompt 04).
  */
-export const SCHEMA_VERSION = 1 as const;
+export const SCHEMA_VERSION = 2 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -137,6 +146,8 @@ export interface GameState {
   readonly rngState: RngState;
   readonly world: World;
   readonly clock: Clock;
+  /** Live per-location price drift for the deal loop (Prompt 04). */
+  readonly markets: Markets;
   /** Safe, launderable money (design/01 §1). Dirty cash lives in `stashes`. */
   readonly cleanCash: number;
   readonly reputation: Reputation;
@@ -219,6 +230,7 @@ export function createInitialState(seed: number | string): GameState {
     rngState: rng.getState(),
     world,
     clock: { hours: 0, day: 1, week: 1 },
+    markets: createInitialMarkets(),
     cleanCash: 0,
     reputation: { street: 0, business: 0, political: 0 },
     heat: country.heatBaseline,
@@ -259,19 +271,24 @@ export function withRngState(state: GameState, rng: Rng): GameState {
 }
 
 /**
- * The intent union — every player action the store can dispatch. This prompt
- * only defines the dispatch skeleton and a `noop`; later prompts add their
- * variants (buy/sell, bribe, launder, borrow, …) and their handler cases.
+ * The intent union — every player action the store can dispatch. The deal
+ * variants (Prompt 04) are the first real actions; later prompts add bribe,
+ * launder, borrow, … and their handler cases.
  */
-export type Intent = { readonly type: 'noop' };
+export type Intent = { readonly type: 'noop' } | BuyIntent | SellIntent;
 
 /**
  * Pure reducer entry point: intent in -> new immutable state out. Never mutates
- * `state`. Individual handlers are registered by later prompts as `case`s here.
+ * `state`. Deal intents delegate to `resolveDeal`, keeping only the new state;
+ * callers that need the deal's scene key / fairness numbers call `resolveDeal`
+ * directly (see `deals.ts`).
  */
 export function applyIntent(state: GameState, intent: Intent): GameState {
   switch (intent.type) {
     case 'noop':
       return state;
+    case 'buy':
+    case 'sell':
+      return resolveDeal(state, intent).state;
   }
 }

@@ -43,6 +43,15 @@ export {
   RIVAL_COUNT,
 } from './config/rivals';
 export type { RivalArchetype } from './config/rivals';
+export { PRODUCTS, getProduct } from './config/products';
+export type { ProductConfig } from './config/products';
+export {
+  LOCATIONS,
+  LOCATION_IDS,
+  SOURCE_LOCATION,
+  getLocation,
+} from './config/locations';
+export type { LocationId, LocationConfig } from './config/locations';
 
 // Core run state + reducer (Prompt 03).
 export {
@@ -77,6 +86,32 @@ export type {
 // Injected-time clock + per-tick pipeline (Prompt 03).
 export { tick, settleOffline, TICK_STEPS } from './clock';
 export type { TickMode, TickStep } from './clock';
+
+// Deal loop — Loop 1 (Prompt 04).
+export {
+  getMarketPrice,
+  driftPrices,
+  computeBustProbability,
+  resolveDeal,
+  hasBankedWin,
+  createInitialMarkets,
+  BUST_MIN,
+  BUST_MAX,
+  DEFAULT_STASH_CAPACITY,
+  DEAL_WIN_FLAG,
+} from './deals';
+export type {
+  MarketState,
+  Markets,
+  MarketPrice,
+  PriceTrend,
+  DealResult,
+  DealOutcome,
+  RejectReason,
+  DealIntent,
+  BuyIntent,
+  SellIntent,
+} from './deals';
 
 export const ENGINE_VERSION = '0.0.0' as const;
 

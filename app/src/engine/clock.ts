@@ -15,6 +15,8 @@
  */
 
 import type { GameState } from './state';
+import { restoreRng } from './rng';
+import { driftPrices } from './deals';
 
 const HOURS_PER_DAY = 24;
 const DAYS_PER_WEEK = 7;
@@ -41,6 +43,14 @@ export interface TickStep {
  * decay before accrual before interest before events before beats.
  */
 export const TICK_STEPS: readonly TickStep[] = [
+  // Live market price walk (design/01 §2). Prompt 04. Active-only: prices are
+  // frozen while away so absence is never punished (GDD §6). Draws from and
+  // advances the run's RNG stream.
+  {
+    id: 'price-drift',
+    modes: ['active'],
+    run: (s, dt) => driftPrices(s, restoreRng(s.rngState), dt),
+  },
   // Heat decays over online time (design/01 §4). Prompt 05. Active-only: offline
   // is frozen, so heat neither rises nor falls while away.
   { id: 'heat-decay', modes: ['active'], run: (s) => s },

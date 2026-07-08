@@ -17,6 +17,7 @@
  */
 
 import { SCHEMA_VERSION, type GameState, type RunStatus } from '@/engine/state';
+import { createInitialMarkets, type Markets } from '@/engine/deals';
 
 /** Lightweight listing of a saved slot (no full state payload). */
 export interface SlotMeta {
@@ -57,7 +58,15 @@ interface SaveEnvelope extends SlotMeta {
 export type Migration = (env: SaveEnvelope) => SaveEnvelope;
 
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
-  // 1: (env) => ({ ...env, schemaVersion: 2, state: /* upgrade */ }),
+  // 1 → 2: seed live markets on saves written before the deal loop (Prompt 04).
+  1: (env) => {
+    const legacy = env.state as GameState & { markets?: Markets };
+    return {
+      ...env,
+      schemaVersion: 2,
+      state: { ...legacy, markets: legacy.markets ?? createInitialMarkets() },
+    };
+  },
 };
 
 /**
