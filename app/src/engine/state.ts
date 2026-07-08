@@ -49,8 +49,11 @@ import type {
  * v6: expanded `Corruption` — full `OfficialTie` payroll model (retainer/greed/
  *     memory/flip arc/pending raise), `paidPorts`, and weekly-payroll bookkeeping
  *     (the corruption network, Prompt 09).
+ * v7: expanded `Debt` — the loan-shark ledger (`lenderId`/`rate`/`accruedInterest`/
+ *     `dueDay`/`collateralRef`/`ladderRung`) replacing the `interestRatePerHour`
+ *     stub (debt & loan sharks, Prompt 10).
  */
-export const SCHEMA_VERSION = 6 as const;
+export const SCHEMA_VERSION = 7 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -240,13 +243,30 @@ export interface Corruption {
 }
 
 /**
- * Loan-shark debt. Prompt 10 owns the interest curve and default ladder.
- * Invariant (guardrail): offline settlement NEVER increases what is owed.
+ * The loan-shark ledger — a capital SOURCE and the game's main early-game pressure
+ * engine (design/10; Prompt 10 owns the interest curve and default ladder). MVP is
+ * one loan at a time (design/10 §7): `lenderId === null` means no active loan.
+ *
+ * Invariant (guarantee #2, design/10 §4.2): offline settlement NEVER increases what
+ * is owed and NEVER advances the ladder. Interest accrues only per in-game day
+ * ACTUALLY PLAYED — the `debt-interest` tick step is active-only.
  */
 export interface Debt {
+  /** The lender this loan is from (`LenderId`), or `null` when there is no loan. */
+  readonly lenderId: string | null;
+  /** Principal borrowed, $ — fixed once borrowed; growth lands in `accruedInterest`. */
   readonly principal: number;
-  readonly interestRatePerHour: number;
-  /** Interest only accrues while active AND the player is online (design/10 §4.2). */
+  /** Current weekly interest rate as a fraction (the vig raises it — design/10 §5). */
+  readonly rate: number;
+  /** Interest accrued to date, $ (kept separate so `principal` is a clean floor). */
+  readonly accruedInterest: number;
+  /** In-game day the soft due date falls on — consequences BEGIN here (design/10 §3). */
+  readonly dueDay: number;
+  /** A pledged stash/front id put up as collateral (design/10 §3). Absent = none. */
+  readonly collateralRef?: string;
+  /** Current default-ladder rung 0–5 (design/10 §5). 0 = in good standing. */
+  readonly ladderRung: number;
+  /** Interest accrues only while `active` AND the player is online (design/10 §4.2). */
   readonly active: boolean;
 }
 
@@ -334,6 +354,24 @@ export function emptyInventory(): Inventory {
   return inv;
 }
 
+/** A ledger with no active loan — the run's starting (and post-repayment) debt. */
+export function emptyDebt(): Debt {
+  return {
+    lenderId: null,
+    principal: 0,
+    rate: 0,
+    accruedInterest: 0,
+    dueDay: 0,
+    ladderRung: 0,
+    active: false,
+  };
+}
+
+/** Total owed = principal + accrued interest (what a full repayment must cover). */
+export function debtOwed(debt: Debt): number {
+  return debt.principal + debt.accruedInterest;
+}
+
 /** Sum of dirty cash across all stashes (dirty cash is located — design/01 §1). */
 export function totalDirtyCash(state: GameState): number {
   return state.stashes.reduce((sum, s) => sum + s.dirtyCash, 0);
@@ -394,7 +432,7 @@ export function createInitialState(seed: number | string): GameState {
     fronts: [],
     crew: [],
     corruption: { officials: [], payrollPerWeek: 0, paidPorts: [], lastPayrollWeek: 1 },
-    debt: { principal: 0, interestRatePerHour: 0, active: false },
+    debt: emptyDebt(),
     rivals,
     flags: {},
     beatsFired: [],

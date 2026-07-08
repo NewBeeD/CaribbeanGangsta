@@ -99,7 +99,15 @@ describe('settleOffline — the ethical core: adds only, never seizes (GDD §6, 
       stashes: [stash],
       heat: 80,
       cleanCash: 10_000,
-      debt: { principal: 40_000, interestRatePerHour: 0.05, active: true },
+      debt: {
+        lenderId: 'papa-cass',
+        principal: 40_000,
+        rate: 0.2,
+        accruedInterest: 0,
+        dueDay: base.clock.day + 14,
+        ladderRung: 0,
+        active: true,
+      },
     };
   }
 

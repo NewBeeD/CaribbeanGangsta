@@ -23,6 +23,7 @@ import { raidStep } from './storage';
 import { accrue } from './laundering';
 import { crewStep } from './crew';
 import { corruptionStep } from './corruption';
+import { debtStep } from './debt';
 
 const HOURS_PER_DAY = 24;
 const DAYS_PER_WEEK = 7;
@@ -82,9 +83,11 @@ export const TICK_STEPS: readonly TickStep[] = [
   // offline never charges a retainer or advances a flip, so absence is safe
   // (GDD §6). Deterministic — the flip arc uses no randomness.
   { id: 'corruption', modes: ['active'], run: (s, dt) => corruptionStep(s, dt) },
-  // Debt interest (design/10). Prompt 10. Active-only AND only when debt.active —
-  // offline never advances what is owed.
-  { id: 'debt-interest', modes: ['active'], run: (s) => s },
+  // Debt interest + default ladder (design/10). Prompt 10. Active-only AND only
+  // when debt.active: accrues interest per in-game day played, then advances the
+  // telegraphed default ladder one rung past the soft due date. Offline never runs
+  // it, so absence never grows what's owed or escalates (guarantee #2, §4.2).
+  { id: 'debt-interest', modes: ['active'], run: (s, dt) => debtStep(s, dt) },
   // Procedural events (design/05). Prompt 12. Active-only.
   { id: 'chaos-roll', modes: ['active'], run: (s) => s },
   // Narrative-beat checks (design/05). Prompt 12/13. Active-only.

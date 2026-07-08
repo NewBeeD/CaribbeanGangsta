@@ -292,8 +292,11 @@ function assertOfflineGuardrails(before: GameState, after: GameState): void {
   if (after.heat > before.heat) {
     throw new Error('settleOffline(): heat rose while offline (guardrail)');
   }
-  if (after.debt.principal > before.debt.principal) {
-    throw new Error('settleOffline(): debt increased while offline (guardrail)');
+  if (owed(after) > owed(before)) {
+    throw new Error('settleOffline(): debt owed increased while offline (guardrail)');
+  }
+  if (after.debt.ladderRung > before.debt.ladderRung) {
+    throw new Error('settleOffline(): debt ladder advanced while offline (guardrail)');
   }
   if (after.runStatus === 'dead' || after.runStatus === 'prison') {
     throw new Error('settleOffline(): run ended while offline (guardrail)');
@@ -305,6 +308,11 @@ function assertOfflineGuardrails(before: GameState, after: GameState): void {
 
 function totalDirty(state: GameState): number {
   return state.stashes.reduce((sum, s) => sum + s.dirtyCash, 0);
+}
+
+/** Total loan-shark debt owed (principal + accrued interest) — the offline-freeze check. */
+function owed(state: GameState): number {
+  return state.debt.principal + state.debt.accruedInterest;
 }
 
 // --- Front operations --------------------------------------------------------

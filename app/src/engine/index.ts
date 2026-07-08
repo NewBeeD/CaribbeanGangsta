@@ -59,6 +59,8 @@ export {
   createInitialState,
   applyIntent,
   emptyInventory,
+  emptyDebt,
+  debtOwed,
   totalDirtyCash,
   netWorth,
   empireSize,
@@ -353,6 +355,56 @@ export type {
   ChargeResult,
   CorruptionRejectReason,
 } from './corruption';
+
+// Debt & loan sharks — capital source, come-up hook & lifeline — Prompt 10.
+export {
+  LENDERS,
+  getLender,
+  findLender,
+  CAP_REPUTATION_FLOOR,
+  CAP_REPUTATION_SCALE,
+  CAP_COLLATERAL_FRACTION,
+  INTEREST_DAYS_PER_WEEK,
+  LADDER_MAX_RUNG,
+  LADDER_SIGNS,
+  LADDER_VIG_RATE_INCREASE,
+  LADDER_INCOME_CUT,
+  LADDER_DAYS_PER_RUNG,
+  CEILING_MAX_RUNG,
+  LIFELINE_CAPITAL_THRESHOLD,
+  LIFELINE_MIN_REPUTATION,
+  LIFELINE_OFFER_FRACTION,
+  DEBT_REPAY_REP_BONUS,
+  DEBT_ONTIME_REP_BONUS,
+} from './config/lenders';
+export type {
+  LenderId,
+  LenderConfig,
+  ConsequenceCeiling,
+  LadderRung,
+} from './config/lenders';
+export {
+  isLenderUnlocked,
+  borrowCap,
+  quoteLoan,
+  borrow,
+  accrueInterest,
+  repay,
+  defaultLadder,
+  debtStep,
+  lifelineOffer,
+  isDebtMarked,
+  DEBT_MARKED_FLAG,
+  DEBT_DEFAULT_CHOICE,
+  DEBT_CLEARED_CHOICE,
+} from './debt';
+export type {
+  LoanQuote,
+  BorrowResult,
+  RepayResult,
+  LenderOffer,
+  DebtRejectReason,
+} from './debt';
 
 export const ENGINE_VERSION = '0.0.0' as const;
 

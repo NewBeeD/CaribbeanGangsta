@@ -34,7 +34,15 @@ describe('tick — clock advancement', () => {
 function withActiveDebt(state: GameState): GameState {
   return {
     ...state,
-    debt: { principal: 5000, interestRatePerHour: 0.05, active: true },
+    debt: {
+      lenderId: 'papa-cass',
+      principal: 5000,
+      rate: 0.2,
+      accruedInterest: 0,
+      dueDay: state.clock.day + 14,
+      ladderRung: 0,
+      active: true,
+    },
   };
 }
 

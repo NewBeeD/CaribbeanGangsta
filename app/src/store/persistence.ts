@@ -18,8 +18,10 @@
 
 import {
   SCHEMA_VERSION,
+  emptyDebt,
   type Corruption,
   type CrewMember,
+  type Debt,
   type GameState,
   type OfficialTie,
   type RunStatus,
@@ -156,6 +158,16 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
       lastPayrollWeek: legacy.corruption?.lastPayrollWeek ?? legacy.clock.week,
     };
     return { ...env, schemaVersion: 6, state: { ...legacy, corruption } };
+  },
+  // 6 → 7: expand `debt` to the loan-shark ledger (Prompt 10). Pre-Prompt-10 runs
+  // could never borrow (no `borrow` function existed), so any legacy debt is inert
+  // — reset to a clean no-loan ledger with the soft due date seeded from the stored
+  // clock so a migrated run is never mid-default. The old `interestRatePerHour`
+  // stub field is dropped.
+  6: (env) => {
+    const legacy = env.state as GameState;
+    const debt: Debt = { ...emptyDebt(), dueDay: legacy.clock.day };
+    return { ...env, schemaVersion: 7, state: { ...legacy, debt } };
   },
 };
 
