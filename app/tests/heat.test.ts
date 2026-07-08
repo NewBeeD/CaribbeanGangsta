@@ -219,7 +219,7 @@ describe('offline is safe — raids never fire while away (GDD §6)', () => {
   it('settleOffline triggers no raid and no heat change, for any hours away', () => {
     const base = raidProne('offline-safe');
     for (const hours of [1, 24, 500, 10_000]) {
-      const settled = settleOffline(base, hours);
+      const { state: settled } = settleOffline(base, hours);
       expect(settled.pendingChoices.filter((c) => c.kind === 'raid')).toHaveLength(0);
       expect(settled.heat).toBe(base.heat); // frozen: no decay, no rise
       expect(settled.stashes).toEqual(base.stashes); // nothing seized

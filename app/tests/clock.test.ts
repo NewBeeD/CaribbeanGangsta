@@ -42,7 +42,7 @@ describe('settleOffline — frozen/safe (GDD §6; design/10 §4.2)', () => {
   it('never increases debt and never ends the run, for any hours away', () => {
     const base = withActiveDebt(createInitialState('offline'));
     for (const hours of [1, 12, 24, 100, 1000, 10_000]) {
-      const settled = settleOffline(base, hours);
+      const { state: settled } = settleOffline(base, hours);
       expect(settled.debt.principal).toBeLessThanOrEqual(base.debt.principal);
       expect(settled.runStatus).not.toBe('dead');
       expect(settled.runStatus).not.toBe('prison');
@@ -53,13 +53,13 @@ describe('settleOffline — frozen/safe (GDD §6; design/10 §4.2)', () => {
 
   it('does not advance the in-game clock (the world is frozen while away)', () => {
     const base = createInitialState('frozen');
-    const settled = settleOffline(base, 48);
+    const { state: settled } = settleOffline(base, 48);
     expect(settled.clock).toEqual(base.clock);
   });
 
   it('is a no-op at 0 hours and rejects negative hours', () => {
     const base = createInitialState('offline0');
-    expect(settleOffline(base, 0)).toBe(base);
+    expect(settleOffline(base, 0).state).toBe(base);
     expect(() => settleOffline(base, -5)).toThrow();
   });
 });

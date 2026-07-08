@@ -291,7 +291,7 @@ describe('offline is safe — raids never resolve while away (GDD §6)', () => {
       stashes: [mkStash('s1', 'floor', { weed: 40, cash: 50_000 })],
     };
     for (const hours of [1, 100, 10_000]) {
-      const settled = settleOffline(hot, hours);
+      const { state: settled } = settleOffline(hot, hours);
       expect(settled.stashes).toEqual(hot.stashes); // nothing seized
       expect(settled.flags[WIPED_CAPITAL_FLAG]).toBeUndefined();
     }

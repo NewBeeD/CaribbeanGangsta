@@ -12,7 +12,8 @@
 
 import { create } from 'zustand';
 import { applyIntent, createInitialState, type GameState, type Intent } from '@/engine/state';
-import { settleOffline, tick } from '@/engine/clock';
+import { tick } from '@/engine/clock';
+import { settleOffline, type OfflineReport } from '@/engine/laundering';
 import { CloudSaveStore, LocalSaveStore, type SaveStore } from './persistence';
 
 const MS_PER_HOUR = 3_600_000;
@@ -22,6 +23,12 @@ export interface GameStore {
   readonly state: GameState | null;
   /** Save backend (swappable; defaults to on-device IndexedDB). */
   readonly saveStore: SaveStore;
+  /**
+   * The payoff from the most recent offline settlement (clean cash earned + the
+   * choices queued on return) — the "welcome back" the Money screen presents.
+   * `null` until a hydrate settles some away time.
+   */
+  readonly lastOfflineReport: OfflineReport | null;
 
   /** Start a fresh run from `seed` (does not persist until `persist` is called). */
   newGame(seed: number | string): void;
@@ -49,6 +56,7 @@ function withState(
 export const useGameStore = create<GameStore>((set, get) => ({
   state: null,
   saveStore: safeLocalSaveStore(),
+  lastOfflineReport: null,
 
   newGame(seed) {
     set({ state: createInitialState(seed) });
@@ -71,9 +79,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const away = loaded.lastPlayedRealTime;
     const realHoursAway =
       away === null ? 0 : Math.max(0, (Date.now() - away) / MS_PER_HOUR);
-    const settled = realHoursAway > 0 ? settleOffline(loaded, realHoursAway) : loaded;
-
-    set({ state: settled });
+    if (realHoursAway > 0) {
+      const { state, report } = settleOffline(loaded, realHoursAway);
+      set({ state, lastOfflineReport: report });
+    } else {
+      set({ state: loaded, lastOfflineReport: null });
+    }
     return true;
   },
 

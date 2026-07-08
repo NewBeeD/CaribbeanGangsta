@@ -1,17 +1,18 @@
 /**
- * The injected-time clock. The sim advances ONLY through `tick(state, dtHours)`
- * (player online) and `settleOffline(state, realHoursAway)` (return from away) —
- * never by reading a wall clock inside the engine (prompts/README.md "Time is
- * injected"). This is what keeps the sim deterministic and lets the store
- * compute elapsed real time and feed it in.
+ * The injected-time clock. Online, the sim advances ONLY through
+ * `tick(state, dtHours)` — never by reading a wall clock inside the engine
+ * (prompts/README.md "Time is injected"). This is what keeps the sim
+ * deterministic and lets the store compute elapsed real time and feed it in.
  *
  * Per-tick systems (heat decay, laundering accrual, debt interest, chaos rolls,
  * beat checks) are registered as small pure steps in `TICK_STEPS`, run in a
  * defined order. Later prompts fill the placeholder steps they own.
  *
- * Offline is frozen/safe (GDD §6; design/10 §4.2): `settleOffline` runs ONLY the
- * offline-safe steps — it may add clean cash and queue return hooks, but never
- * advances heat, debt, or the death spiral, never seizes, never kills.
+ * Offline is frozen/safe (GDD §6; design/10 §4.2): the return-from-away payoff is
+ * settled by `laundering.settleOffline` (Prompt 07), which only adds clean cash
+ * and queues return hooks — it never advances heat, debt, or the death spiral,
+ * never seizes, never kills. The active `TICK_STEPS` are all `'active'`-only for
+ * anything that could punish absence; nothing runs on the frozen offline path.
  */
 
 import type { GameState } from './state';
@@ -19,6 +20,7 @@ import { restoreRng } from './rng';
 import { driftPrices } from './deals';
 import { applyHeatEscalation, decayHeat } from './heat';
 import { raidStep } from './storage';
+import { accrue } from './laundering';
 
 const HOURS_PER_DAY = 24;
 const DAYS_PER_WEEK = 7;
@@ -64,9 +66,10 @@ export const TICK_STEPS: readonly TickStep[] = [
   // (`raidStep` → `resolveRaid`) applies the seizure and queues the scene.
   // Active-only: offline is safe (GDD §6) — no raid fires while the player is away.
   { id: 'raid-roll', modes: ['active'], run: (s, dt) => raidStep(s, dt) },
-  // Laundering fronts accrue clean cash (design/01 §3). Prompt 07. The ONE
-  // offline-safe step: it only *adds* clean cash on return.
-  { id: 'laundering-accrual', modes: ['active', 'offline'], run: (s) => s },
+  // Laundering fronts accrue clean cash + apply their passive heat footprint
+  // (design/01 §3). Prompt 07. Active-only: the offline return payoff is settled
+  // separately by `laundering.settleOffline` on its own piecewise curve.
+  { id: 'laundering-accrual', modes: ['active'], run: (s, dt) => accrue(s, dt) },
   // Debt interest (design/10). Prompt 10. Active-only AND only when debt.active —
   // offline never advances what is owed.
   { id: 'debt-interest', modes: ['active'], run: (s) => s },
@@ -103,34 +106,7 @@ export function tick(state: GameState, dtHours: number): GameState {
   return runSteps({ ...state, clock }, dtHours, 'active');
 }
 
-/**
- * Settle `realHoursAway` of offline absence. Offline is FROZEN (GDD §6): the
- * in-game clock does NOT advance and only offline-safe steps run — laundering
- * accrues clean cash and events may queue as pending choices. Nothing here may
- * seize, kill, imprison, or advance debt/heat/the spiral.
- *
- * The invariants below are asserted defensively so a future mis-registered step
- * can never silently punish absence.
- */
-export function settleOffline(state: GameState, realHoursAway: number): GameState {
-  if (realHoursAway < 0) {
-    throw new Error(`settleOffline(): realHoursAway must be >= 0 (got ${realHoursAway})`);
-  }
-  if (realHoursAway === 0) return state;
-
-  // No clock advance: the world is frozen while away, only accrual/queueing runs.
-  const settled = runSteps(state, realHoursAway, 'offline');
-
-  // Guardrail invariants (prompts/README.md ethical checklist; design/10 §4.2).
-  if (settled.debt.principal > state.debt.principal) {
-    throw new Error('settleOffline(): debt increased while offline (guardrail violation)');
-  }
-  if (settled.runStatus === 'dead' || settled.runStatus === 'prison') {
-    throw new Error('settleOffline(): run ended while offline (guardrail violation)');
-  }
-  if (settled.heat > state.heat) {
-    throw new Error('settleOffline(): heat rose while offline (guardrail violation)');
-  }
-
-  return settled;
-}
+// Offline settlement (return-from-away payoff) lives in `laundering.ts` —
+// `settleOffline(state, realHoursAway) → { state, report }` — the concrete
+// implementation of Prompt 03's hook. It is frozen/safe by construction (adds
+// only, never advances the clock or any punishing system).

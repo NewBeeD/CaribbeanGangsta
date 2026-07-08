@@ -84,7 +84,7 @@ export type {
 } from './state';
 
 // Injected-time clock + per-tick pipeline (Prompt 03).
-export { tick, settleOffline, TICK_STEPS } from './clock';
+export { tick, TICK_STEPS } from './clock';
 export type { TickMode, TickStep } from './clock';
 
 // Deal loop — Loop 1 (Prompt 04).
@@ -178,6 +178,42 @@ export type {
   MoveResult,
   RaidResult,
 } from './storage';
+
+// Laundering / idle-offline engine — Prompt 07.
+export {
+  FRONT_TYPES,
+  FRONT_MAX_LEVEL,
+  FRONT_COST_GROWTH,
+  getFrontType,
+  frontUpgradeCost,
+  OFFLINE_SOFT_CAP_HOURS,
+  OFFLINE_REDUCED_RATE,
+  CRYPTO_SWING,
+  PESO_EXCHANGE_HAIRCUT,
+  TRADE_LAUNDER_FRACTION,
+  tradeLaunderCapacity,
+} from './config/fronts';
+export type { FrontType, FrontTypeConfig } from './config/fronts';
+export {
+  cleanCashRate,
+  cryptoSwingFactor,
+  accrue,
+  offlineEarnings,
+  settleOffline,
+  rollGoldenHour,
+  buyFront,
+  upgradeFront,
+  pesoExchange,
+  pesoExchangeQuote,
+} from './laundering';
+export type {
+  OfflineReport,
+  GoldenHourEvent,
+  FrontResult,
+  LaunderRejectReason,
+  PesoQuote,
+  PesoExchangeResult,
+} from './laundering';
 
 export const ENGINE_VERSION = '0.0.0' as const;
 
