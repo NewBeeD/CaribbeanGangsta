@@ -16,9 +16,10 @@
  * (the engine stays wall-clock-free; the store stamps time and injects it).
  */
 
-import { SCHEMA_VERSION, type GameState, type RunStatus } from '@/engine/state';
+import { SCHEMA_VERSION, type GameState, type RunStatus, type Stash } from '@/engine/state';
 import { createInitialMarkets, type Markets } from '@/engine/deals';
 import { tierForHeat, type LeTier } from '@/engine/heat';
+import { STARTING_STASH_TYPE } from '@/engine/config/stashes';
 
 /** Lightweight listing of a saved slot (no full state payload). */
 export interface SlotMeta {
@@ -83,6 +84,24 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
         ...legacy,
         lyingLow: legacy.lyingLow ?? false,
         leTierAck: legacy.leTierAck ?? tierForHeat(legacy.heat),
+      },
+    };
+  },
+  // 3 → 4: give every pre-Prompt-06 stash a storage `type`. Legacy runs only ever
+  // had the starting home stash, so default it to the floor archetype; a stash
+  // that somehow already carries a type keeps it (idempotent). `guardCrewId` is
+  // optional and simply stays absent (unguarded).
+  3: (env) => {
+    const legacy = env.state as GameState;
+    return {
+      ...env,
+      schemaVersion: 4,
+      state: {
+        ...legacy,
+        stashes: legacy.stashes.map((s) => {
+          const stash = s as Stash & { type?: Stash['type'] };
+          return stash.type ? stash : { ...stash, type: STARTING_STASH_TYPE };
+        }),
       },
     };
   },

@@ -149,6 +149,7 @@ function raidProne(seed: string): GameState {
     id,
     name: id,
     countryId: 'x',
+    type: 'floor',
     dirtyCash: cash,
     inventory: (base.stashes[0] as Stash).inventory,
   });

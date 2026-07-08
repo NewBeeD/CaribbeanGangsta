@@ -20,7 +20,7 @@
  * snapshot back, so a save/load round-trip reproduces every roll.
  */
 
-import { restoreRng, type Rng } from './rng';
+import type { Rng } from './rng';
 import { PRODUCT_IDS } from './config/countries';
 import {
   BRIBE_HEAT_PER_DOLLAR,
@@ -243,26 +243,4 @@ export function rollRaid(state: GameState, rng: Rng, dtHours = 1): RaidEvent | n
     tier: tierForHeat(state.heat),
     heatAtRoll: state.heat,
   };
-}
-
-/**
- * Raid tick step: roll a raid over `dtHours` and, if one fires, queue a
- * return-hook `PendingChoice` announcing it (the seizure itself is Prompt 06).
- * Threads the RNG through `state.rngState`. Active-only (registered in clock.ts),
- * so raids never fire while the player is away (GDD §6).
- */
-export function raidRollStep(state: GameState, dtHours: number): GameState {
-  const rng = restoreRng(state.rngState);
-  const raid = rollRaid(state, rng, dtHours);
-  const advanced: GameState = { ...state, rngState: rng.getState() };
-  if (!raid) return advanced;
-
-  const stash = state.stashes.find((s) => s.id === raid.targetStashId);
-  const telegraph: PendingChoice = {
-    id: `raid-${raid.targetStashId}-${state.clock.hours}`,
-    kind: 'raid',
-    summary: `Law enforcement is moving on ${stash?.name ?? 'a stash'}.`,
-    createdAtHours: state.clock.hours,
-  };
-  return { ...advanced, pendingChoices: [...advanced.pendingChoices, telegraph] };
 }

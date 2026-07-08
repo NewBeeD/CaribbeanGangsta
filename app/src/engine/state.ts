@@ -28,6 +28,7 @@ import {
   type SellIntent,
 } from './deals';
 import { setLieLow, tierForHeat, type LeTier, type LieLowIntent } from './heat';
+import { STARTING_STASH_TYPE, type StashType } from './config/stashes';
 
 /**
  * Bump when the persisted `GameState` shape changes; add a matching entry to the
@@ -36,8 +37,9 @@ import { setLieLow, tierForHeat, type LeTier, type LieLowIntent } from './heat';
  *
  * v2: added `markets` (live per-location price drift, Prompt 04).
  * v3: added `lyingLow` + `leTierAck` (heat/law-enforcement engine, Prompt 05).
+ * v4: added `type` + `guardCrewId` to `Stash` (contraband storage, Prompt 06).
  */
-export const SCHEMA_VERSION = 3 as const;
+export const SCHEMA_VERSION = 4 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -62,15 +64,21 @@ export interface Reputation {
 export type Inventory = Readonly<Record<ProductId, number>>;
 
 /**
- * A guarded location holding DIRTY cash and product (design/01 §1 — dirty cash
- * is located and seizable). Prompt 06 owns raid resolution and capacity.
+ * A location holding DIRTY cash and product (design/01 §1 — dirty cash is located
+ * and seizable). `type` selects the archetype (capacity, base seizure %, travel
+ * delay, cost — config/stashes.ts); `guardCrewId`, when set, ties a crew member's
+ * loyalty into the effective seizure % (an inside job — design/09 A.3a). Prompt 06
+ * (`storage.ts`) owns capacity enforcement and raid resolution.
  */
 export interface Stash {
   readonly id: string;
   readonly name: string;
   readonly countryId: string;
+  readonly type: StashType;
   readonly dirtyCash: number;
   readonly inventory: Inventory;
+  /** Crew member guarding this stash (design/09 A.3a). Absent = unguarded. */
+  readonly guardCrewId?: string;
 }
 
 /** A laundering front (idle engine). Prompt 07 owns rates and accrual. */
@@ -224,6 +232,7 @@ export function createInitialState(seed: number | string): GameState {
     id: 'stash-home',
     name: 'Home Stash',
     countryId: country.id,
+    type: STARTING_STASH_TYPE,
     dirtyCash: country.startingCash,
     inventory: emptyInventory(),
   };

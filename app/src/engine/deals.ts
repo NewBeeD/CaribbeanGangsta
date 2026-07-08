@@ -32,6 +32,7 @@ import {
   type LocationId,
 } from './config/locations';
 import { HEAT_MAX } from './config/heat';
+import { getStashType } from './config/stashes';
 import { addHeat } from './heat';
 import type { GameState, Inventory, Stash } from './state';
 
@@ -85,7 +86,11 @@ const CREW_WEIGHT = 0.15;
 const QTY_FULL_RISK = 100;
 /** Buying is quieter than selling: buy heat is scaled down from the per-unit rate. */
 const BUY_HEAT_FACTOR = 0.5;
-/** Placeholder per-stash unit cap until Prompt 06 owns real storage capacity. */
+/**
+ * Legacy per-stash unit cap. Real capacity is now per-archetype (Prompt 06:
+ * `getStashType(stash.type).capacity`, enforced on buys below); this constant is
+ * retained as a neutral reference value for callers/tests that want a round cap.
+ */
 export const DEFAULT_STASH_CAPACITY = 1000;
 /** Flag set once a deal has been banked this run (loss-sequencing hook, Prompt 24). */
 export const DEAL_WIN_FLAG = 'dealWinBanked';
@@ -347,7 +352,7 @@ function resolveBuy(state: GameState, intent: BuyIntent): DealResult {
   const price = getMarketPrice(state, product, location);
   const cost = price.buy * qty;
   if (stash.dirtyCash < cost) return reject(state, 'insufficient-funds');
-  if (stashUnits(stash) + qty > DEFAULT_STASH_CAPACITY) {
+  if (stashUnits(stash) + qty > getStashType(stash.type).capacity) {
     return reject(state, 'insufficient-capacity');
   }
 

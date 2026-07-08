@@ -203,6 +203,7 @@ describe('resolveDeal — sell (fairness law, GDD §8)', () => {
       id: 'stash-other',
       name: 'Other',
       countryId: 'elsewhere',
+      type: 'floor',
       dirtyCash: 9999,
       inventory: { ...(start.stashes[0] as Stash).inventory, cocaine: 100 },
     };

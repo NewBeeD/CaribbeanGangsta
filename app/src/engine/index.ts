@@ -126,7 +126,6 @@ export {
   setLieLow,
   raidChance,
   rollRaid,
-  raidRollStep,
 } from './heat';
 export type { LeTier, TierEscalation, LieLowIntent, RaidEvent } from './heat';
 export {
@@ -143,6 +142,42 @@ export {
   RAID_EMPIRE_FACTOR,
 } from './config/heat';
 export type { HeatTierConfig } from './config/heat';
+
+// Contraband storage — Prompt 06.
+export {
+  STASH_TYPES,
+  STARTING_STASH_TYPE,
+  getStashType,
+  stashCost,
+  STASH_COST_GROWTH,
+  GUARD_CASH_THRESHOLD,
+  GUARD_MAX_PENALTY,
+  GUARD_UNGUARDED_PENALTY,
+  WIPE_CAPITAL_THRESHOLD,
+  TOTAL_ARCHETYPE_CAPACITY,
+} from './config/stashes';
+export type { StashType, StashTypeConfig } from './config/stashes';
+export {
+  stashUnits,
+  totalUnits,
+  stashCapacity,
+  capacityRemaining,
+  effectiveSeizurePct,
+  diversificationIndex,
+  addStash,
+  moveProduct,
+  storeCash,
+  setStashGuard,
+  resolveRaid,
+  raidStep,
+  WIPED_CAPITAL_FLAG,
+} from './storage';
+export type {
+  StorageRejectReason,
+  AddStashResult,
+  MoveResult,
+  RaidResult,
+} from './storage';
 
 export const ENGINE_VERSION = '0.0.0' as const;
 
