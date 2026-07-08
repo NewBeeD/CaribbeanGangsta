@@ -18,8 +18,10 @@
 
 import {
   SCHEMA_VERSION,
+  type Corruption,
   type CrewMember,
   type GameState,
+  type OfficialTie,
   type RunStatus,
   type Stash,
 } from '@/engine/state';
@@ -27,6 +29,7 @@ import { createInitialMarkets, type Markets } from '@/engine/deals';
 import { tierForHeat, type LeTier } from '@/engine/heat';
 import { STARTING_STASH_TYPE } from '@/engine/config/stashes';
 import { hydrateLegacyCrew } from '@/engine/crew';
+import { hydrateLegacyOfficial } from '@/engine/corruption';
 
 /** Lightweight listing of a saved slot (no full state payload). */
 export interface SlotMeta {
@@ -128,6 +131,31 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
         crew: (legacy.crew ?? []).map((c) => hydrateLegacyCrew(c) as CrewMember),
       },
     };
+  },
+  // 5 → 6: expand `corruption` to the full payroll model (Prompt 09). Pre-Prompt-09
+  // runs never bought officials, so `officials` is usually empty; any legacy
+  // `{ id, loyalty }` tie is hydrated to a full `OfficialTie`. `paidPorts` starts
+  // empty and `lastPayrollWeek` is seeded from the stored clock so a migrated run
+  // never back-charges retainers for weeks it was never on the payroll.
+  5: (env) => {
+    const legacy = env.state as GameState & {
+      corruption?: {
+        officials?: readonly { id: string; loyalty: number }[];
+        payrollPerWeek?: number;
+        paidPorts?: Corruption['paidPorts'];
+        lastPayrollWeek?: number;
+      };
+    };
+    const officials: readonly OfficialTie[] = (legacy.corruption?.officials ?? []).map(
+      (o) => hydrateLegacyOfficial(o),
+    );
+    const corruption: Corruption = {
+      officials,
+      payrollPerWeek: officials.reduce((sum, o) => sum + o.retainerPerWeek, 0),
+      paidPorts: legacy.corruption?.paidPorts ?? [],
+      lastPayrollWeek: legacy.corruption?.lastPayrollWeek ?? legacy.clock.week,
+    };
+    return { ...env, schemaVersion: 6, state: { ...legacy, corruption } };
   },
 };
 

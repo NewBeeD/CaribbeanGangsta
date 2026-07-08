@@ -22,6 +22,7 @@ import { applyHeatEscalation, decayHeat } from './heat';
 import { raidStep } from './storage';
 import { accrue } from './laundering';
 import { crewStep } from './crew';
+import { corruptionStep } from './corruption';
 
 const HOURS_PER_DAY = 24;
 const DAYS_PER_WEEK = 7;
@@ -75,6 +76,12 @@ export const TICK_STEPS: readonly TickStep[] = [
   // heat (design/02 §4). Prompt 08. Active-only: offline never advances an arc or a
   // wire's heat (GDD §6). Deterministic — the arc uses no randomness.
   { id: 'crew', modes: ['active'], run: (s, dt) => crewStep(s, dt) },
+  // Corruption: settle weekly retainers on the weekly boundary (from clean cash),
+  // let officials ask for raises, advance flip arcs one telegraphed stage, then
+  // apply flipped-official wire heat (design/09 B.2). Prompt 09. Active-only:
+  // offline never charges a retainer or advances a flip, so absence is safe
+  // (GDD §6). Deterministic — the flip arc uses no randomness.
+  { id: 'corruption', modes: ['active'], run: (s, dt) => corruptionStep(s, dt) },
   // Debt interest (design/10). Prompt 10. Active-only AND only when debt.active —
   // offline never advances what is owed.
   { id: 'debt-interest', modes: ['active'], run: (s) => s },

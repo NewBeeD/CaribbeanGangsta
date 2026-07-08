@@ -104,11 +104,17 @@ function guardPenalty(state: GameState, stash: Stash): number {
 
 /**
  * Whether this stash's port is paid (design/09 A.3 — a paid port drops a
- * container's seizure to ~3%). The corruption network owns port payment (Prompt
- * 09); until then no port is paid, so container seizure sits at its base.
+ * container's seizure to ~3%). The corruption network (Prompt 09) records paid
+ * ports on `state.corruption.paidPorts`, keyed by the port's `countryId`; a one-off
+ * bribe carries an expiry (`paidUntilHours`), while a standing customs chief has
+ * none. Read directly off state so storage stays decoupled from `corruption.ts`.
  */
-function isPortPaid(_state: GameState, _stash: Stash): boolean {
-  return false; // Prompt 09 hook.
+function isPortPaid(state: GameState, stash: Stash): boolean {
+  return state.corruption.paidPorts.some(
+    (p) =>
+      p.portId === stash.countryId &&
+      (p.paidUntilHours === undefined || p.paidUntilHours > state.clock.hours),
+  );
 }
 
 /**

@@ -46,8 +46,11 @@ import type {
  * v4: added `type` + `guardCrewId` to `Stash` (contraband storage, Prompt 06).
  * v5: expanded `CrewMember` to the full relatedness model — traits/skills/agenda/
  *     memory/betrayal arcs (crew engine, Prompt 08).
+ * v6: expanded `Corruption` — full `OfficialTie` payroll model (retainer/greed/
+ *     memory/flip arc/pending raise), `paidPorts`, and weekly-payroll bookkeeping
+ *     (the corruption network, Prompt 09).
  */
-export const SCHEMA_VERSION = 5 as const;
+export const SCHEMA_VERSION = 6 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -165,15 +168,75 @@ export interface CrewMember {
   readonly isFamily?: boolean;
 }
 
-/** A bought official. Prompt 09 owns bribes/payroll/flips. */
+/**
+ * A standing raise the official is asking for (design/09 B.2 v1.1). Present on an
+ * `OfficialTie` once they've asked for more; the player accepts / negotiates /
+ * refuses. Ignoring or refusing it counts as an underpayment (feeds the flip arc).
+ */
+export interface RaiseAsk {
+  /** The new weekly retainer they want (computed from the documented formula). */
+  readonly newRetainer: number;
+  readonly askedAtHours: number;
+  /** Readable reason surfaced as prose ("business is booming and so is the risk"). */
+  readonly reason: string;
+}
+
+/**
+ * A bought official on standing payroll (design/09 B.2). Reuses the crew
+ * relatedness spine: hidden `loyalty` (0–100), a `memoryLog` of how you've treated
+ * them, and a TELEGRAPHED `activeArc` (the same `BetrayalArc` staging the crew
+ * engine uses) that ends in `isWire` when LE turns them. `greed` (0.7–1.3) scales
+ * their asks; `retainerPerWeek` is the CURRENT retainer (raised over time via
+ * `pendingRaise`). Prompt 09 (`corruption.ts`) owns all of it.
+ */
 export interface OfficialTie {
+  /** Unique instance id (stable across repeat hires of the same archetype). */
   readonly id: string;
+  /** The config archetype this tie was hired from (`OfficialId`). */
+  readonly officialId: string;
+  readonly name: string;
+  /** Current weekly retainer, $ (raised over time — design/09 B.2 v1.1). */
+  readonly retainerPerWeek: number;
+  /** Hidden 0–100; surfaced via prose/behavior, never as a bar (design/02 §1). */
   readonly loyalty: number;
+  /** Greed trait 0.7–1.3 — scales bribe/raise asks (design/09 B.1/B.2). */
+  readonly greed: number;
+  /** Heat (0–100) above which they get nervous and distance themselves (B.2). */
+  readonly comfortHeat: number;
+  readonly hiredAtHours: number;
+  /** The last in-game week their retainer was charged (weekly-boundary bookkeeping). */
+  readonly lastPaidWeek: number;
+  readonly memoryLog: readonly MemoryEntry[];
+  /** Present once a flip arc has begun (design/09 B.2; reuses the crew arc). */
+  readonly activeArc?: BetrayalArc;
+  /** True once flipped: LE turned them into a wire feeding heat (design/09 B.2). */
+  readonly isWire?: boolean;
+  /** A standing raise they're currently asking for (design/09 B.2 v1.1). */
+  readonly pendingRaise?: RaiseAsk;
+}
+
+/**
+ * A port whose official has been paid (design/09 B.1/A.3) — container stashes at
+ * this port get the reduced seizure floor. `portId` matches a container stash's
+ * `countryId`. `paidUntilHours` bounds a one-off port bribe (drifts/expires); a
+ * standing customs chief leaves it absent (paid while they're on the payroll).
+ */
+export interface PaidPort {
+  readonly portId: string;
+  /** The reduced seizure % locked in for container stashes here, 0..1. */
+  readonly seizurePct: number;
+  readonly paidAtHours: number;
+  /** In-game hours the payment lapses at; absent = standing (never expires). */
+  readonly paidUntilHours?: number;
 }
 
 export interface Corruption {
   readonly officials: readonly OfficialTie[];
+  /** Sum of current retainers across officials, $/wk (derived, kept in sync). */
   readonly payrollPerWeek: number;
+  readonly paidPorts: readonly PaidPort[];
+  /** Last in-game week the weekly payroll was settled (boundary bookkeeping). */
+  readonly lastPayrollWeek: number;
 }
 
 /**
@@ -330,7 +393,7 @@ export function createInitialState(seed: number | string): GameState {
     stashes: [homeStash],
     fronts: [],
     crew: [],
-    corruption: { officials: [], payrollPerWeek: 0 },
+    corruption: { officials: [], payrollPerWeek: 0, paidPorts: [], lastPayrollWeek: 1 },
     debt: { principal: 0, interestRatePerHour: 0, active: false },
     rivals,
     flags: {},
