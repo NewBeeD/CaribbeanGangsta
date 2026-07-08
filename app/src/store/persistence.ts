@@ -18,6 +18,7 @@
 
 import { SCHEMA_VERSION, type GameState, type RunStatus } from '@/engine/state';
 import { createInitialMarkets, type Markets } from '@/engine/deals';
+import { tierForHeat, type LeTier } from '@/engine/heat';
 
 /** Lightweight listing of a saved slot (no full state payload). */
 export interface SlotMeta {
@@ -65,6 +66,24 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
       ...env,
       schemaVersion: 2,
       state: { ...legacy, markets: legacy.markets ?? createInitialMarkets() },
+    };
+  },
+  // 2 → 3: default the heat engine's fields on pre-Prompt-05 saves. Lie-low is
+  // off; the acknowledged tier is derived from stored heat so a migrated run
+  // never self-telegraphs an escalation it was already sitting inside.
+  2: (env) => {
+    const legacy = env.state as GameState & {
+      lyingLow?: boolean;
+      leTierAck?: LeTier;
+    };
+    return {
+      ...env,
+      schemaVersion: 3,
+      state: {
+        ...legacy,
+        lyingLow: legacy.lyingLow ?? false,
+        leTierAck: legacy.leTierAck ?? tierForHeat(legacy.heat),
+      },
     };
   },
 };

@@ -27,6 +27,7 @@ import {
   type Markets,
   type SellIntent,
 } from './deals';
+import { setLieLow, tierForHeat, type LeTier, type LieLowIntent } from './heat';
 
 /**
  * Bump when the persisted `GameState` shape changes; add a matching entry to the
@@ -34,8 +35,9 @@ import {
  * cleanly (Prompt 03 acceptance).
  *
  * v2: added `markets` (live per-location price drift, Prompt 04).
+ * v3: added `lyingLow` + `leTierAck` (heat/law-enforcement engine, Prompt 05).
  */
-export const SCHEMA_VERSION = 2 as const;
+export const SCHEMA_VERSION = 3 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -152,6 +154,14 @@ export interface GameState {
   readonly cleanCash: number;
   readonly reputation: Reputation;
   readonly heat: number;
+  /** "Lie low" mode: heat decays faster, laundering income slows (Prompt 05/07). */
+  readonly lyingLow: boolean;
+  /**
+   * Highest LE tier already TELEGRAPHED to the player. Escalation fires only when
+   * the live tier climbs above this, then advances it — so a crossing telegraphs
+   * exactly once (design/07 §5). Drops back down as heat cools, re-arming.
+   */
+  readonly leTierAck: LeTier;
   /** Loose aggregate inventory; Prompt 06 locates units into `stashes`. */
   readonly inventory: Inventory;
   readonly stashes: readonly Stash[];
@@ -234,6 +244,9 @@ export function createInitialState(seed: number | string): GameState {
     cleanCash: 0,
     reputation: { street: 0, business: 0, political: 0 },
     heat: country.heatBaseline,
+    lyingLow: false,
+    // Acknowledge the opening tier so the baseline never self-telegraphs on tick 1.
+    leTierAck: tierForHeat(country.heatBaseline),
     inventory: emptyInventory(),
     stashes: [homeStash],
     fronts: [],
@@ -275,7 +288,11 @@ export function withRngState(state: GameState, rng: Rng): GameState {
  * variants (Prompt 04) are the first real actions; later prompts add bribe,
  * launder, borrow, … and their handler cases.
  */
-export type Intent = { readonly type: 'noop' } | BuyIntent | SellIntent;
+export type Intent =
+  | { readonly type: 'noop' }
+  | BuyIntent
+  | SellIntent
+  | LieLowIntent;
 
 /**
  * Pure reducer entry point: intent in -> new immutable state out. Never mutates
@@ -290,5 +307,7 @@ export function applyIntent(state: GameState, intent: Intent): GameState {
     case 'buy':
     case 'sell':
       return resolveDeal(state, intent).state;
+    case 'lieLow':
+      return setLieLow(state, intent.enabled);
   }
 }

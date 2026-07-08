@@ -113,6 +113,37 @@ export type {
   SellIntent,
 } from './deals';
 
+// Heat & law enforcement — Prompt 05.
+export {
+  addHeat,
+  decayHeat,
+  reduceHeatByBribe,
+  currentTier,
+  tierForHeat,
+  tierDots,
+  checkTierEscalation,
+  applyHeatEscalation,
+  setLieLow,
+  raidChance,
+  rollRaid,
+  raidRollStep,
+} from './heat';
+export type { LeTier, TierEscalation, LieLowIntent, RaidEvent } from './heat';
+export {
+  HEAT_MIN,
+  HEAT_MAX,
+  HEAT_TIERS,
+  HEAT_DOTS_TOTAL,
+  HEAT_DECAY_RATE_PER_HOUR,
+  LIE_LOW_DECAY_MULTIPLIER,
+  LIE_LOW_INCOME_MULTIPLIER,
+  EMPIRE_DECAY_SLOWDOWN,
+  BRIBE_HEAT_PER_DOLLAR,
+  RAID_BASE_RATE_PER_HOUR,
+  RAID_EMPIRE_FACTOR,
+} from './config/heat';
+export type { HeatTierConfig } from './config/heat';
+
 export const ENGINE_VERSION = '0.0.0' as const;
 
 export interface Game {

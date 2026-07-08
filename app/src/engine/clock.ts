@@ -17,6 +17,7 @@
 import type { GameState } from './state';
 import { restoreRng } from './rng';
 import { driftPrices } from './deals';
+import { applyHeatEscalation, decayHeat, raidRollStep } from './heat';
 
 const HOURS_PER_DAY = 24;
 const DAYS_PER_WEEK = 7;
@@ -53,7 +54,14 @@ export const TICK_STEPS: readonly TickStep[] = [
   },
   // Heat decays over online time (design/01 §4). Prompt 05. Active-only: offline
   // is frozen, so heat neither rises nor falls while away.
-  { id: 'heat-decay', modes: ['active'], run: (s) => s },
+  { id: 'heat-decay', modes: ['active'], run: (s, dt) => decayHeat(s, dt) },
+  // Telegraph an LE-tier crossing after decay/accrual shift heat (design/07 §5).
+  // Prompt 05. Active-only, and fires each crossing exactly once.
+  { id: 'heat-escalation', modes: ['active'], run: (s) => applyHeatEscalation(s) },
+  // Roll for a raid on a single stash (design/01 §4). Prompt 05 decides
+  // whether/where; Prompt 06 resolves the seizure. Active-only: offline is safe
+  // (GDD §6) — no raid can fire while the player is away.
+  { id: 'raid-roll', modes: ['active'], run: (s, dt) => raidRollStep(s, dt) },
   // Laundering fronts accrue clean cash (design/01 §3). Prompt 07. The ONE
   // offline-safe step: it only *adds* clean cash on return.
   { id: 'laundering-accrual', modes: ['active', 'offline'], run: (s) => s },

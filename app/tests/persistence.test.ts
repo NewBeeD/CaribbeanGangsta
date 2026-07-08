@@ -89,6 +89,22 @@ describe('migrateEnvelope — schema version + migration hook', () => {
   it('rejects a newer (future) schema it cannot downgrade', () => {
     expect(migrateEnvelope({ ...envelope, schemaVersion: SCHEMA_VERSION + 1 })).toBeNull();
   });
+
+  it('migrates a v2 save up to the heat engine (Prompt 05 fields defaulted)', () => {
+    // A pre-Prompt-05 save: heat sitting in DEA range, no heat-engine fields.
+    const legacy = { ...state, heat: 45 } as Record<string, unknown>;
+    delete legacy.lyingLow;
+    delete legacy.leTierAck;
+    const migrated = migrateEnvelope({
+      ...envelope,
+      schemaVersion: 2,
+      state: legacy as unknown as GameState,
+    });
+    expect(migrated).not.toBeNull();
+    expect(migrated?.lyingLow).toBe(false);
+    // Acknowledged tier derived from stored heat → never self-telegraphs on load.
+    expect(migrated?.leTierAck).toBe('dea');
+  });
 });
 
 describe('CloudSaveStore — conforming stub', () => {

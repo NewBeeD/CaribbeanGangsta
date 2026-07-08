@@ -31,6 +31,8 @@ import {
   getLocation,
   type LocationId,
 } from './config/locations';
+import { HEAT_MAX } from './config/heat';
+import { addHeat } from './heat';
 import type { GameState, Inventory, Stash } from './state';
 
 // --- Live market state (drifts each active tick) -----------------------------
@@ -81,8 +83,6 @@ const QTY_WEIGHT = 0.1;
 const CREW_WEIGHT = 0.15;
 /** Quantity at which the size term saturates its weight. */
 const QTY_FULL_RISK = 100;
-/** Heat is a 0..100 meter (design/01 §4). */
-const HEAT_MAX = 100;
 /** Buying is quieter than selling: buy heat is scaled down from the per-unit rate. */
 const BUY_HEAT_FACTOR = 0.5;
 /** Placeholder per-stash unit cap until Prompt 06 owns real storage capacity. */
@@ -308,10 +308,6 @@ function adjustInventory(inv: Inventory, product: ProductId, delta: number): Inv
   return { ...inv, [product]: inv[product] + delta };
 }
 
-function addHeat(state: GameState, delta: number): GameState {
-  return { ...state, heat: clamp(state.heat + delta, 0, HEAT_MAX) };
-}
-
 /** Bank peak trackers after a deal (design/01 §7 — score banks from peaks). */
 function bankPeaks(state: GameState): GameState {
   const dirty = state.stashes.reduce((sum, s) => sum + s.dirtyCash, 0);
@@ -362,7 +358,7 @@ function resolveBuy(state: GameState, intent: BuyIntent): DealResult {
   };
   const cfg = getProduct(product);
   let next = withStash(state, nextStash);
-  next = addHeat(next, cfg.heatPerUnit * qty * BUY_HEAT_FACTOR);
+  next = addHeat(next, cfg.heatPerUnit * qty * BUY_HEAT_FACTOR, 'deal.buy');
   next = bankPeaks(next);
 
   return {
@@ -404,7 +400,7 @@ function resolveSell(state: GameState, intent: SellIntent): DealResult {
       inventory: adjustInventory(stash.inventory, product, -qty),
     };
     let next = withStash(rolled, bustedStash);
-    next = addHeat(next, cfg.heatPerUnit * qty * cfg.bustHeatMultiplier);
+    next = addHeat(next, cfg.heatPerUnit * qty * cfg.bustHeatMultiplier, 'deal.bust');
     next = bankPeaks(next);
     return {
       state: next,
@@ -423,7 +419,7 @@ function resolveSell(state: GameState, intent: SellIntent): DealResult {
     inventory: adjustInventory(stash.inventory, product, -qty),
   };
   let next = withStash(rolled, soldStash);
-  next = addHeat(next, cfg.heatPerUnit * qty);
+  next = addHeat(next, cfg.heatPerUnit * qty, 'deal.sell');
   next = { ...next, flags: { ...next.flags, [DEAL_WIN_FLAG]: true } };
   next = bankPeaks(next);
   return {
