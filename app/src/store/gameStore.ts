@@ -36,7 +36,16 @@ import {
 } from '@/engine/crew';
 import type { CrewSkill } from '@/engine/config/crew';
 import { tick } from '@/engine/clock';
-import { settleOffline, type OfflineReport } from '@/engine/laundering';
+import {
+  settleOffline,
+  buyFront as buyFrontEngine,
+  upgradeFront as upgradeFrontEngine,
+  pesoExchange as pesoExchangeEngine,
+  type OfflineReport,
+  type FrontResult,
+  type FrontType,
+  type PesoExchangeResult,
+} from '@/engine/laundering';
 import { CloudSaveStore, LocalSaveStore, type SaveStore, type SlotMeta } from './persistence';
 
 const MS_PER_HOUR = 3_600_000;
@@ -96,6 +105,25 @@ export interface GameStore {
    * new state, and autosaves so the roster survives a refresh. The UI authors no
    * loyalty/skill math; it only names the person and the intent.
    */
+  /**
+   * Laundering actions (Prompt 18) — each wraps the pure `laundering.ts` engine,
+   * commits only when the operation lands (funds sufficed), and autosaves so the
+   * fronts/exchange survive a refresh. The UI authors no rate/cost/haircut math.
+   */
+  /**
+   * Upgrade a front one level, paid from CLEAN cash at `buy_in × 1.15^level`.
+   * Commits + autosaves only when it lands (funds sufficed, not maxed); returns the
+   * full `FrontResult` (its `rejected` reason otherwise), or `null` when no run loaded.
+   */
+  upgradeFront(frontId: string): FrontResult | null;
+  /** Open a new Level-1 front of `type`, paid from CLEAN cash. Commits on success. */
+  buyFront(type: FrontType): FrontResult | null;
+  /**
+   * Convert a lump of DIRTY cash held in a stash to CLEAN cash at the DISCLOSED
+   * peso-exchange haircut (design/01 §3a). Commits + autosaves only when the
+   * exchange goes through (amount valid, stash exists, funds suffice).
+   */
+  exchangePeso(amount: number, stashId?: string): PesoExchangeResult | null;
   /** Bring an archetype onto the crew (open access — money/relationships gate it, never a flag). */
   recruitCrew(archetypeId: string): CrewMember | null;
   /** Train a skill by a fixed step, paid from clean cash. Rejects (no commit) if maxed/short. */
@@ -172,6 +200,44 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const result = addStash(state, intent.stashType, opts);
     // Only commit + autosave when a stash was actually built (funds sufficed).
     if (result.stash) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  upgradeFront(frontId) {
+    const { state } = get();
+    if (!state) return null;
+    const result = upgradeFrontEngine(state, frontId);
+    // Only commit + autosave when the upgrade landed (funds sufficed, not maxed).
+    if (!result.rejected) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  buyFront(type) {
+    const { state } = get();
+    if (!state) return null;
+    const result = buyFrontEngine(state, type);
+    if (!result.rejected) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  exchangePeso(amount, stashId) {
+    const { state } = get();
+    if (!state) return null;
+    const result =
+      stashId === undefined
+        ? pesoExchangeEngine(state, amount)
+        : pesoExchangeEngine(state, amount, stashId);
+    // Only commit + autosave when the exchange actually cleared.
+    if (result.ok) {
       set({ state: result.state });
       void get().persist(AUTOSAVE_SLOT).catch(() => {});
     }
