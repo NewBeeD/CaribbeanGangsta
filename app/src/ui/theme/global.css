@@ -522,6 +522,54 @@ button {
   cursor: default;
 }
 
+/* -------------------------------------------------------------- App shell */
+/* Mobile-first column: header · scrolling screen · persistent bottom nav. */
+.cg-shell {
+  width: 100%;
+  max-width: 430px;
+  margin: 0 auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.cg-shell__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--cg-line-soft);
+}
+.cg-shell__uplinks {
+  display: flex;
+  gap: 4px;
+}
+.cg-shell__uplinks .cg-btn {
+  padding: 6px 8px;
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+}
+/* The routed screen fills the space between header and nav. */
+.cg-shell__main {
+  flex: 1;
+  padding-top: var(--cg-space-lg);
+}
+.cg-shell .cg-bottomnav {
+  position: sticky;
+  bottom: 0;
+  background: var(--cg-ink-900);
+}
+
+/* Entry gate + error screen: vertically centered aspiration, one primary action. */
+.cg-gate {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
 /* ---------------------------------------------------------------- keyframes */
 @keyframes cg-grain {
   0% {

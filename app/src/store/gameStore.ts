@@ -14,9 +14,12 @@ import { create } from 'zustand';
 import { applyIntent, createInitialState, type GameState, type Intent } from '@/engine/state';
 import { tick } from '@/engine/clock';
 import { settleOffline, type OfflineReport } from '@/engine/laundering';
-import { CloudSaveStore, LocalSaveStore, type SaveStore } from './persistence';
+import { CloudSaveStore, LocalSaveStore, type SaveStore, type SlotMeta } from './persistence';
 
 const MS_PER_HOUR = 3_600_000;
+
+/** The single-slot autosave the app boots from / continues into (Prompt 14). */
+export const AUTOSAVE_SLOT = 'autosave';
 
 export interface GameStore {
   /** Current run, or `null` before a game is created/loaded. */
@@ -30,8 +33,11 @@ export interface GameStore {
    */
   readonly lastOfflineReport: OfflineReport | null;
 
-  /** Start a fresh run from `seed` (does not persist until `persist` is called). */
-  newGame(seed: number | string): void;
+  /**
+   * Start a fresh run. When `seed` is omitted the store mints one from the wall
+   * clock — the engine stays pure, so the ONLY `Date.now()` lives here.
+   */
+  newGame(seed?: number | string): void;
   /** Dispatch a player intent through the pure reducer. */
   dispatch(intent: Intent): void;
   /** Advance the sim by `dtHours` of online in-game time. */
@@ -40,6 +46,13 @@ export interface GameStore {
   hydrate(slot: string): Promise<boolean>;
   /** Persist the current run to a slot, stamping the wall clock. */
   persist(slot: string): Promise<void>;
+  /**
+   * Clear the offline report once the return hook has been shown (so it presents
+   * exactly once per app open — Prompt 14 acceptance).
+   */
+  acknowledgeOffline(): void;
+  /** List saved slots (for the "continue" entry gate). */
+  listSaves(): Promise<SlotMeta[]>;
 }
 
 /** Guarded update: only runs `fn` when a run is loaded. */
@@ -59,7 +72,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   lastOfflineReport: null,
 
   newGame(seed) {
-    set({ state: createInitialState(seed) });
+    const runSeed = seed ?? `run-${Date.now()}`;
+    set({ state: createInitialState(runSeed), lastOfflineReport: null });
   },
 
   dispatch(intent) {
@@ -95,7 +109,24 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ state: stamped });
     await saveStore.save(slot, stamped);
   },
+
+  acknowledgeOffline() {
+    set({ lastOfflineReport: null });
+  },
+
+  listSaves() {
+    return get().saveStore.list();
+  },
 }));
+
+// --- Selector hooks (the thin read surface the UI consumes) ------------------
+
+/** The current run, or `null` before one is created/loaded. */
+export const useGameState = (): GameState | null => useGameStore((s) => s.state);
+
+/** The most recent offline settlement to surface as a return hook (or `null`). */
+export const useOfflineReport = (): OfflineReport | null =>
+  useGameStore((s) => s.lastOfflineReport);
 
 /**
  * A `LocalSaveStore` when IndexedDB is present, otherwise the cloud stub — so
