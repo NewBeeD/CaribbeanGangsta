@@ -20,7 +20,28 @@ import {
   type Intent,
 } from '@/engine/state';
 import { resolveDeal, type DealIntent, type DealResult } from '@/engine/deals';
-import { addStash, type AddStashResult, type StashType } from '@/engine/storage';
+import {
+  addStash,
+  moveProduct as moveProductEngine,
+  storeCash as storeCashEngine,
+  setStashGuard as setStashGuardEngine,
+  type AddStashResult,
+  type MoveResult,
+  type StashType,
+} from '@/engine/storage';
+import {
+  payBribe as payBribeEngine,
+  haggle as haggleEngine,
+  hire as hireEngine,
+  dismissOfficial as dismissOfficialEngine,
+  respondToRaise as respondToRaiseEngine,
+  type HaggleResult,
+  type HireResult,
+  type PayBribeResult,
+  type RaiseResult,
+} from '@/engine/corruption';
+import type { OfficialId } from '@/engine/config/corruption';
+import type { ProductId } from '@/engine/config/countries';
 import {
   assign,
   dismiss,
@@ -101,6 +122,41 @@ export interface GameStore {
    * expanded empire.
    */
   buildStash(intent: BuildStashIntent): AddStashResult | null;
+  /**
+   * Storage actions (Prompt 20) — each wraps the pure `storage.ts` engine, commits
+   * only when the operation lands (valid + funds/inventory sufficed), and autosaves
+   * so the stash layout survives a refresh. The UI authors no seizure/capacity math.
+   */
+  /** Move `qty` of a product between stashes; the result reports the travel delay. */
+  moveStashProduct(
+    fromId: string,
+    toId: string,
+    product: ProductId,
+    qty: number,
+  ): MoveResult | null;
+  /** Move dirty cash between stashes (dirty cash is located); reports travel delay. */
+  moveStashCash(fromId: string, toId: string, amount: number): MoveResult | null;
+  /** Assign (or, with `crewId: undefined`, clear) the crew member guarding a stash. */
+  assignStashGuard(stashId: string, crewId: string | undefined): void;
+  /**
+   * Corruption actions (Prompt 20) — each wraps the pure `corruption.ts` engine,
+   * commits when the operation lands, and autosaves. The UI authors no price/loyalty
+   * math; it only shows the disclosed numbers and dispatches the intent.
+   */
+  /** Pay a port bribe from CLEAN cash (pass `agreedAsk` from a successful haggle). */
+  payPortBribe(portId: string, shipmentValue: number, agreedAsk?: number): PayBribeResult | null;
+  /**
+   * Haggle a port bribe — a readable gamble (design/09 B.1). ALWAYS commits the
+   * advanced RNG snapshot (the roll was consumed; re-rolling would be unfair), and
+   * returns the result so the UI can show the discounted ask or the refusal.
+   */
+  hagglePortBribe(portId: string, shipmentValue: number): HaggleResult | null;
+  /** Put an official on the payroll (customs chief needs the `portId` it covers). */
+  hireOfficial(officialId: OfficialId, portId?: string): HireResult | null;
+  /** Cut an official loose — the clean break (drops any standing paid port). */
+  fireOfficial(officialId: string): void;
+  /** Accept (raise their retainer) or refuse (an underpayment) a pending raise-ask. */
+  respondToRaise(officialId: string, accept: boolean): RaiseResult | null;
   /**
    * Crew actions (Prompt 17) — each wraps the pure `crew.ts` engine, commits the
    * new state, and autosaves so the roster survives a refresh. The UI authors no
@@ -214,6 +270,89 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const result = addStash(state, intent.stashType, opts);
     // Only commit + autosave when a stash was actually built (funds sufficed).
     if (result.stash) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  moveStashProduct(fromId, toId, product, qty) {
+    const { state } = get();
+    if (!state) return null;
+    const result = moveProductEngine(state, fromId, toId, product, qty);
+    if (result.ok) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  moveStashCash(fromId, toId, amount) {
+    const { state } = get();
+    if (!state) return null;
+    const result = storeCashEngine(state, fromId, toId, amount);
+    if (result.ok) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  assignStashGuard(stashId, crewId) {
+    withState(get, set, (state) => setStashGuardEngine(state, stashId, crewId));
+    void get().persist(AUTOSAVE_SLOT).catch(() => {});
+  },
+
+  payPortBribe(portId, shipmentValue, agreedAsk) {
+    const { state } = get();
+    if (!state) return null;
+    const result =
+      agreedAsk === undefined
+        ? payBribeEngine(state, portId, shipmentValue)
+        : payBribeEngine(state, portId, shipmentValue, { agreedAsk });
+    // Only commit + autosave when the bribe cleared (funds sufficed).
+    if (result.ok) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  hagglePortBribe(portId, shipmentValue) {
+    const { state } = get();
+    if (!state) return null;
+    const result = haggleEngine(state, portId, shipmentValue);
+    // Always commit — the RNG draw was consumed; a re-roll on retry would be unfair.
+    set({ state: result.state });
+    void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    return result;
+  },
+
+  hireOfficial(officialId, portId) {
+    const { state } = get();
+    if (!state) return null;
+    const result =
+      portId === undefined
+        ? hireEngine(state, officialId)
+        : hireEngine(state, officialId, { portId });
+    // Only commit + autosave when the hire landed (funds sufficed, not a duplicate).
+    if (result.official) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  fireOfficial(officialId) {
+    withState(get, set, (state) => dismissOfficialEngine(state, officialId));
+    void get().persist(AUTOSAVE_SLOT).catch(() => {});
+  },
+
+  respondToRaise(officialId, accept) {
+    const { state } = get();
+    if (!state) return null;
+    const result = respondToRaiseEngine(state, officialId, accept);
+    if (!result.rejected) {
       set({ state: result.state });
       void get().persist(AUTOSAVE_SLOT).catch(() => {});
     }

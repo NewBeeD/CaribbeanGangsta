@@ -102,7 +102,7 @@ export function HeatScreen() {
           <Button
             variant="secondary"
             fullWidth
-            onClick={() => navigate('empire')}
+            onClick={() => navigate('storage')}
             data-testid="raid-tipoff"
           >
             Move product

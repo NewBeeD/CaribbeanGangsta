@@ -592,3 +592,21 @@ button {
     left: 130%;
   }
 }
+
+/* ------------------------------------------------------ form controls (Prompt 20) */
+/* Native select/number inputs used by the Storage/Corruption movers. Kept on-theme
+   so they read on the dark dossier surface; shape + label carry meaning, not color. */
+.cg-select,
+.cg-input {
+  font: inherit;
+  color: var(--cg-paper);
+  background: var(--cg-ink-750);
+  border: 1px solid var(--cg-line);
+  border-radius: var(--cg-radius-md);
+  padding: 6px 8px;
+}
+.cg-select:focus-visible,
+.cg-input:focus-visible {
+  outline: 2px solid var(--cg-brass);
+  outline-offset: 1px;
+}
