@@ -11,9 +11,30 @@
  */
 
 import { create } from 'zustand';
-import { applyIntent, createInitialState, type GameState, type Intent } from '@/engine/state';
+import {
+  applyIntent,
+  createInitialState,
+  type CrewAssignment,
+  type CrewMember,
+  type GameState,
+  type Intent,
+} from '@/engine/state';
 import { resolveDeal, type DealIntent, type DealResult } from '@/engine/deals';
 import { addStash, type AddStashResult, type StashType } from '@/engine/storage';
+import {
+  assign,
+  dismiss,
+  loyaltyDelta,
+  promote,
+  recruit,
+  train,
+  type LoyaltyEvent,
+  type LoyaltyResult,
+  type PromoteResult,
+  type PromoteTarget,
+  type TrainResult,
+} from '@/engine/crew';
+import type { CrewSkill } from '@/engine/config/crew';
 import { tick } from '@/engine/clock';
 import { settleOffline, type OfflineReport } from '@/engine/laundering';
 import { CloudSaveStore, LocalSaveStore, type SaveStore, type SlotMeta } from './persistence';
@@ -70,6 +91,27 @@ export interface GameStore {
    * expanded empire.
    */
   buildStash(intent: BuildStashIntent): AddStashResult | null;
+  /**
+   * Crew actions (Prompt 17) — each wraps the pure `crew.ts` engine, commits the
+   * new state, and autosaves so the roster survives a refresh. The UI authors no
+   * loyalty/skill math; it only names the person and the intent.
+   */
+  /** Bring an archetype onto the crew (open access — money/relationships gate it, never a flag). */
+  recruitCrew(archetypeId: string): CrewMember | null;
+  /** Train a skill by a fixed step, paid from clean cash. Rejects (no commit) if maxed/short. */
+  trainCrew(npcId: string, skill: CrewSkill): TrainResult | null;
+  /** Promote to lieutenant delegating a front/territory; ripples grievance to the passed-over. */
+  promoteCrew(npcId: string, target: PromoteTarget): PromoteResult | null;
+  /** Set what a crew member is doing (guard wires them into the stash's seizure %). */
+  assignCrew(npcId: string, assignment: CrewAssignment): void;
+  /**
+   * Apply a loyalty/treatment event (raise pay, confront, …) — the betrayal-arc
+   * intervention lever (design/02 §4). The engine walks the arc back on the next
+   * tick when loyalty recovers; this just records the treatment.
+   */
+  treatCrew(npcId: string, event: LoyaltyEvent): LoyaltyResult | null;
+  /** Fire / cut loose a crew member (also clears any stash they guarded). */
+  dismissCrew(npcId: string): void;
   /** Advance the sim by `dtHours` of online in-game time. */
   tickBy(dtHours: number): void;
   /** Load a slot and settle any offline time since it was last played. */
@@ -134,6 +176,59 @@ export const useGameStore = create<GameStore>((set, get) => ({
       void get().persist(AUTOSAVE_SLOT).catch(() => {});
     }
     return result;
+  },
+
+  recruitCrew(archetypeId) {
+    const { state } = get();
+    if (!state) return null;
+    const result = recruit(state, archetypeId);
+    set({ state: result.state });
+    void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    return result.crew;
+  },
+
+  trainCrew(npcId, skill) {
+    const { state } = get();
+    if (!state) return null;
+    const result = train(state, npcId, skill);
+    // Only commit + autosave when the session actually happened (funds/skill room).
+    if (!result.rejected) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  promoteCrew(npcId, target) {
+    const { state } = get();
+    if (!state) return null;
+    const result = promote(state, npcId, target);
+    if (!result.rejected) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  assignCrew(npcId, assignment) {
+    withState(get, set, (state) => assign(state, npcId, assignment));
+    void get().persist(AUTOSAVE_SLOT).catch(() => {});
+  },
+
+  treatCrew(npcId, event) {
+    const { state } = get();
+    if (!state) return null;
+    const result = loyaltyDelta(state, npcId, event);
+    if (!result.rejected) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  dismissCrew(npcId) {
+    withState(get, set, (state) => dismiss(state, npcId));
+    void get().persist(AUTOSAVE_SLOT).catch(() => {});
   },
 
   tickBy(dtHours) {

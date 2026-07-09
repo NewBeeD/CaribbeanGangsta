@@ -3,7 +3,7 @@
  * The remaining entries are minimal, wired PLACEHOLDERS that later prompts replace
  * one-for-one (deals is now the real screen, Prompt 15):
  *
- *   deals → Prompt 15 (live)   empire → Prompt 16 (live)   crew  → Prompt 17
+ *   deals → Prompt 15 (live)   empire → Prompt 16 (live)   crew  → Prompt 17 (live)
  *   money → Prompt 18          heat   → Prompt 19          highscore → Prompt 23
  *
  * They already read live run state through the store selector (proving the shell
@@ -15,6 +15,7 @@ import { useGameState } from '@/store';
 import { Card, SceneText } from '@/ui/components';
 import { DealScreen } from '@/ui/screens/DealScreen';
 import { EmpireMap } from '@/ui/screens/EmpireMap';
+import { CrewScreen } from '@/ui/screens/CrewScreen';
 import { getScreenNode, type ScreenId } from './nav';
 
 interface PlaceholderProps {
@@ -48,7 +49,7 @@ function PlaceholderScreen({ id, promptNo }: PlaceholderProps) {
 export const SCREENS: Readonly<Record<ScreenId, () => JSX.Element>> = {
   deals: () => <DealScreen />,
   empire: () => <EmpireMap />,
-  crew: () => <PlaceholderScreen id="crew" promptNo={17} />,
+  crew: () => <CrewScreen />,
   money: () => <PlaceholderScreen id="money" promptNo={18} />,
   heat: () => <PlaceholderScreen id="heat" promptNo={19} />,
   highscore: () => <PlaceholderScreen id="highscore" promptNo={23} />,
