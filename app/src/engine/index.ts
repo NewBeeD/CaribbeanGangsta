@@ -406,6 +406,43 @@ export type {
   DebtRejectReason,
 } from './debt';
 
+// Endgame — death spiral, permadeath, high score & prestige — Prompt 11.
+export {
+  EMPIRE_WEIGHTS,
+  PRESTIGE_UNLOCKS,
+  findPrestige,
+  SPIRAL_HEAT_UNMANAGED,
+  SPIRAL_HEAT_HUNTED,
+  SPIRAL_RIVAL_HUNTED,
+} from './config/prestige';
+export type {
+  PrestigeCategory,
+  PrestigeRequirementKind,
+  PrestigeUnlockConfig,
+} from './config/prestige';
+export {
+  actReached,
+  empireComposite,
+  bankPeaks,
+  operatingCapital,
+  evaluateSpiral,
+  runStats,
+  evaluatePrestige,
+  endRun,
+  retire,
+  LEGACY_MODE_ENABLED,
+} from './endgame';
+export type {
+  SpiralStage,
+  SpiralStep,
+  SpiralExit,
+  SpiralStatus,
+  RunStats,
+  RunEndCause,
+  RunRecap,
+  RunEndResult,
+} from './endgame';
+
 export const ENGINE_VERSION = '0.0.0' as const;
 
 export interface Game {

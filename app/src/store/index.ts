@@ -19,3 +19,16 @@ export type {
   Migration,
   LocalSaveStoreOptions,
 } from './persistence';
+
+export {
+  META_VERSION,
+  emptyMeta,
+  bankScore,
+  LocalMetaProgressStore,
+  CloudMetaProgressStore,
+} from './metaProgress';
+export type {
+  MetaProgress,
+  MetaProgressStore,
+  LocalMetaProgressStoreOptions,
+} from './metaProgress';

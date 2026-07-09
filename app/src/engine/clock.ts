@@ -24,6 +24,7 @@ import { accrue } from './laundering';
 import { crewStep } from './crew';
 import { corruptionStep } from './corruption';
 import { debtStep } from './debt';
+import { bankPeaks } from './endgame';
 
 const HOURS_PER_DAY = 24;
 const DAYS_PER_WEEK = 7;
@@ -92,6 +93,11 @@ export const TICK_STEPS: readonly TickStep[] = [
   { id: 'chaos-roll', modes: ['active'], run: (s) => s },
   // Narrative-beat checks (design/05). Prompt 12/13. Active-only.
   { id: 'beat-check', modes: ['active'], run: (s) => s },
+  // Peak trackers: bank net-worth / clean-cash / empire-composite peaks after every
+  // system above has settled (design/01 §7). Prompt 11. Active-only and LAST, so the
+  // banked height reflects this tick's true max. Offline peak banking is handled by
+  // `laundering.settleOffline` (clean cash only; empire size can't grow while away).
+  { id: 'peak-tracking', modes: ['active'], run: (s) => bankPeaks(s) },
 ];
 
 /** Recompute a clock advanced by `dtHours` (derives day/week from total hours). */
