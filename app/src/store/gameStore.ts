@@ -46,6 +46,7 @@ import {
   type FrontType,
   type PesoExchangeResult,
 } from '@/engine/laundering';
+import { bribeToCoolHeat, setLieLow, type BribeCoolResult } from '@/engine/heat';
 import { CloudSaveStore, LocalSaveStore, type SaveStore, type SlotMeta } from './persistence';
 
 const MS_PER_HOUR = 3_600_000;
@@ -140,6 +141,19 @@ export interface GameStore {
   treatCrew(npcId: string, event: LoyaltyEvent): LoyaltyResult | null;
   /** Fire / cut loose a crew member (also clears any stash they guarded). */
   dismissCrew(npcId: string): void;
+  /**
+   * Heat levers (Prompt 19) — the Heat screen's reduce-heat controls. Each wraps
+   * the pure `heat.ts` engine, commits, and autosaves so the tension state survives
+   * a refresh. The UI authors no decay/heat math; it names the lever only.
+   */
+  /** Toggle "lie low" — heat cools faster, laundering income slows (design/07 §5). */
+  setLieLow(enabled: boolean): void;
+  /**
+   * Pay a cop off from CLEAN cash to cool heat (design/07 §5's `[ Bribe a cop -$X ]`).
+   * Commits + autosaves only when it lands (funds sufficed); returns the full
+   * `BribeCoolResult` (its `rejected` reason otherwise), or `null` when no run loaded.
+   */
+  coolWithBribe(dollars?: number): BribeCoolResult | null;
   /** Advance the sim by `dtHours` of online in-game time. */
   tickBy(dtHours: number): void;
   /** Load a slot and settle any offline time since it was last played. */
@@ -295,6 +309,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
   dismissCrew(npcId) {
     withState(get, set, (state) => dismiss(state, npcId));
     void get().persist(AUTOSAVE_SLOT).catch(() => {});
+  },
+
+  setLieLow(enabled) {
+    withState(get, set, (state) => setLieLow(state, enabled));
+    void get().persist(AUTOSAVE_SLOT).catch(() => {});
+  },
+
+  coolWithBribe(dollars) {
+    const { state } = get();
+    if (!state) return null;
+    const result = dollars === undefined ? bribeToCoolHeat(state) : bribeToCoolHeat(state, dollars);
+    // Only commit + autosave when the bribe cleared (funds sufficed, amount valid).
+    if (result.ok) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
   },
 
   tickBy(dtHours) {
