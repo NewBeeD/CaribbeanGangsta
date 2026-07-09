@@ -31,6 +31,7 @@ import {
   HEAT_MIN,
   HEAT_TIERS,
   LIE_LOW_DECAY_MULTIPLIER,
+  QUICK_BRIBE_DOLLARS,
   RAID_BASE_RATE_PER_HOUR,
   RAID_EMPIRE_FACTOR,
   type LeTier,
@@ -83,6 +84,54 @@ export function decayHeat(state: GameState, dtHours: number): GameState {
 export function reduceHeatByBribe(state: GameState, bribeDollars: number): GameState {
   if (bribeDollars <= 0) return state;
   return addHeat(state, -bribeDollars * BRIBE_HEAT_PER_DOLLAR, 'bribe');
+}
+
+/**
+ * A DISCLOSED quote for the Heat screen's `[ Bribe a cop -$X ]` lever (design/07
+ * §5): what a `dollars` bribe costs and exactly how much heat it removes (clamped
+ * at the floor, so the shown drop is never more than there is to shed). Pure — the
+ * number shown here is the number `bribeToCoolHeat` charges/removes (fairness law).
+ */
+export interface BribeCoolQuote {
+  readonly cost: number;
+  readonly heatReduced: number;
+}
+
+export function bribeCoolQuote(state: GameState, dollars = QUICK_BRIBE_DOLLARS): BribeCoolQuote {
+  const cost = Math.max(0, Math.round(dollars));
+  const raw = cost * BRIBE_HEAT_PER_DOLLAR;
+  const heatReduced = Math.min(raw, state.heat - HEAT_MIN);
+  return { cost, heatReduced: Math.round(heatReduced * 10) / 10 };
+}
+
+export interface BribeCoolResult {
+  readonly state: GameState;
+  readonly ok: boolean;
+  /** Clean cash actually charged (== the quoted cost). */
+  readonly paid: number;
+  /** Heat actually shed (== the quoted `heatReduced`). */
+  readonly heatReduced: number;
+  readonly rejected?: 'insufficient-funds' | 'invalid-amount';
+}
+
+/**
+ * Pay a cop off from CLEAN cash to cool heat (design/07 §5's reduce-heat lever).
+ * An in-fiction lever, NOT a "buy heat" store: it charges the disclosed cost and
+ * sheds the disclosed heat via `reduceHeatByBribe`. Rejects without mutating on an
+ * invalid amount or insufficient funds. The full corruption negotiation & payroll
+ * remain Prompt 09/20's domain; this is the quick, always-available option.
+ */
+export function bribeToCoolHeat(state: GameState, dollars = QUICK_BRIBE_DOLLARS): BribeCoolResult {
+  const quote = bribeCoolQuote(state, dollars);
+  if (quote.cost <= 0) {
+    return { state, ok: false, paid: 0, heatReduced: 0, rejected: 'invalid-amount' };
+  }
+  if (state.cleanCash < quote.cost) {
+    return { state, ok: false, paid: 0, heatReduced: 0, rejected: 'insufficient-funds' };
+  }
+  const cooled = reduceHeatByBribe(state, quote.cost);
+  const next: GameState = { ...cooled, cleanCash: cooled.cleanCash - quote.cost };
+  return { state: next, ok: true, paid: quote.cost, heatReduced: state.heat - next.heat };
 }
 
 // --- Tiers -------------------------------------------------------------------

@@ -171,6 +171,8 @@ function queueFiredCard(state: GameState, card: StoryCard): GameState {
     kind: 'card',
     summary: card.sceneText,
     createdAtHours: state.clock.hours,
+    // The presenter (Prompt 22) resolves the chained scene via `getCard`.
+    cardId: card.id,
   };
   return { ...state, pendingChoices: [...state.pendingChoices, scene] };
 }
@@ -209,6 +211,24 @@ export function applyChoice(
     if (chained) next = queueFiredCard(next, chained);
   }
   return next;
+}
+
+/**
+ * Resolve the story card a queued `PendingChoice` should present (Prompt 22 — the
+ * presenter's entry point). A beat-sourced choice resolves via `cardForBeat` (which
+ * skips already-fired one-shots and stamps the rep variant); a chained choice resolves
+ * its `cardId` directly and gets the same variant stamp. Return-hook choices from
+ * `settleOffline` carry neither, so they resolve to `null` (they route to a screen,
+ * not a scene). Pure read — the variant is the player's dominant reputation track.
+ */
+export function cardForPending(state: GameState, choice: PendingChoice): StoryCard | null {
+  if (choice.cardId) {
+    const card = CARD_BY_ID.get(choice.cardId);
+    if (!card || !isCardEligible(state, card)) return null;
+    return { ...card, activeVariant: dominantRepTrack(state.reputation) };
+  }
+  if (choice.beatId) return cardForBeat(choice.beatId, state);
+  return null;
 }
 
 /** The variant prose for a resolved card (or its `street` default). Presentation helper. */

@@ -7,7 +7,16 @@
  */
 
 /** Every routable screen in the shell. */
-export type ScreenId = 'deals' | 'crew' | 'money' | 'heat' | 'empire' | 'highscore';
+export type ScreenId =
+  | 'deals'
+  | 'crew'
+  | 'money'
+  | 'heat'
+  | 'empire'
+  | 'storage'
+  | 'corruption'
+  | 'debt'
+  | 'highscore';
 
 export interface ScreenNode {
   readonly id: ScreenId;
@@ -57,6 +66,27 @@ export const SCREEN_NODES: readonly ScreenNode[] = [
     route: 'empire',
     inNav: false,
     tagline: 'Your territory, at a glance.',
+  },
+  {
+    id: 'storage',
+    label: 'Storage',
+    route: 'storage',
+    inNav: false,
+    tagline: 'Spread the weight. One raid, one place.',
+  },
+  {
+    id: 'corruption',
+    label: 'Corruption',
+    route: 'corruption',
+    inNav: false,
+    tagline: 'Buy the badge. Pay to stay safe.',
+  },
+  {
+    id: 'debt',
+    label: 'Debt',
+    route: 'debt',
+    inNav: false,
+    tagline: 'Borrow to come up. Terms up front.',
   },
   {
     id: 'highscore',

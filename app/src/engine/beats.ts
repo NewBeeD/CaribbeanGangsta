@@ -351,6 +351,8 @@ export function beatStep(state: GameState): GameState {
     kind: 'beat',
     summary: TRIGGER_BY_ID.get(f.beatId)?.summary ?? f.beatId,
     createdAtHours: state.clock.hours,
+    // The story-card presenter (Prompt 22) resolves the scene via `cardForBeat`.
+    beatId: f.beatId,
   }));
 
   return { ...state, beatsFired, pendingChoices: [...state.pendingChoices, ...scenes] };

@@ -288,6 +288,17 @@ export interface PendingChoice {
   readonly summary: string;
   /** In-game hours at which it was queued (for ordering/expiry). */
   readonly createdAtHours: number;
+  /**
+   * The beat that queued this choice (Prompt 22). Lets the story-card presenter
+   * resolve the scene via `cardForBeat` without parsing the id. Absent on plain
+   * return-hooks (offline `settleOffline` allocations) that carry no card.
+   */
+  readonly beatId?: string;
+  /**
+   * A chained story card queued directly (a choice's `firesCard`; Prompt 22). The
+   * presenter resolves it via `getCard`. Absent on beat-sourced / return-hook choices.
+   */
+  readonly cardId?: string;
 }
 
 /**

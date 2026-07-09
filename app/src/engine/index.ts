@@ -126,6 +126,8 @@ export {
   addHeat,
   decayHeat,
   reduceHeatByBribe,
+  bribeCoolQuote,
+  bribeToCoolHeat,
   currentTier,
   tierForHeat,
   tierDots,
@@ -135,7 +137,14 @@ export {
   raidChance,
   rollRaid,
 } from './heat';
-export type { LeTier, TierEscalation, LieLowIntent, RaidEvent } from './heat';
+export type {
+  LeTier,
+  TierEscalation,
+  LieLowIntent,
+  RaidEvent,
+  BribeCoolQuote,
+  BribeCoolResult,
+} from './heat';
 export {
   HEAT_MIN,
   HEAT_MAX,
@@ -146,6 +155,10 @@ export {
   LIE_LOW_INCOME_MULTIPLIER,
   EMPIRE_DECAY_SLOWDOWN,
   BRIBE_HEAT_PER_DOLLAR,
+  QUICK_BRIBE_DOLLARS,
+  TIER_TELEGRAPH_MARGIN,
+  RAID_TIPOFF_LOOKAHEAD_HOURS,
+  RAID_TIPOFF_MIN_CHANCE,
   RAID_BASE_RATE_PER_HOUR,
   RAID_EMPIRE_FACTOR,
 } from './config/heat';
@@ -488,6 +501,7 @@ export {
   validateCard,
   validateEffect,
   cardForBeat,
+  cardForPending,
   applyChoice,
   applyEffect,
   getCard,

@@ -73,6 +73,31 @@ export const LIE_LOW_INCOME_MULTIPLIER = 0.5;
  */
 export const BRIBE_HEAT_PER_DOLLAR = 0.003;
 
+/**
+ * The standard "bribe a cop" lever offered on the Heat screen (design/07 §5's
+ * `[ Bribe a cop -$X ]`): a fixed clean-cash spend that cools heat by
+ * `× BRIBE_HEAT_PER_DOLLAR` (~$5,000 ⇒ ~15 heat). An in-fiction reduce-heat lever,
+ * NOT a "buy heat" store — the number shown is the number charged/removed.
+ */
+export const QUICK_BRIBE_DOLLARS = 5_000;
+
+// --- Telegraphing (design/07 §5: every escalation warned BEFORE it lands) -----
+
+/**
+ * How close (in heat points) to the next tier boundary the UI starts telegraphing
+ * an imminent crossing — "cross into DEA range and it gets personal." Warned while
+ * still IN the lower tier, so a crossing is never a surprise (design/07 §5).
+ */
+export const TIER_TELEGRAPH_MARGIN = 5;
+
+/**
+ * The look-ahead window (hours) a payrolled beat cop's raid tip-off reads, and the
+ * minimum raid probability over it before the tip-off surfaces. Gives lead time to
+ * move product BEFORE a raid lands, rather than a post-raid scene (design/07 §5).
+ */
+export const RAID_TIPOFF_LOOKAHEAD_HOURS = 24;
+export const RAID_TIPOFF_MIN_CHANCE = 0.15;
+
 // --- Raids (design/01 §4; resolution lives in Prompt 06's storage.ts) ---------
 
 /**
