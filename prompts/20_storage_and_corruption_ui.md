@@ -7,7 +7,8 @@
 ## Goal
 Expose the *where to stash* and *who to buy* decisions with their **shown risk numbers**,
 so the player can read exposure vs. cost (storage) and price vs. protection (corruption)
-before committing. Both unlock via progressive disclosure (mid-game, not first session).
+before committing. Both are available from the start (Ideas.md — open access): buying a
+stash or an official costs money, and that price is the only gate.
 
 ## Build
 - `src/ui/screens/StorageScreen.tsx`:

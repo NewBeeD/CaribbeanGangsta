@@ -1,7 +1,9 @@
 /**
- * App shell (Prompt 14): the store-connected React layer, progressive disclosure,
- * the offline return hook, the new-run gate, and the global error boundary. Screens
- * (Prompts 15–23) plug into `screens.tsx`; everything else here is chrome + routing.
+ * App shell (Prompt 14, revised per Ideas.md — open access): the store-connected
+ * React layer, the offline return hook, the new-run gate, and the global error
+ * boundary. Every screen is reachable from the start — money limits options, not
+ * menus. Screens (Prompts 15–23) plug into `screens.tsx`; everything else here is
+ * chrome + routing.
  */
 
 export { App } from './App';
@@ -14,12 +16,9 @@ export type { ReturnHookProps } from './ReturnHook';
 export { useHash, navigate } from './useHash';
 export { SCREENS } from './screens';
 export {
-  DISCLOSURE_NODES,
+  SCREEN_NODES,
   DEFAULT_SCREEN,
-  disclosureState,
-  resolveDisclosure,
-  getDisclosureNode,
-  isScreenAccessible,
+  getScreenNode,
   screenForHash,
-} from './Disclosure';
-export type { ScreenId, DisclosureState, DisclosureNode } from './Disclosure';
+} from './nav';
+export type { ScreenId, ScreenNode } from './nav';

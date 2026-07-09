@@ -25,7 +25,7 @@
 
 import { hasBankedWin } from './deals';
 import { tierForHeat } from './heat';
-import { isLenderUnlocked, lifelineOffer } from './debt';
+import { lifelineOffer } from './debt';
 import { evaluateSpiral } from './endgame';
 import {
   CHAOS_MAJOR_DISRUPTION_FLAG,
@@ -116,7 +116,9 @@ export const BEAT_TRIGGERS: readonly BeatTrigger[] = [
     major: false,
     negative: false,
     summary: 'Papa Cass, a street shark, lets it be known his money is available — for a price.',
-    when: (s) => isLenderUnlocked(s, 'papa-cass'),
+    // Borrowing is open from minute one (Ideas.md) — the beat is always eligible;
+    // the variable-trigger pacing decides when it actually lands.
+    when: () => true,
   },
   // --- Act II: the contender ----------------------------------------------
   {

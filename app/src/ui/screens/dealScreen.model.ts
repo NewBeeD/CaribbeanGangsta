@@ -11,8 +11,6 @@
  */
 
 import {
-  ARMS_UNLOCK_FLAG,
-  INTERNATIONAL_ROUTES_FLAG,
   PRODUCTS,
   SOURCE_LOCATION,
   computeBustProbability,
@@ -32,31 +30,9 @@ export type DealMode = 'buy' | 'sell';
 /** The leg the home stash deals at; travel/route legs arrive with the map (Prompt 16). */
 export const DEAL_LOCATION: LocationId = SOURCE_LOCATION;
 
-/**
- * Which durable flag reveals each product's `unlock` gate (design/01 §2 "Unlock").
- * `null` = ungated (weed, from minute one). A gate string absent from this table is
- * treated as still-locked, so a real gate never silently opens.
- */
-const UNLOCK_FLAG: Readonly<Record<string, string | null>> = {
-  start: null,
-  'district-controlled': 'district-controlled',
-  'smuggling-route': INTERNATIONAL_ROUTES_FLAG,
-  'arms-unlock': ARMS_UNLOCK_FLAG,
-};
-
 /** The run's home stash — the default buy/sell target (design/07 §1). */
 export function homeStash(state: GameState): Stash {
   return state.stashes[0]!;
-}
-
-/** Whether `product` has passed its disclosure gate this run (reads flags only). */
-export function isProductUnlocked(state: GameState, product: ProductId): boolean {
-  const cfg = PRODUCTS.find((p) => p.id === product);
-  if (!cfg) return false;
-  const flag = UNLOCK_FLAG[cfg.unlock];
-  if (flag === undefined) return false; // unknown gate: keep it locked
-  if (flag === null) return true; // ungated (weed, from minute one)
-  return state.flags[flag] === true;
 }
 
 /** Sell/buy margin as a whole percent of the buy price (0 when buy is free). */
@@ -69,7 +45,6 @@ export function marginPct(buy: number, sell: number): number {
 export interface ProductRow {
   readonly id: ProductId;
   readonly name: string;
-  readonly unlocked: boolean;
   readonly buy: number;
   readonly sell: number;
   readonly marginPct: number;
@@ -89,7 +64,6 @@ function productRow(
   return {
     id: product,
     name: cfg.name,
-    unlocked: isProductUnlocked(state, product),
     buy: price.buy,
     sell: price.sell,
     marginPct: marginPct(price.buy, price.sell),
@@ -98,7 +72,11 @@ function productRow(
   };
 }
 
-/** Every product's deal-board row, in canonical order (locked ones flagged). */
+/**
+ * Every product's deal-board row, in canonical order. All products are on the
+ * board from minute one (Ideas.md — Drug Lord 2 open access): the buy price is
+ * the gate, not a progression flag.
+ */
 export function productRows(
   state: GameState,
   location: LocationId,
@@ -158,13 +136,12 @@ export function sellBustProbability(
   return computeBustProbability(state, product, qty, location);
 }
 
-/** The default product the screen opens on: first unlocked, preferring one held. */
+/** The default product the screen opens on: the first one held, else the first. */
 export function defaultProduct(state: GameState | null): ProductId {
   if (!state) return PRODUCTS[0]!.id;
   const stash = homeStash(state);
-  const unlocked = PRODUCTS.filter((p) => isProductUnlocked(state, p.id));
-  const held = unlocked.find((p) => stash.inventory[p.id] > 0);
-  return (held ?? unlocked[0] ?? PRODUCTS[0]!).id;
+  const held = PRODUCTS.find((p) => stash.inventory[p.id] > 0);
+  return (held ?? PRODUCTS[0]!).id;
 }
 
 /** Open in sell mode when there's product to move, otherwise in buy mode. */

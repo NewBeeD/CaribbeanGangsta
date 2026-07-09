@@ -1,10 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { createInitialState, type OfflineReport } from '@/engine';
+import { type OfflineReport } from '@/engine';
 import { BottomNav, type BottomNavItem } from '@/ui/components';
 import { NewRunGate } from '@/ui/shell/NewRunGate';
 import { ReturnHook } from '@/ui/shell/ReturnHook';
-import { DISCLOSURE_NODES } from '@/ui/shell/Disclosure';
+import { SCREEN_NODES } from '@/ui/shell/nav';
 
 describe('NewRunGate (Prompt 14 — the entry gate)', () => {
   it('offers only a fresh start when there is no save', () => {
@@ -58,24 +58,21 @@ describe('ReturnHook (Prompt 14 — reward, never punishment; GDD §6)', () => {
   });
 });
 
-describe('Bottom nav disclosure (design/07 §2/§8)', () => {
-  it('renders locked tabs greyed (disabled), never missing', () => {
-    const state = createInitialState('nav');
-    const items: BottomNavItem[] = DISCLOSURE_NODES.filter((n) => n.inNav).map((n) => ({
+describe('Bottom nav (Ideas.md — open access)', () => {
+  it('renders every tab enabled from minute one — nothing locked', () => {
+    const items: BottomNavItem[] = SCREEN_NODES.filter((n) => n.inNav).map((n) => ({
       id: n.id,
       label: n.label,
-      disabled: !n.unlocked(state),
     }));
 
     const html = renderToStaticMarkup(
       <BottomNav items={items} activeId="deals" onSelect={() => {}} />,
     );
 
-    // All four tabs render...
+    // All four tabs render, none disabled.
     for (const label of ['Deals', 'Crew', 'Money', 'Heat']) {
       expect(html).toContain(label);
     }
-    // ...but crew/money/heat are disabled on minute one (3 of 4 locked).
-    expect((html.match(/disabled/g) ?? []).length).toBe(3);
+    expect(html).not.toContain('disabled');
   });
 });

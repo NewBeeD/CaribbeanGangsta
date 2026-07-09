@@ -384,7 +384,6 @@ export type {
   LadderRung,
 } from './config/lenders';
 export {
-  isLenderUnlocked,
   borrowCap,
   quoteLoan,
   borrow,

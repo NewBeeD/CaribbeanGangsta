@@ -167,14 +167,12 @@ export function DealScreen() {
                 key={r.id}
                 type="button"
                 className="cg-panel"
-                disabled={!r.unlocked}
                 aria-current={isSel ? 'true' : undefined}
                 aria-pressed={isSel}
-                onClick={() => r.unlocked && pick(r.id)}
+                onClick={() => pick(r.id)}
                 style={{
                   textAlign: 'left',
-                  cursor: r.unlocked ? 'pointer' : 'default',
-                  opacity: r.unlocked ? 1 : 0.5,
+                  cursor: 'pointer',
                   outline: isSel ? '2px solid var(--cg-brass)' : 'none',
                   width: '100%',
                 }}
@@ -188,18 +186,12 @@ export function DealScreen() {
                   }}
                 >
                   <span className="cg-stat__value">{r.name}</span>
-                  {r.unlocked ? (
-                    <TrendArrow direction={r.trend} />
-                  ) : (
-                    <span className="cg-label">Locked</span>
-                  )}
+                  <TrendArrow direction={r.trend} />
                 </div>
-                {r.unlocked && (
-                  <div className="cg-label" style={{ marginTop: 4 }}>
-                    Buy {money(r.buy)} · Sell {money(r.sell)} ({r.marginPct >= 0 ? '+' : ''}
-                    {r.marginPct}%) · You hold {r.held}
-                  </div>
-                )}
+                <div className="cg-label" style={{ marginTop: 4 }}>
+                  Buy {money(r.buy)} · Sell {money(r.sell)} ({r.marginPct >= 0 ? '+' : ''}
+                  {r.marginPct}%) · You hold {r.held}
+                </div>
               </button>
             );
           })}

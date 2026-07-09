@@ -16,9 +16,10 @@
  * scattered literals (prompts/README.md "Config, not literals"; Prompt 26).
  *
  * Lenders are a progression of CHARACTERS (design/10 §2): higher tiers are cheaper
- * but their consequences are heavier — a real trade, not a strict upgrade. MVP
- * (§7) ships the street shark done well; the higher tiers are here so the roster,
- * unlock gates, and cap curve are complete from day one.
+ * but their consequences are heavier — a real trade, not a strict upgrade. The
+ * whole roster is open from day one (Ideas.md — Drug Lord 2 open access): what
+ * limits a broke, unknown player is the reputation/collateral-scaled borrow cap
+ * and the consequences, never a hidden menu.
  */
 
 /** The lenders, cheapest-consequence first (design/10 §2). */
@@ -44,13 +45,6 @@ export interface LenderConfig {
   readonly softDueDays: number;
   /** The heaviest rung this lender can reach (design/10 §2 consequence ceiling). */
   readonly consequenceCeiling: ConsequenceCeiling;
-  /**
-   * Unlock gate (design/10 §2). `unlocksAtDay` gates the street shark to ~day 2
-   * (post-competence, never before the player has felt a few wins — design/10 §6);
-   * the higher tiers gate on a progression flag set by later systems.
-   */
-  readonly unlocksAtDay?: number;
-  readonly requiresFlag?: string;
   /** Greed trait 0.7–1.3 — reserved for the NPC relationship layer (design/10 §2). */
   readonly greed: number;
   /** Where the lender relationship starts (0–100, hidden — reused from crew, §2). */
@@ -70,7 +64,6 @@ export const LENDERS: readonly LenderConfig[] = [
     weeklyRate: 0.2,
     softDueDays: 14, // ~2 in-game weeks (design/10 §3)
     consequenceCeiling: 'seize-stash',
-    unlocksAtDay: 2, // the early come-up hook (design/10 §6)
     greed: 1.1,
     startingLoyalty: 55,
   },
@@ -82,7 +75,6 @@ export const LENDERS: readonly LenderConfig[] = [
     weeklyRate: 0.1,
     softDueDays: 14,
     consequenceCeiling: 'seize-front',
-    requiresFlag: 'district-controlled',
     greed: 1.05,
     startingLoyalty: 52,
   },
@@ -94,7 +86,6 @@ export const LENDERS: readonly LenderConfig[] = [
     weeklyRate: 0.05,
     softDueDays: 21,
     consequenceCeiling: 'lethal',
-    requiresFlag: 'international-routes',
     greed: 1.25,
     startingLoyalty: 48,
   },

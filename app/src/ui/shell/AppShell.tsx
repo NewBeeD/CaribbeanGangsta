@@ -6,22 +6,18 @@ import {
   useOfflineReport,
 } from '@/store';
 import { BottomNav, type BottomNavItem } from '@/ui/components';
-import {
-  DISCLOSURE_NODES,
-  isScreenAccessible,
-  screenForHash,
-  type ScreenId,
-} from './Disclosure';
+import { SCREEN_NODES, screenForHash, type ScreenId } from './nav';
 import { NewRunGate } from './NewRunGate';
 import { ReturnHook } from './ReturnHook';
 import { SCREENS } from './screens';
 import { navigate, useHash } from './useHash';
 
 /**
- * The React shell (Prompt 14). It renders the current run and dispatches player
- * intents to the engine, and hosts the progressive-disclosure system that unlocks
- * screens as their flags flip (design/04 §0, design/07 §2). It reads state and calls
- * store actions ONLY — no game logic lives here (README UI rule).
+ * The React shell (Prompt 14, revised per Ideas.md — open access). It renders the
+ * current run and dispatches player intents to the engine. Every screen is
+ * reachable from minute one; money limits what the player can DO there, never
+ * where he can go. It reads state and calls store actions ONLY — no game logic
+ * lives here (README UI rule).
  *
  * Boot: attempt to resume the autosave (settling any offline time through the store,
  * which owns the only `Date.now()`); on success drop into the run — surfacing the
@@ -88,47 +84,41 @@ export function AppShell() {
         onContinue={() => useGameStore.getState().acknowledgeOffline()}
         onSee={() => {
           useGameStore.getState().acknowledgeOffline();
-          navigate(isScreenAccessible(state, 'money') ? 'money' : 'deals');
+          navigate('money');
         }}
       />
     );
   }
 
-  const current: ScreenId = screenForHash(state, hash);
+  const current: ScreenId = screenForHash(hash);
   const Screen = SCREENS[current];
 
-  const navItems: BottomNavItem[] = DISCLOSURE_NODES.filter((n) => n.inNav).map(
+  const navItems: BottomNavItem[] = SCREEN_NODES.filter((n) => n.inNav).map(
     (n) => ({
       id: n.id,
       label: n.label,
-      disabled: !n.unlocked(state),
     }),
   );
 
   // Empire Map + High Score live one level up (design/07 §2/§8).
-  const topNodes = DISCLOSURE_NODES.filter((n) => !n.inNav);
+  const topNodes = SCREEN_NODES.filter((n) => !n.inNav);
 
   return (
     <div className="cg-shell">
       <header className="cg-shell__top">
         <span className="cg-kicker">Caribbean Gangsta</span>
         <nav className="cg-shell__uplinks" aria-label="Overview">
-          {topNodes.map((n) => {
-            const unlocked = n.unlocked(state);
-            return (
-              <button
-                key={n.id}
-                type="button"
-                className="cg-btn cg-btn--ghost"
-                disabled={!unlocked}
-                title={unlocked ? undefined : n.aspiration}
-                aria-current={current === n.id ? 'page' : undefined}
-                onClick={() => unlocked && navigate(n.route)}
-              >
-                {n.label}
-              </button>
-            );
-          })}
+          {topNodes.map((n) => (
+            <button
+              key={n.id}
+              type="button"
+              className="cg-btn cg-btn--ghost"
+              aria-current={current === n.id ? 'page' : undefined}
+              onClick={() => navigate(n.route)}
+            >
+              {n.label}
+            </button>
+          ))}
         </nav>
       </header>
 
@@ -139,9 +129,7 @@ export function AppShell() {
       <BottomNav
         items={navItems}
         activeId={current}
-        onSelect={(id) => {
-          if (isScreenAccessible(state, id as ScreenId)) navigate(id);
-        }}
+        onSelect={(id) => navigate(id)}
       />
     </div>
   );

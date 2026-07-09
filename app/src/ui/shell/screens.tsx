@@ -14,7 +14,7 @@
 import { useGameState } from '@/store';
 import { Card, SceneText } from '@/ui/components';
 import { DealScreen } from '@/ui/screens/DealScreen';
-import { getDisclosureNode, type ScreenId } from './Disclosure';
+import { getScreenNode, type ScreenId } from './nav';
 
 interface PlaceholderProps {
   readonly id: ScreenId;
@@ -23,13 +23,13 @@ interface PlaceholderProps {
 
 function PlaceholderScreen({ id, promptNo }: PlaceholderProps) {
   const state = useGameState();
-  const node = getDisclosureNode(id);
+  const node = getScreenNode(id);
   const label = node?.label ?? id;
 
   return (
     <Card heading={label}>
       <SceneText tone="default">
-        {node?.aspiration ?? 'Coming together.'}
+        {node?.tagline ?? 'Coming together.'}
       </SceneText>
       <p className="cg-label" style={{ marginTop: 12 }}>
         Screen under construction · Prompt {promptNo}

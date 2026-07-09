@@ -24,7 +24,9 @@ frustration-free, with a **win inside 2 minutes**.
 - **Adaptive hints:** show a hint **only** if the player visibly fumbles; fast learners
   never see it (preserves competence). (design/04 §2, PvZ)
 - Introduce currency/laundering complexity around **minute 8**, not minute 1.
-- Gate all other nav/features via progressive disclosure until their onboarding step.
+- **Never gate navigation** (Ideas.md — open access): guide attention with beats, hints,
+  and the highlighted primary action, but every screen and option stays live. A curious
+  player who wanders off-script just plays the open game.
 - On-screen instruction **≤ ~8 words** at any time; no screen labeled "Tutorial".
 
 ## Acceptance criteria
@@ -32,14 +34,14 @@ frustration-free, with a **win inside 2 minutes**.
   full flow within the **10–20 min** window (measure via telemetry, Prompt 25).
 - The guided sale and first heat scare are **guaranteed survivals**; real bust risk only
   begins after competence is established. (prototype fidelity note)
-- Exactly one crew member and one front are introduced during onboarding; other systems
-  stay disclosed-later.
+- Exactly one crew member and one front are *introduced* (spotlighted) during
+  onboarding; every other system remains reachable, just not pushed. (Ideas.md)
 - The session ends **mid-motion** (income accruing + a buyer waiting). (GDD §11)
 - No on-screen instruction exceeds ~8 words; nothing is labeled "Tutorial".
 
 ## Guardrails
-- **Invisible tutorial, learn by doing, progressive disclosure, reveal the dream first.**
-  (GDD §9 rules 1–7)
+- **Invisible tutorial, learn by doing, guide attention (never lock doors), reveal the
+  dream first.** (GDD §9 rules 1–7; Ideas.md)
 - **Wins before risk** — never sequence a loss before the player has banked wins.
   (design/04 §2, Sid Meier)
 - Onboarding is *prior to* retention — if the first minutes don't land, nothing

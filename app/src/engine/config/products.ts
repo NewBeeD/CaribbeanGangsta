@@ -4,11 +4,16 @@
  * The canonical real-dollar price *bands* live in `config/countries.ts`
  * (`PRODUCT_PRICE_BANDS`, the single source of truth referenced across docs
  * 09–10). This module augments each product with the deal-loop behavior the
- * bands alone don't carry: its risk tier, how its margin responds to route
- * distance, and its unlock gate — all v1 tuning HYPOTHESES held as config
- * (prompts/README.md "Config, not literals"; Prompt 26 centralizes).
+ * bands alone don't carry: its risk tier and how its margin responds to route
+ * distance — all v1 tuning HYPOTHESES held as config (prompts/README.md "Config,
+ * not literals"; Prompt 26 centralizes).
  *
- * Design structure encoded here (design/01 §2):
+ * Design structure encoded here (design/01 §2; Ideas.md — Drug Lord 2 open
+ * access):
+ *  - **Every product is dealable from minute one.** There is no progression
+ *    gate — the buy price and the heat are the gates. Weed is where a broke
+ *    player starts because it's what he can afford, not because the rest is
+ *    hidden.
  *  - **Cocaine is the margin engine**: a high `sellDistanceElasticity` makes its
  *    sell price widen sharply from source → mid-route → wholesale.
  *  - **Arms are the high-heat premium tier**: top `tierRisk` and bust-heat spike.
@@ -43,8 +48,6 @@ export interface ProductConfig {
   readonly buyDistanceElasticity: number;
   /** Heat spike multiplier applied to `heatPerUnit × qty` on a bust. */
   readonly bustHeatMultiplier: number;
-  /** Progression gate that unlocks this product (design/01 §2 "Unlock"). */
-  readonly unlock: string;
 }
 
 /** Per-product deal-loop metadata, merged with the canonical price bands. */
@@ -57,7 +60,6 @@ const PRODUCT_META: Readonly<
       | 'sellDistanceElasticity'
       | 'buyDistanceElasticity'
       | 'bustHeatMultiplier'
-      | 'unlock'
     >
   >
 > = {
@@ -66,28 +68,24 @@ const PRODUCT_META: Readonly<
     sellDistanceElasticity: 0.3,
     buyDistanceElasticity: 0.1,
     bustHeatMultiplier: 3,
-    unlock: 'start',
   },
   synthetics: {
     tierRisk: 0.4,
     sellDistanceElasticity: 0.8,
     buyDistanceElasticity: 0.15,
     bustHeatMultiplier: 3,
-    unlock: 'district-controlled',
   },
   cocaine: {
     tierRisk: 0.7,
     sellDistanceElasticity: 2.0, // the margin engine — widens hard with distance
     buyDistanceElasticity: 0.2,
     bustHeatMultiplier: 4,
-    unlock: 'smuggling-route',
   },
   arms: {
     tierRisk: 1.0, // high-heat premium tier
     sellDistanceElasticity: 0.5,
     buyDistanceElasticity: 0.15,
     bustHeatMultiplier: 5,
-    unlock: 'arms-unlock',
   },
 };
 
