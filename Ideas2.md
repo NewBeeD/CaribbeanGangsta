@@ -1,0 +1,5 @@
+When transporting drugs via go fast boats to other countries, I can either go myself at a cost or give someone else a percentage to do the selling for me, which comes with it own risks. 
+
+I should be able to see drug prices in other neighboring countries. Where I can either buy from or sell to. To get drugs from colombia or mexico (The true Source) i must get a plug or a connection to there first. I am not able to just get a connection to the source from the get go, so this could be unlocked after a certain time. But from the beginning, my drugs should be purchased locally or neighboring countries. 
+
+Just like Drug Lords 2, when buying drugs from other countries, I would have to either travel there via go fast boat, or ferry or plane. all with their varying risk and costs. If a go fast boat is used, then the owner of the boat must get a percentage, and that journey comes with risk, thats why there should be a market for the payer to buy a gun or something. 

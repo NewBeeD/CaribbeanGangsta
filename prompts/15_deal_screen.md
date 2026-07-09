@@ -23,8 +23,9 @@ skill** and risk is **fair and estimable**. Success and bust both return a **sce
     alley before the deal closed. You ran; the product didn't."), never a toast.
 - Dispatch `BuyIntent`/`SellIntent`; read all numbers from selectors — no math in the
   component.
-- Respect disclosure: products locked until their gate; risk panel appears once real
-  bust risk is active (onboarding keeps early sells guaranteed — Prompt 24).
+- Open access (Ideas.md): every product is on the board from minute one — the buy price
+  is the gate, never a progression flag. Risk panel appears once real bust risk is
+  active (onboarding keeps early sells guaranteed — Prompt 24).
 
 ## Acceptance criteria
 - The displayed bust % equals `computeBustProbability(...)` for the current selection

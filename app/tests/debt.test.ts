@@ -12,7 +12,6 @@ import {
   LADDER_VIG_RATE_INCREASE,
   LIFELINE_MIN_REPUTATION,
   // debt — engine
-  isLenderUnlocked,
   borrowCap,
   quoteLoan,
   borrow,
@@ -28,7 +27,7 @@ import {
 } from '@/engine';
 import { migrateEnvelope } from '@/store';
 
-/** A run on ~day 2 (street shark unlocked) with the street rep to draw a full line. */
+/** A run on ~day 2 with the street rep to draw a full line. */
 function borrower(seed: string, streetRep = 100): GameState {
   const base = createInitialState(seed);
   return {
@@ -54,12 +53,13 @@ describe('debt is opt-in — nothing auto-enrolls the player (guarantee #1)', ()
     expect(debtOwed(s.debt)).toBe(0);
   });
 
-  it('the street shark is gated until ~day 2 (post-competence, design/10 §6)', () => {
+  it('every lender is open from day one — the borrow cap is the limiter (Ideas.md)', () => {
     const day1 = createInitialState('gate');
-    expect(isLenderUnlocked(day1, 'papa-cass')).toBe(false);
-    expect(isLenderUnlocked(setDay(day1, 2), 'papa-cass')).toBe(true);
-    // Higher tiers stay gated behind progression flags.
-    expect(isLenderUnlocked(setDay(day1, 2), 'money-man')).toBe(false);
+    // No flag or day gate: a fresh player can knock on any door…
+    expect(borrow(day1, 'papa-cass', 500).ok).toBe(true);
+    expect(borrow(day1, 'money-man', 500).ok).toBe(true);
+    // …but the reputation-scaled cap keeps the big lines out of reach.
+    expect(borrowCap(day1, 'financier')).toBeLessThan(getLender('financier').maxPrincipal);
   });
 });
 
@@ -93,10 +93,7 @@ describe('terms are computed and exposed before the player confirms (guarantee #
     expect(r.state.debt.active).toBe(true);
   });
 
-  it('rejects a locked lender, a bad amount, an over-cap ask, and a second loan', () => {
-    const day1 = createInitialState('rej');
-    expect(borrow(day1, 'papa-cass', 500).rejected).toBe('lender-locked');
-
+  it('rejects a bad amount, an over-cap ask, and a second loan', () => {
     const s = borrower('rej2');
     expect(borrow(s, 'papa-cass', 0).rejected).toBe('invalid-amount');
     expect(borrow(s, 'papa-cass', borrowCap(s, 'papa-cass') + 1).rejected).toBe('exceeds-cap');
@@ -325,8 +322,8 @@ describe('lifelineOffer surfaces when wiped IF reputation warrants (design/10 §
 describe('the final rung marks the player as a telegraphed run-ending hook', () => {
   it('a lethal-ceiling lender reaches rung 5 and sets the marked flag', () => {
     let s = borrower('marked');
-    // Unlock the cartel financier and take its line.
-    s = { ...s, flags: { ...s.flags, 'international-routes': true }, reputation: { ...s.reputation, street: 100 } };
+    // Take the cartel financier's line (open roster; rep covers the ask).
+    s = { ...s, reputation: { ...s.reputation, street: 100 } };
     s = borrow(s, 'financier', 10_000).state;
     s = { ...s, debt: { ...s.debt, dueDay: 2 } };
 

@@ -38,3 +38,11 @@ export {
 export type { ApplyChoiceReject, RegistryIssue } from './registry';
 
 export { ALL_CARDS } from './content';
+
+// Durable onboarding flags the guided flow sets — the progressive-disclosure
+// layer (Prompt 14) keys nav unlocks off these same flags (design/08; design/04 §0).
+export {
+  FIRST_SALE_FLAG,
+  HEAT_LESSON_FLAG,
+  FIRST_RUNNER_FLAG,
+} from './content/flags';

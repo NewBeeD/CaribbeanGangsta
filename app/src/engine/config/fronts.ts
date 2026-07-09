@@ -30,8 +30,6 @@ export interface FrontTypeConfig {
   readonly buyIn: number;
   /** Passive heat added per online hour while this front operates (design/01 §3a). */
   readonly heatPerHour: number;
-  /** Progression gate (a flag/rep milestone later prompts set). Display + unlock. */
-  readonly unlock: string;
   /**
    * Crypto's rate **swings ±`swing`** live (design/01 §3a). Absent/0 for the
    * steady fronts. The swing is a deterministic function of in-game time (see
@@ -44,9 +42,11 @@ export interface FrontTypeConfig {
 export const FRONT_MAX_LEVEL = 5;
 
 /**
- * The front roster (design/01 §3a, real dollars). Bar is the onboarding starter
- * that teaches the idle engine; the resort is the heavy earner; crypto is fast
- * and low-heat but its rate *swings*, pairing with the tech playstyle.
+ * The front roster (design/01 §3a, real dollars). Every front is purchasable
+ * from the start — the buy-in is the gate, never a progression flag (Ideas.md —
+ * Drug Lord 2 open access). Bar is where a broke player starts because it's the
+ * one he can afford; the resort is the heavy earner; crypto is fast and low-heat
+ * but its rate *swings*, pairing with the tech playstyle.
  */
 export const FRONT_TYPES: readonly FrontTypeConfig[] = [
   {
@@ -55,7 +55,6 @@ export const FRONT_TYPES: readonly FrontTypeConfig[] = [
     ratePerLevel: 120,
     buyIn: 2_000,
     heatPerHour: 0,
-    unlock: 'front.first', // first front, onboarding (design/01 §6)
     swing: 0,
   },
   {
@@ -64,7 +63,6 @@ export const FRONT_TYPES: readonly FrontTypeConfig[] = [
     ratePerLevel: 450,
     buyIn: 12_000,
     heatPerHour: 0.02,
-    unlock: 'district.controlled',
     swing: 0,
   },
   {
@@ -73,7 +71,6 @@ export const FRONT_TYPES: readonly FrontTypeConfig[] = [
     ratePerLevel: 1_600,
     buyIn: 60_000,
     heatPerHour: 0.05,
-    unlock: 'region.scale',
     swing: 0,
   },
   {
@@ -82,7 +79,6 @@ export const FRONT_TYPES: readonly FrontTypeConfig[] = [
     ratePerLevel: 900,
     buyIn: 20_000,
     heatPerHour: 0.01, // lowest footprint
-    unlock: 'tech.path',
     swing: 0.4, // ±40% live rate swing (design/01 §3a)
   },
 ] as const;

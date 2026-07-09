@@ -3,8 +3,13 @@
  * leaderboard adapters. Leaderboard adapters arrive in Prompt 23.
  */
 
-export { useGameStore } from './gameStore';
-export type { GameStore } from './gameStore';
+export {
+  useGameStore,
+  useGameState,
+  useOfflineReport,
+  AUTOSAVE_SLOT,
+} from './gameStore';
+export type { GameStore, BuildStashIntent } from './gameStore';
 
 export {
   LocalSaveStore,

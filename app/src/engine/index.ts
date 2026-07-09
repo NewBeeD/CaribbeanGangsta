@@ -384,7 +384,6 @@ export type {
   LadderRung,
 } from './config/lenders';
 export {
-  isLenderUnlocked,
   borrowCap,
   quoteLoan,
   borrow,
@@ -502,6 +501,9 @@ export {
   ALL_CARDS,
   CARD_FIRED_PREFIX,
   MVP_CRITICAL_BEATS,
+  FIRST_SALE_FLAG,
+  HEAT_LESSON_FLAG,
+  FIRST_RUNNER_FLAG,
 } from './cards';
 export type {
   RepTrack,

@@ -76,19 +76,10 @@ export const DEBT_DEFAULT_CHOICE = 'debt-default';
 /** The beat kind queued when a loan is cleared in full (design/10 §6 payoff beat). */
 export const DEBT_CLEARED_CHOICE = 'debt-cleared';
 
-// --- Unlock gates & borrow cap (design/10 §2) --------------------------------
-
-/**
- * Whether `lenderId` is available to the player right now (design/10 §2). The
- * street shark gates on the in-game day (post-competence, ~day 2 — design/10 §6);
- * higher tiers gate on a progression flag set by later systems.
- */
-export function isLenderUnlocked(state: GameState, lenderId: LenderId): boolean {
-  const cfg = getLender(lenderId);
-  if (cfg.unlocksAtDay !== undefined && state.clock.day < cfg.unlocksAtDay) return false;
-  if (cfg.requiresFlag !== undefined && !state.flags[cfg.requiresFlag]) return false;
-  return true;
-}
+// --- Borrow cap (design/10 §2; Ideas.md — open access) ------------------------
+//
+// Every lender's door is open from day one: what limits a broke, unknown player
+// is the reputation/collateral-scaled cap below, never a hidden menu.
 
 /** The seizable $ value of a pledged asset (a stash's dirty cash, or a front's build value). */
 function assetValue(state: GameState, ref: string): number {
@@ -175,7 +166,6 @@ export function quoteLoan(
 
 export type DebtRejectReason =
   | 'loan-active'
-  | 'lender-locked'
   | 'invalid-amount'
   | 'exceeds-cap'
   | 'no-collateral'
@@ -194,9 +184,9 @@ export interface BorrowResult {
  * Take a loan (design/10 §3) — the ONLY way debt begins (guarantee #1: opt-in).
  * The principal is added to CLEAN cash (the capital source), and the ledger is
  * opened with the soft due date set. MVP is one loan at a time (design/10 §7), so
- * a second borrow while a loan is active is rejected. Rejects WITHOUT mutating on a
- * locked lender, a bad amount, an over-cap request, or a collateral ref that names
- * nothing. Terms come back on the result either way (`quote`).
+ * a second borrow while a loan is active is rejected. Rejects WITHOUT mutating on
+ * a bad amount, an over-cap request, or a collateral ref that names nothing.
+ * Terms come back on the result either way (`quote`).
  */
 export function borrow(
   state: GameState,
@@ -208,7 +198,6 @@ export function borrow(
   const reject = (rejected: DebtRejectReason): BorrowResult => ({ state, ok: false, quote, rejected });
 
   if (state.debt.active) return reject('loan-active');
-  if (!isLenderUnlocked(state, lenderId)) return reject('lender-locked');
   if (!(amount > 0)) return reject('invalid-amount');
   if (collateralRef !== undefined && assetValue(state, collateralRef) <= 0) {
     return reject('no-collateral');
@@ -470,8 +459,9 @@ export interface LenderOffer {
  * Offer a lifeline loan IF the player is wiped (operating capital at/below the
  * threshold) AND their street reputation keeps the door open (design/10 §1).
  * Returns `null` otherwise — including when a loan is already active — which lets
- * Prompt 11 treat a null offer as a genuinely terminal spiral. Draws from the
- * highest UNLOCKED lender the player has earned. Pure and RNG-free.
+ * Prompt 11 treat a null offer as a genuinely terminal spiral. The lifeline is
+ * always the street shark's: a wiped player goes back to the street for a stake,
+ * a modest hand up rather than a fortune. Pure and RNG-free.
  */
 export function lifelineOffer(state: GameState): LenderOffer | null {
   if (state.debt.active) return null;
@@ -479,8 +469,7 @@ export function lifelineOffer(state: GameState): LenderOffer | null {
   if (capital > LIFELINE_CAPITAL_THRESHOLD) return null;
   if (state.reputation.street < LIFELINE_MIN_REPUTATION) return null;
 
-  const unlocked = LENDERS.filter((l) => isLenderUnlocked(state, l.id));
-  const lender = unlocked[unlocked.length - 1] ?? LENDERS[0]!;
+  const lender = LENDERS[0]!;
   return {
     lenderId: lender.id,
     amount: Math.round(lender.maxPrincipal * LIFELINE_OFFER_FRACTION),
