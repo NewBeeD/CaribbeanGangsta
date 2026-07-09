@@ -24,6 +24,8 @@ import { accrue } from './laundering';
 import { crewStep } from './crew';
 import { corruptionStep } from './corruption';
 import { debtStep } from './debt';
+import { chaosStep } from './chaos';
+import { beatStep } from './beats';
 import { bankPeaks } from './endgame';
 
 const HOURS_PER_DAY = 24;
@@ -89,10 +91,16 @@ export const TICK_STEPS: readonly TickStep[] = [
   // telegraphed default ladder one rung past the soft due date. Offline never runs
   // it, so absence never grows what's owed or escalates (guarantee #2, §4.2).
   { id: 'debt-interest', modes: ['active'], run: (s, dt) => debtStep(s, dt) },
-  // Procedural events (design/05). Prompt 12. Active-only.
-  { id: 'chaos-roll', modes: ['active'], run: (s) => s },
-  // Narrative-beat checks (design/05). Prompt 12/13. Active-only.
-  { id: 'beat-check', modes: ['active'], run: (s) => s },
+  // Procedural world events — the variable-reward core (design/05 §2; design/01
+  // §4.7). Prompt 12. Active-only: offline is frozen/safe, so absence never
+  // triggers chaos (GDD §6). Draws from an INDEPENDENT run-seeded stream, so it
+  // never perturbs the main deal/raid RNG. Runs after the economic systems so a
+  // shock lands on this tick's settled prices/heat.
+  { id: 'chaos-roll', modes: ['active'], run: (s, dt) => chaosStep(s, dt) },
+  // Narrative-beat checks — state → beats, not a script (design/05 §0). Prompt 12
+  // (Prompt 13 renders them). Active-only (offline never fires a beat, GDD §6),
+  // and AFTER chaos so beats can key off the flags a fired event just stamped.
+  { id: 'beat-check', modes: ['active'], run: (s) => beatStep(s) },
   // Peak trackers: bank net-worth / clean-cash / empire-composite peaks after every
   // system above has settled (design/01 §7). Prompt 11. Active-only and LAST, so the
   // banked height reflects this tick's true max. Offline peak banking is handled by

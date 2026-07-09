@@ -229,7 +229,10 @@ describe('weekly retainers — charged on the weekly boundary from clean cash', 
     const tie = state.corruption.officials[0]!;
     expect(tie.loyalty).toBeLessThan(cop.startingLoyalty);
     expect(tie.memoryLog.some((m) => m.kind === 'missed')).toBe(true);
-    expect(state.cleanCash).toBe(0); // never went negative (offline/online safety)
+    // Never went negative paying the retainer (offline/online safety). A chaos
+    // windfall may legitimately add clean cash during the week, so assert the real
+    // invariant (>= 0) rather than an exact balance.
+    expect(state.cleanCash).toBeGreaterThanOrEqual(0);
   });
 });
 

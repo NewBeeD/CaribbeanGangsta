@@ -443,6 +443,46 @@ export type {
   RunEndResult,
 } from './endgame';
 
+// Chaos Engine — procedural world events (design/05 §2; design/01 §4.7) — Prompt 12.
+export {
+  CHAOS_EVENTS,
+  getChaosEvent,
+  CHAOS_BASE_RATE_PER_HOUR,
+  CHAOS_MAX_PER_TICK,
+  ALT_ROUTE_FLAG,
+  CHAOS_FLAG_PREFIX,
+  CHAOS_MAJOR_DISRUPTION_FLAG,
+  CHAOS_SUPPLY_SHOCK_FLAG,
+} from './config/events';
+export type { ChaosEventId, ChaosEffect, ChaosEventConfig } from './config/events';
+export {
+  chaosChance,
+  rollChaos,
+  applyChaos,
+  chaosStep,
+} from './chaos';
+export type { ChaosEvent } from './chaos';
+
+// Narrative-beat engine — state → beats (design/05) — Prompt 12.
+export {
+  BEAT_TRIGGERS,
+  checkBeats,
+  isPlateau,
+  beatStep,
+  ON_THE_MAP_CLEAN_CASH,
+  CROWN_PEAK_NET_WORTH,
+  ARMS_UNLOCK_FLAG,
+  INTERNATIONAL_ROUTES_FLAG,
+  JUDGE_COMEBACK_FLAG,
+  MAJOR_BEATS_PER_TICK,
+} from './beats';
+export type {
+  BeatTrigger,
+  BeatTriggerType,
+  BeatAct,
+  FiredBeat,
+} from './beats';
+
 export const ENGINE_VERSION = '0.0.0' as const;
 
 export interface Game {
