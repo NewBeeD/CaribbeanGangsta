@@ -483,6 +483,40 @@ export type {
   FiredBeat,
 } from './beats';
 
+// Story-card system — schema, registry & MVP content (design/08) — Prompt 13.
+export {
+  dominantRepTrack,
+  validateCard,
+  validateEffect,
+  cardForBeat,
+  applyChoice,
+  applyEffect,
+  getCard,
+  allCards,
+  isCardEligible,
+  prerequisitesMet,
+  hasCardFired,
+  cardFiredFlag,
+  variantText,
+  auditRegistry,
+  ALL_CARDS,
+  CARD_FIRED_PREFIX,
+  MVP_CRITICAL_BEATS,
+} from './cards';
+export type {
+  RepTrack,
+  CardTriggerType,
+  HookRole,
+  CardArc,
+  CardEffect,
+  Choice,
+  ReputationVariants,
+  StoryCard,
+  CardValidationIssue,
+  ApplyChoiceReject,
+  RegistryIssue,
+} from './cards';
+
 export const ENGINE_VERSION = '0.0.0' as const;
 
 export interface Game {
