@@ -1,9 +1,10 @@
 /**
- * Screen registry (Prompt 14). The shell routes to one component per `ScreenId`;
- * these are minimal, wired PLACEHOLDERS that later prompts replace one-for-one:
+ * Screen registry (Prompt 14). The shell routes to one component per `ScreenId`.
+ * The remaining entries are minimal, wired PLACEHOLDERS that later prompts replace
+ * one-for-one (deals is now the real screen, Prompt 15):
  *
- *   deals → Prompt 15   empire → Prompt 16   crew  → Prompt 17
- *   money → Prompt 18   heat   → Prompt 19   highscore → Prompt 23
+ *   deals → Prompt 15 (live)   empire → Prompt 16   crew  → Prompt 17
+ *   money → Prompt 18          heat   → Prompt 19   highscore → Prompt 23
  *
  * They already read live run state through the store selector (proving the shell
  * plumbs state through), and render nothing but glanceable status — no intents, no
@@ -12,6 +13,7 @@
 
 import { useGameState } from '@/store';
 import { Card, SceneText } from '@/ui/components';
+import { DealScreen } from '@/ui/screens/DealScreen';
 import { getDisclosureNode, type ScreenId } from './Disclosure';
 
 interface PlaceholderProps {
@@ -43,7 +45,7 @@ function PlaceholderScreen({ id, promptNo }: PlaceholderProps) {
 
 /** The route-to-component table the shell renders from. */
 export const SCREENS: Readonly<Record<ScreenId, () => JSX.Element>> = {
-  deals: () => <PlaceholderScreen id="deals" promptNo={15} />,
+  deals: () => <DealScreen />,
   empire: () => <PlaceholderScreen id="empire" promptNo={16} />,
   crew: () => <PlaceholderScreen id="crew" promptNo={17} />,
   money: () => <PlaceholderScreen id="money" promptNo={18} />,

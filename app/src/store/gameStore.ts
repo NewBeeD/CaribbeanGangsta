@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { applyIntent, createInitialState, type GameState, type Intent } from '@/engine/state';
+import { resolveDeal, type DealIntent, type DealResult } from '@/engine/deals';
 import { tick } from '@/engine/clock';
 import { settleOffline, type OfflineReport } from '@/engine/laundering';
 import { CloudSaveStore, LocalSaveStore, type SaveStore, type SlotMeta } from './persistence';
@@ -40,6 +41,14 @@ export interface GameStore {
   newGame(seed?: number | string): void;
   /** Dispatch a player intent through the pure reducer. */
   dispatch(intent: Intent): void;
+  /**
+   * Resolve a buy/sell with a SINGLE bust roll, apply the new state, and return
+   * the full `DealResult` (scene key + fairness numbers) so the UI can render the
+   * outcome scene. Distinct from `dispatch` — which re-runs `resolveDeal` for its
+   * state only — so the number shown to the player is the number that was rolled
+   * (never a second draw; design/01 §0.3). Returns `null` when no run is loaded.
+   */
+  commitDeal(intent: DealIntent): DealResult | null;
   /** Advance the sim by `dtHours` of online in-game time. */
   tickBy(dtHours: number): void;
   /** Load a slot and settle any offline time since it was last played. */
@@ -78,6 +87,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   dispatch(intent) {
     withState(get, set, (state) => applyIntent(state, intent));
+  },
+
+  commitDeal(intent) {
+    const { state } = get();
+    if (!state) return null;
+    const result = resolveDeal(state, intent);
+    set({ state: result.state });
+    // Keep the autosave current so a refresh resumes on the post-deal state.
+    void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    return result;
   },
 
   tickBy(dtHours) {
