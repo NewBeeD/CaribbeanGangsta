@@ -4,3 +4,6 @@ Just like Drug Lord 2, at the very beginning, the player can borrow money, he ca
 
 
 And with more motion from the player, and as he becomes a bigger player, then heat on him increases.
+
+
+

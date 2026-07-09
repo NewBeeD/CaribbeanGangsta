@@ -13,6 +13,7 @@
 import { create } from 'zustand';
 import { applyIntent, createInitialState, type GameState, type Intent } from '@/engine/state';
 import { resolveDeal, type DealIntent, type DealResult } from '@/engine/deals';
+import { addStash, type AddStashResult, type StashType } from '@/engine/storage';
 import { tick } from '@/engine/clock';
 import { settleOffline, type OfflineReport } from '@/engine/laundering';
 import { CloudSaveStore, LocalSaveStore, type SaveStore, type SlotMeta } from './persistence';
@@ -21,6 +22,18 @@ const MS_PER_HOUR = 3_600_000;
 
 /** The single-slot autosave the app boots from / continues into (Prompt 14). */
 export const AUTOSAVE_SLOT = 'autosave';
+
+/**
+ * A territory-expansion intent (Prompt 16): open or reinforce a foothold — build a
+ * stash of `stashType` in `countryId`. Paid from CLEAN cash by the engine's
+ * `addStash`; the country is what expands empire footprint/reach (`empireComposite`
+ * counts distinct stash-countries as districts/routes).
+ */
+export interface BuildStashIntent {
+  readonly stashType: StashType;
+  readonly countryId: string;
+  readonly name?: string;
+}
 
 export interface GameStore {
   /** Current run, or `null` before a game is created/loaded. */
@@ -49,6 +62,14 @@ export interface GameStore {
    * (never a second draw; design/01 §0.3). Returns `null` when no run is loaded.
    */
   commitDeal(intent: DealIntent): DealResult | null;
+  /**
+   * Open or reinforce a territory foothold — build a stash (paid from CLEAN cash)
+   * in a country, expanding empire footprint/reach immediately (Prompt 16). Returns
+   * the full `AddStashResult` (its `rejected` reason on insufficient funds), or
+   * `null` when no run is loaded. Autosaves on success so a refresh resumes on the
+   * expanded empire.
+   */
+  buildStash(intent: BuildStashIntent): AddStashResult | null;
   /** Advance the sim by `dtHours` of online in-game time. */
   tickBy(dtHours: number): void;
   /** Load a slot and settle any offline time since it was last played. */
@@ -96,6 +117,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ state: result.state });
     // Keep the autosave current so a refresh resumes on the post-deal state.
     void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    return result;
+  },
+
+  buildStash(intent) {
+    const { state } = get();
+    if (!state) return null;
+    const opts =
+      intent.name === undefined
+        ? { countryId: intent.countryId }
+        : { countryId: intent.countryId, name: intent.name };
+    const result = addStash(state, intent.stashType, opts);
+    // Only commit + autosave when a stash was actually built (funds sufficed).
+    if (result.stash) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
     return result;
   },
 

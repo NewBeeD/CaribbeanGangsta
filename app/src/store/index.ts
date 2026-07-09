@@ -9,7 +9,7 @@ export {
   useOfflineReport,
   AUTOSAVE_SLOT,
 } from './gameStore';
-export type { GameStore } from './gameStore';
+export type { GameStore, BuildStashIntent } from './gameStore';
 
 export {
   LocalSaveStore,
