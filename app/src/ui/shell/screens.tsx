@@ -5,7 +5,7 @@
  *
  *   deals → Prompt 15 (live)   empire → Prompt 16 (live)   crew  → Prompt 17 (live)
  *   money → Prompt 18 (live)   heat   → Prompt 19 (live)   storage/corruption → 20 (live)
- *   highscore → Prompt 23
+ *   debt  → Prompt 21 (live)   highscore → Prompt 23
  *
  * They already read live run state through the store selector (proving the shell
  * plumbs state through), and render nothing but glanceable status — no intents, no
@@ -21,6 +21,7 @@ import { MoneyScreen } from '@/ui/screens/MoneyScreen';
 import { HeatScreen } from '@/ui/screens/HeatScreen';
 import { StorageScreen } from '@/ui/screens/StorageScreen';
 import { CorruptionScreen } from '@/ui/screens/CorruptionScreen';
+import { DebtScreen } from '@/ui/screens/DebtScreen';
 import { getScreenNode, type ScreenId } from './nav';
 
 interface PlaceholderProps {
@@ -59,5 +60,6 @@ export const SCREENS: Readonly<Record<ScreenId, () => JSX.Element>> = {
   heat: () => <HeatScreen />,
   storage: () => <StorageScreen />,
   corruption: () => <CorruptionScreen />,
+  debt: () => <DebtScreen />,
   highscore: () => <PlaceholderScreen id="highscore" promptNo={23} />,
 };

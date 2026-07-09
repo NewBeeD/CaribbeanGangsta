@@ -501,6 +501,7 @@ export {
   validateCard,
   validateEffect,
   cardForBeat,
+  cardForPending,
   applyChoice,
   applyEffect,
   getCard,

@@ -17,6 +17,7 @@
 
 import { useGameState, useGameStore, useOfflineReport } from '@/store';
 import { Button, Card, Panel, SceneText, Stat } from '@/ui/components';
+import { SessionEndHook } from '@/ui/shell/SessionEndHook';
 import { navigate } from '@/ui/shell/useHash';
 import {
   PESO_HAIRCUT_PCT,
@@ -173,7 +174,12 @@ export function MoneyScreen() {
               <Button
                 key={d.id}
                 variant="secondary"
-                onClick={() => navigate(d.route)}
+                onClick={() => {
+                  // The hook did its job — clear it, then drop into the screen that
+                  // resolves it (Prompt 22: return-hooks clear when acted on).
+                  useGameStore.getState().dismissPendingChoice(d.id);
+                  navigate(d.route);
+                }}
                 data-testid="pending-decision"
               >
                 ➜ {d.summary}
@@ -261,6 +267,9 @@ export function MoneyScreen() {
           ))}
         </div>
       </Card>
+
+      {/* Never leave clean — the open loop that pulls the next session (GDD §11). */}
+      <SessionEndHook />
     </div>
   );
 }

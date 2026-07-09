@@ -9,6 +9,8 @@ import { BottomNav, type BottomNavItem } from '@/ui/components';
 import { SCREEN_NODES, screenForHash, type ScreenId } from './nav';
 import { NewRunGate } from './NewRunGate';
 import { ReturnHook } from './ReturnHook';
+import { StoryCardModal } from './StoryCardModal';
+import { nextCardScene } from './storyCardPresenter.model';
 import { SCREENS } from './screens';
 import { navigate, useHash } from './useHash';
 
@@ -93,6 +95,11 @@ export function AppShell() {
   const current: ScreenId = screenForHash(hash);
   const Screen = SCREENS[current];
 
+  // A fired beat / chained card presents as an in-world scene, over everything else
+  // (design/08 — interrupts show immediately). One at a time; resolving advances the
+  // queue. Return-hook choices (no card) stay on the Money screen, not here.
+  const scene = nextCardScene(state);
+
   const navItems: BottomNavItem[] = SCREEN_NODES.filter((n) => n.inNav).map(
     (n) => ({
       id: n.id,
@@ -131,6 +138,15 @@ export function AppShell() {
         activeId={current}
         onSelect={(id) => navigate(id)}
       />
+
+      {scene ? (
+        <StoryCardModal
+          card={scene.card}
+          onResolve={(choiceIndex) =>
+            useGameStore.getState().resolveCardChoice(scene.choiceId, choiceIndex)
+          }
+        />
+      ) : null}
     </div>
   );
 }

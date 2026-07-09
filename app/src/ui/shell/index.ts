@@ -13,6 +13,13 @@ export { NewRunGate } from './NewRunGate';
 export type { NewRunGateProps } from './NewRunGate';
 export { ReturnHook } from './ReturnHook';
 export type { ReturnHookProps } from './ReturnHook';
+export { StoryCardModal } from './StoryCardModal';
+export type { StoryCardModalProps } from './StoryCardModal';
+export { SessionEndHook } from './SessionEndHook';
+export { nextCardScene, pendingCardScenes } from './storyCardPresenter.model';
+export type { CardScene } from './storyCardPresenter.model';
+export { openLoop } from './sessionEnd.model';
+export type { OpenLoop } from './sessionEnd.model';
 export { useHash, navigate } from './useHash';
 export { SCREENS } from './screens';
 export {

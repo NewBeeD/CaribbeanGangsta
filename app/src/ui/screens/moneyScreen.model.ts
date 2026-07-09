@@ -158,8 +158,10 @@ export function totalDirty(state: GameState): number {
 
 /**
  * A decision waiting on return — a hook to allocate, surfaced as prose plus the
- * screen it routes into (design/07 §4). The story-card presenter (Prompt 22) will
- * take over resolution; until then a hook drops the player onto the relevant screen.
+ * screen it routes into (design/07 §4). These are the return-hooks from `settleOffline`
+ * (buyer/crew/rival); a tap drops the player onto the screen that resolves it and clears
+ * the hook. Beat/chained-card scenes are NOT listed here — the story-card presenter
+ * (Prompt 22) shows those as in-world interrupt scenes instead.
  */
 export interface PendingDecision {
   readonly id: string;
@@ -182,9 +184,13 @@ function routeForKind(kind: string): string {
 }
 
 export function pendingDecisions(state: GameState): readonly PendingDecision[] {
-  return state.pendingChoices.map((c) => ({
-    id: c.id,
-    summary: c.summary,
-    route: routeForKind(c.kind),
-  }));
+  return state.pendingChoices
+    // Card-bearing scenes (beats + chained cards) present as interrupt scenes, not
+    // routed decisions — leave those to the story-card presenter (Prompt 22).
+    .filter((c) => c.beatId === undefined && c.cardId === undefined)
+    .map((c) => ({
+      id: c.id,
+      summary: c.summary,
+      route: routeForKind(c.kind),
+    }));
 }

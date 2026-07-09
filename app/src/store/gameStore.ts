@@ -68,6 +68,14 @@ import {
   type PesoExchangeResult,
 } from '@/engine/laundering';
 import { bribeToCoolHeat, setLieLow, type BribeCoolResult } from '@/engine/heat';
+import {
+  borrow as borrowEngine,
+  repay as repayEngine,
+  type BorrowResult,
+  type RepayResult,
+} from '@/engine/debt';
+import type { LenderId } from '@/engine/config/lenders';
+import { applyChoice, cardForPending } from '@/engine/cards';
 import { CloudSaveStore, LocalSaveStore, type SaveStore, type SlotMeta } from './persistence';
 
 const MS_PER_HOUR = 3_600_000;
@@ -210,6 +218,37 @@ export interface GameStore {
    * `BribeCoolResult` (its `rejected` reason otherwise), or `null` when no run loaded.
    */
   coolWithBribe(dollars?: number): BribeCoolResult | null;
+  /**
+   * Debt actions (Prompt 21) — borrowing at interest, the come-up hook & the
+   * lifeline out of the spiral (design/10). Each wraps the pure `debt.ts` engine,
+   * commits only when it lands, and autosaves so the ledger survives a refresh. The
+   * UI authors no interest/cap/ladder math; it shows disclosed terms and dispatches.
+   */
+  /**
+   * Take a loan from `lenderId` (opt-in only — guarantee #1). Commits + autosaves
+   * only when it lands (amount valid, within cap, no active loan); returns the full
+   * `BorrowResult` (its `rejected` reason otherwise), or `null` when no run loaded.
+   */
+  borrowLoan(lenderId: LenderId, amount: number, collateralRef?: string): BorrowResult | null;
+  /**
+   * Repay toward the loan from CLEAN cash — partial/early is always free and resets
+   * the shark's patience (guarantee #4). Commits + autosaves only when it lands
+   * (funds sufficed, a loan is active); returns the full `RepayResult`, or `null`.
+   */
+  repayLoan(amount: number): RepayResult | null;
+  /**
+   * Story-card presenter (Prompt 22) — resolve a queued scene's chosen option. Folds
+   * the choice's declarative effects through the engine (`applyChoice`, the ONE place a
+   * card touches state), removes the now-resolved pending choice from the queue, and
+   * autosaves. A no-op when no run is loaded or the choice can't be resolved to a card.
+   */
+  resolveCardChoice(choiceId: string, choiceIndex: number): void;
+  /**
+   * Clear a queued return-hook once it's been acted on (Prompt 22) — the hook did its
+   * job (pulled the player into the screen that resolves it), so it leaves the queue.
+   * Autosaves so the cleared queue survives a refresh.
+   */
+  dismissPendingChoice(choiceId: string): void;
   /** Advance the sim by `dtHours` of online in-game time. */
   tickBy(dtHours: number): void;
   /** Load a slot and settle any offline time since it was last played. */
@@ -465,6 +504,59 @@ export const useGameStore = create<GameStore>((set, get) => ({
       void get().persist(AUTOSAVE_SLOT).catch(() => {});
     }
     return result;
+  },
+
+  borrowLoan(lenderId, amount, collateralRef) {
+    const { state } = get();
+    if (!state) return null;
+    const result =
+      collateralRef === undefined
+        ? borrowEngine(state, lenderId, amount)
+        : borrowEngine(state, lenderId, amount, collateralRef);
+    // Only commit + autosave when the loan actually opened (opt-in, within cap).
+    if (result.ok) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  repayLoan(amount) {
+    const { state } = get();
+    if (!state) return null;
+    const result = repayEngine(state, amount);
+    // Only commit + autosave when the payment cleared (funds sufficed, loan active).
+    if (result.ok) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  resolveCardChoice(choiceId, choiceIndex) {
+    const { state } = get();
+    if (!state) return;
+    const choice = state.pendingChoices.find((c) => c.id === choiceId);
+    if (!choice) return;
+    // Apply the choice's effects (when it resolves to a card), then drop the resolved
+    // scene from the queue — a chained `firesCard` enqueued by `applyChoice` survives.
+    const card = cardForPending(state, choice);
+    const applied = card ? applyChoice(state, card.id, choiceIndex) : state;
+    set({
+      state: {
+        ...applied,
+        pendingChoices: applied.pendingChoices.filter((c) => c.id !== choiceId),
+      },
+    });
+    void get().persist(AUTOSAVE_SLOT).catch(() => {});
+  },
+
+  dismissPendingChoice(choiceId) {
+    withState(get, set, (state) => ({
+      ...state,
+      pendingChoices: state.pendingChoices.filter((c) => c.id !== choiceId),
+    }));
+    void get().persist(AUTOSAVE_SLOT).catch(() => {});
   },
 
   tickBy(dtHours) {

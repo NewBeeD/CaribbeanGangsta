@@ -22,6 +22,7 @@ export { dominantRepTrack, validateCard, validateEffect } from './schema';
 
 export {
   cardForBeat,
+  cardForPending,
   applyChoice,
   applyEffect,
   getCard,

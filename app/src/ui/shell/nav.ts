@@ -15,6 +15,7 @@ export type ScreenId =
   | 'empire'
   | 'storage'
   | 'corruption'
+  | 'debt'
   | 'highscore';
 
 export interface ScreenNode {
@@ -79,6 +80,13 @@ export const SCREEN_NODES: readonly ScreenNode[] = [
     route: 'corruption',
     inNav: false,
     tagline: 'Buy the badge. Pay to stay safe.',
+  },
+  {
+    id: 'debt',
+    label: 'Debt',
+    route: 'debt',
+    inNav: false,
+    tagline: 'Borrow to come up. Terms up front.',
   },
   {
     id: 'highscore',
