@@ -198,6 +198,17 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
       },
     };
   },
+  // 8 → 9: the travel engine (Prompt 30). Pre-Prompt-30 runs could never launch
+  // a shipment, so `shipments` simply starts empty — nothing in flight, nothing
+  // owed, nothing to resolve.
+  8: (env) => {
+    const legacy = env.state as GameState & { shipments?: GameState['shipments'] };
+    return {
+      ...env,
+      schemaVersion: 9,
+      state: { ...legacy, shipments: legacy.shipments ?? [] },
+    };
+  },
 };
 
 /**

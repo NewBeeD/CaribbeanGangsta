@@ -24,6 +24,7 @@ import {
   getStashType,
   isTraded,
   productDisplayName,
+  spendableAt,
   stashUnits,
   type GameState,
   type PriceTrend,
@@ -92,10 +93,14 @@ export function productRows(state: GameState, stash: Stash): readonly ProductRow
   );
 }
 
-/** Most units of `product` the stash can BUY here: affordable AND capacity-bounded. */
+/**
+ * Most units of `product` the stash can BUY here: affordable AND capacity-
+ * bounded. Affordability spans the stash's dirty cash PLUS the run's clean
+ * cash (`spendableAt`) — a borrowed stake spends anywhere (design/10).
+ */
 export function maxBuyQty(state: GameState, product: ProductId, stash: Stash): number {
   const price = getMarketPrice(state, product, marketCountryId(stash));
-  const affordable = price.buy > 0 ? Math.floor(stash.dirtyCash / price.buy) : 0;
+  const affordable = price.buy > 0 ? Math.floor(spendableAt(state, stash) / price.buy) : 0;
   const capacityLeft = getStashType(stash.type).capacity - stashUnits(stash);
   return Math.max(0, Math.min(affordable, capacityLeft));
 }

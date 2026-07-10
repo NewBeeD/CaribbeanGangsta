@@ -17,7 +17,7 @@ import { getRecipe, type ConversionRecipe, type RecipeId } from './config/conver
 import { PRODUCT_IDS } from './config/countries';
 import { getStashType } from './config/stashes';
 import { addHeat } from './heat';
-import type { GameState, Inventory, Stash } from './state';
+import { splitCharge, type GameState, type Inventory, type Stash } from './state';
 
 export interface ConvertIntent {
   readonly type: 'convert';
@@ -64,13 +64,17 @@ function reject(state: GameState, rejected: ConvertRejectReason): ConvertResult 
   };
 }
 
-/** The most batches of `recipe` this stash can run right now (units/cash/space). */
-export function maxBatches(recipeId: RecipeId, stash: Stash): number {
+/**
+ * The most batches of `recipe` this stash can run right now (units/cash/space).
+ * `cleanCash` is the run's clean pool, spendable here like anywhere money is a
+ * gate (a borrowed stake can fund the cook — design/10's come-up hook).
+ */
+export function maxBatches(recipeId: RecipeId, stash: Stash, cleanCash = 0): number {
   const recipe = getRecipe(recipeId);
   const byUnits = Math.floor((stash.inventory[recipe.from] ?? 0) / recipe.fromQty);
   const byCash =
     recipe.costPerBatch > 0
-      ? Math.floor(stash.dirtyCash / recipe.costPerBatch)
+      ? Math.floor((stash.dirtyCash + cleanCash) / recipe.costPerBatch)
       : Number.MAX_SAFE_INTEGER;
   const netPerBatch = recipe.toQty - recipe.fromQty;
   const bySpace =
@@ -105,7 +109,10 @@ export function convert(state: GameState, intent: ConvertIntent): ConvertResult 
   if ((stash.inventory[recipe.from] ?? 0) < consumed) {
     return reject(state, 'insufficient-inventory');
   }
-  if (stash.dirtyCash < cost) return reject(state, 'insufficient-funds');
+  // Batch costs draw dirty cash at the stash first, then clean cash covers the
+  // shortfall (clean/borrowed capital spends anywhere — design/10).
+  const charge = splitCharge(state, stash, cost);
+  if (!charge) return reject(state, 'insufficient-funds');
   const netUnits = produced - consumed;
   if (
     netUnits > 0 &&
@@ -119,9 +126,14 @@ export function convert(state: GameState, intent: ConvertIntent): ConvertResult 
     [recipe.from]: (stash.inventory[recipe.from] ?? 0) - consumed,
     [recipe.to]: (stash.inventory[recipe.to] ?? 0) + produced,
   };
-  const nextStash: Stash = { ...stash, dirtyCash: stash.dirtyCash - cost, inventory };
+  const nextStash: Stash = {
+    ...stash,
+    dirtyCash: stash.dirtyCash - charge.fromDirty,
+    inventory,
+  };
   let next: GameState = {
     ...state,
+    cleanCash: state.cleanCash - charge.fromClean,
     stashes: state.stashes.map((s) => (s.id === nextStash.id ? nextStash : s)),
   };
   next = addHeat(next, recipe.heatPerBatch * batches, `convert.${recipe.id}`);

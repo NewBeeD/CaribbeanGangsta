@@ -177,6 +177,29 @@ describe('resolveDeal — buy', () => {
     expect(capped.state).toBe(full);
   });
 
+  it('clean (borrowed) cash covers a buy shortfall — dirty cash drains first (design/10)', () => {
+    const base = seed(createInitialState('loan-buy'), { cash: 0 });
+    const price = getMarketPrice(base, 'weed', homeId(base));
+    const cost = price.buy * 10;
+
+    // Dirty cash covers half the ticket; clean cash (a borrowed stake) the rest.
+    const half = Math.floor(cost / 2);
+    const funded: GameState = { ...seed(base, { cash: half }), cleanCash: cost };
+    const result = resolveDeal(funded, { type: 'buy', product: 'weed', qty: 10 });
+
+    expect(result.outcome).toBe('success');
+    const home = result.state.stashes[0] as Stash;
+    expect(home.inventory.weed).toBe(10);
+    expect(home.dirtyCash).toBe(0); // located cash spent first
+    expect(result.state.cleanCash).toBe(half); // clean paid only the shortfall
+
+    // Both pools together still short → reject without mutating.
+    const short: GameState = { ...seed(base, { cash: 1 }), cleanCash: 1 };
+    const rejected = resolveDeal(short, { type: 'buy', product: 'weed', qty: 10 });
+    expect(rejected.rejected).toBe('insufficient-funds');
+    expect(rejected.state).toBe(short);
+  });
+
   it('rejects a product with no market in the stash country (Ideas2 §5)', () => {
     // Meth never fronts on an island corner — the home stash is Caribbean.
     const state = seed(createInitialState('culture'), { cash: 1_000_000 });

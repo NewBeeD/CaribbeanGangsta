@@ -122,12 +122,24 @@ describe('convert — deterministic transformation, never a roll', () => {
     expect(unfunded.state).toBe(broke);
   });
 
+  it('clean (borrowed) cash covers the batch cost shortfall (design/10)', () => {
+    const base = seed(createInitialState('loan-cook'), {
+      cash: 0,
+      inventory: { cocaine: 10 },
+    });
+    const funded: GameState = { ...base, cleanCash: 10_000 };
+    const cooked = convert(funded, { type: 'convert', recipe: 'cook-crack', batches: 1 });
+    expect(cooked.ok).toBe(true);
+    expect(cooked.state.cleanCash).toBe(10_000 - cooked.cost);
+    expect((cooked.state.stashes[0] as Stash).dirtyCash).toBe(0);
+  });
+
   it('maxBatches is exactly what convert will accept', () => {
     const state = seed(createInitialState('max'), {
       cash: 500,
       inventory: { weed: 47 },
     });
-    const max = maxBatches('press-hash', home(state));
+    const max = maxBatches('press-hash', home(state), state.cleanCash);
     expect(max).toBeGreaterThan(0);
     expect(convert(state, { type: 'convert', recipe: 'press-hash', batches: max }).ok).toBe(
       true,

@@ -42,7 +42,7 @@ import { HEAT_MAX } from './config/heat';
 import { getStashType } from './config/stashes';
 import { basePriceAt } from './world';
 import { addHeat } from './heat';
-import type { GameState, Inventory, Stash } from './state';
+import { splitCharge, type GameState, type Inventory, type Stash } from './state';
 
 // --- Live market state (drifts each active tick) -----------------------------
 
@@ -365,18 +365,23 @@ function resolveBuy(state: GameState, intent: BuyIntent): DealResult {
 
   const price = getMarketPrice(state, product, countryId);
   const cost = price.buy * qty;
-  if (stash.dirtyCash < cost) return reject(state, 'insufficient-funds');
+  // Buys draw on the stash's dirty cash first, then CLEAN cash covers the
+  // shortfall — borrowed capital (which lands clean, design/10) must be able to
+  // buy the shipment it was taken out for, not just fronts (the come-up hook).
+  const charge = splitCharge(state, stash, cost);
+  if (!charge) return reject(state, 'insufficient-funds');
   if (stashUnits(stash) + qty > getStashType(stash.type).capacity) {
     return reject(state, 'insufficient-capacity');
   }
 
   const nextStash: Stash = {
     ...stash,
-    dirtyCash: stash.dirtyCash - cost,
+    dirtyCash: stash.dirtyCash - charge.fromDirty,
     inventory: adjustInventory(stash.inventory, product, qty),
   };
   const cfg = getProduct(product);
   let next = withStash(state, nextStash);
+  next = { ...next, cleanCash: next.cleanCash - charge.fromClean };
   next = addHeat(next, cfg.heatPerUnit * qty * BUY_HEAT_FACTOR, 'deal.buy');
   next = bankPeaks(next);
 

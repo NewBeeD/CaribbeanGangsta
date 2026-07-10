@@ -143,6 +143,21 @@ describe('migrateEnvelope — schema version + migration hook', () => {
     ).toEqual(migrated);
   });
 
+  it('migrates a v8 save to the travel engine (v9: shipments start empty)', () => {
+    const legacy = { ...state } as Record<string, unknown>;
+    delete legacy.shipments; // pre-Prompt-30 saves had no travel engine
+    const migrated = migrateEnvelope({
+      ...envelope,
+      schemaVersion: 8,
+      state: legacy as unknown as GameState,
+    });
+    expect(migrated).not.toBeNull();
+    expect(migrated?.shipments).toEqual([]); // nothing in flight, nothing owed
+    // Everything else survives verbatim.
+    expect(migrated?.stashes).toEqual(state.stashes);
+    expect(migrated?.rngState).toEqual(state.rngState);
+  });
+
   it('migrates a v2 save up to the heat engine (Prompt 05 fields defaulted)', () => {
     // A pre-Prompt-05 save: heat sitting in DEA range, no heat-engine fields.
     const legacy = { ...state, heat: 45 } as Record<string, unknown>;

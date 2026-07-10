@@ -30,6 +30,7 @@ import {
 import { setLieLow, tierForHeat, type LeTier, type LieLowIntent } from './heat';
 import { convert, type ConvertIntent } from './conversions';
 import { buyPlug, type BuyPlugIntent } from './plugs';
+import { ship, type ShipIntent, type Shipment } from './travel';
 import { STARTING_STASH_TYPE, type StashType } from './config/stashes';
 import type {
   CrewAgenda,
@@ -57,8 +58,10 @@ import type {
  * v8: regional markets (design/11; Ideas2) — `markets` re-keyed by countryId,
  *     `plugs` (true-source connections), the expanded product roster in every
  *     inventory, and `world` gains `exoticStrain` + supplier `demandFactor`.
+ * v9: added `shipments` (in-flight cross-country cargo, travel engine, Prompt
+ *     30) and the `courier` crew-assignment kind.
  */
-export const SCHEMA_VERSION = 8 as const;
+export const SCHEMA_VERSION = 9 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -142,8 +145,8 @@ export interface BetrayalArc {
 
 /** What a crew member is currently doing (design/02 §5). `targetId` names the asset. */
 export interface CrewAssignment {
-  readonly kind: 'idle' | 'guard' | 'front' | 'territory' | 'deal-crew';
-  /** The stash/front/territory id this assignment references, when applicable. */
+  readonly kind: 'idle' | 'guard' | 'front' | 'territory' | 'deal-crew' | 'courier';
+  /** The stash/front/territory/shipment id this references, when applicable. */
   readonly targetId?: string;
 }
 
@@ -347,6 +350,11 @@ export interface GameState {
   /** Loose aggregate inventory; Prompt 06 locates units into `stashes`. */
   readonly inventory: Inventory;
   readonly stashes: readonly Stash[];
+  /**
+   * Cross-country cargo currently in flight (travel.ts, design/11 §3).
+   * Resolved on ONLINE ticks only — frozen, never seized, while away (GDD §6).
+   */
+  readonly shipments: readonly Shipment[];
   readonly fronts: readonly Front[];
   readonly crew: readonly CrewMember[];
   readonly corruption: Corruption;
@@ -396,6 +404,36 @@ export function debtOwed(debt: Debt): number {
 /** Sum of dirty cash across all stashes (dirty cash is located — design/01 §1). */
 export function totalDirtyCash(state: GameState): number {
   return state.stashes.reduce((sum, s) => sum + s.dirtyCash, 0);
+}
+
+/**
+ * What a purchase AT a stash can draw on in total: the stash's dirty cash plus
+ * the run's clean cash. Clean cash is spendable ANYWHERE money is a gate —
+ * critically, a borrowed principal (which lands in clean cash, design/10) can
+ * fund the shipment it was taken out for, not just fronts (the come-up hook).
+ */
+export function spendableAt(state: GameState, stash: Stash): number {
+  return stash.dirtyCash + state.cleanCash;
+}
+
+/** How a charge at a stash splits across the two pools: located dirty cash
+ * first, clean cash covering the shortfall. `null` when both together can't
+ * cover it (the caller rejects without mutating). */
+export interface ChargeSplit {
+  readonly fromDirty: number;
+  readonly fromClean: number;
+}
+
+/** Split a charge of `cost` at `stash` across dirty-then-clean cash, or `null`
+ * if the combined pool falls short. Pure — appliers subtract each side. */
+export function splitCharge(
+  state: GameState,
+  stash: Stash,
+  cost: number,
+): ChargeSplit | null {
+  if (spendableAt(state, stash) < cost) return null;
+  const fromDirty = Math.min(stash.dirtyCash, cost);
+  return { fromDirty, fromClean: cost - fromDirty };
 }
 
 /** Net worth = all dirty cash + clean cash. Basis of the peak high score. */
@@ -451,6 +489,7 @@ export function createInitialState(seed: number | string): GameState {
     leTierAck: tierForHeat(country.heatBaseline),
     inventory: emptyInventory(),
     stashes: [homeStash],
+    shipments: [],
     fronts: [],
     crew: [],
     corruption: { officials: [], payrollPerWeek: 0, paidPorts: [], lastPayrollWeek: 1 },
@@ -496,6 +535,7 @@ export type Intent =
   | SellIntent
   | ConvertIntent
   | BuyPlugIntent
+  | ShipIntent
   | LieLowIntent;
 
 /**
@@ -515,6 +555,8 @@ export function applyIntent(state: GameState, intent: Intent): GameState {
       return convert(state, intent).state;
     case 'buyPlug':
       return buyPlug(state, intent.countryId).state;
+    case 'ship':
+      return ship(state, intent).state;
     case 'lieLow':
       return setLieLow(state, intent.enabled);
   }

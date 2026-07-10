@@ -72,6 +72,8 @@ export {
   emptyDebt,
   debtOwed,
   totalDirtyCash,
+  spendableAt,
+  splitCharge,
   netWorth,
   empireSize,
   rngFor,
@@ -81,6 +83,7 @@ export type {
   GameState,
   Intent,
   RunStatus,
+  ChargeSplit,
   Clock,
   Reputation,
   Inventory,
@@ -140,6 +143,43 @@ export type {
   ConvertResult,
   ConvertRejectReason,
 } from './conversions';
+
+// Travel, transports & couriers (design/11 §3; Ideas2 §1/§3) — Prompt 30.
+export {
+  TRANSPORTS,
+  getTransport,
+  INTERDICTION_MIN,
+  INTERDICTION_MAX,
+  INTERDICTION_BASE,
+  MODE_RISK_WEIGHT,
+  DISTANCE_RISK_WEIGHT,
+  CARGO_HEAT_WEIGHT,
+  DEST_RISK_WEIGHT,
+  PORT_PROTECTION_WEIGHT,
+  PAID_PORT_RELIEF,
+  CARGO_HEAT_FULL_RISK,
+  MIN_LEG_DISTANCE,
+  COURIER_CUT_PCT,
+  ESCORT_ODDS_REDUCTION,
+  COURIER_SKIM_PCT,
+  CONSIGNED_BUST_HEAT_FACTOR,
+} from './config/transport';
+export type { TransportId, TransportConfig } from './config/transport';
+export {
+  interdictionChance,
+  quoteShipment,
+  ship,
+  travelStep,
+  shipmentsInFlight,
+  shipmentRoute,
+} from './travel';
+export type {
+  Shipment,
+  ShipIntent,
+  ShipRejectReason,
+  ShipmentQuote,
+  ShipResult,
+} from './travel';
 
 // Plugs — true-source connections (Ideas2 §2; design/11 §2).
 export {

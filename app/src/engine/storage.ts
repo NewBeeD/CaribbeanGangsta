@@ -161,7 +161,9 @@ export type StorageRejectReason =
   | 'no-stash'
   | 'insufficient-inventory'
   | 'insufficient-capacity'
-  | 'insufficient-funds';
+  | 'insufficient-funds'
+  /** Cross-country product moves route through shipments (travel.ts, Prompt 30). */
+  | 'cross-country';
 
 /** Result of building a stash: the new state + the created stash, or a rejection. */
 export interface AddStashResult {
@@ -228,10 +230,12 @@ function travelDelayBetween(from: Stash, to: Stash): number {
 }
 
 /**
- * Move `qty` of `product` from one stash to another. Enforces the destination's
- * capacity (rejects `insufficient-capacity`) and reports the incurred access-speed
- * travel delay (design/09 A.3). Rejects without mutating on bad qty, unknown
- * stash, a same-stash move, or insufficient held inventory.
+ * Move `qty` of `product` from one stash to another WITHIN the same country —
+ * instant and free. Cross-country moves are a priced, risky shipment
+ * (travel.ts, design/11 §3) and reject here with `cross-country`. Enforces the
+ * destination's capacity (rejects `insufficient-capacity`) and reports the
+ * incurred access-speed travel delay (design/09 A.3). Rejects without mutating
+ * on bad qty, unknown stash, a same-stash move, or insufficient held inventory.
  */
 export function moveProduct(
   state: GameState,
@@ -246,6 +250,7 @@ export function moveProduct(
   const from = findStash(state, fromId);
   const to = findStash(state, toId);
   if (!from || !to) return rejectMove(state, 'no-stash');
+  if (from.countryId !== to.countryId) return rejectMove(state, 'cross-country');
   if (from.inventory[product] < qty) return rejectMove(state, 'insufficient-inventory');
   if (stashUnits(to) + qty > stashCapacity(to)) {
     return rejectMove(state, 'insufficient-capacity');

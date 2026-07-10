@@ -129,8 +129,8 @@ Copy this checklist into any PR touching player-facing loops:
 **Phase 4 — World expansion (Ideas2.md; design/11)**
 - `29_regional_markets_products_and_plugs.md` ✅ implemented (per-country
   markets, 11-product roster, conversions, plugs, exotic strains, schema v8)
-- `30_travel_transport_and_couriers.md` (go-fast/ferry/plane shipments,
-  courier consignments & escorts)
+- `30_travel_transport_and_couriers.md` ✅ implemented (go-fast/ferry/plane
+  shipments, courier consignments & escorts, schema v9)
 - `31_world_market_and_travel_ui.md` (world price board, plug/conversion/
   shipment surfacing)
 

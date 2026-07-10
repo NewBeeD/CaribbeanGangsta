@@ -1,7 +1,7 @@
 # 11 — Regional Markets, Plugs, Travel & Product Lines
 
 **Source:** `Ideas2.md`, reconciled with the open-access rule (`Ideas.md`, design/01 §0)
-**Status:** §1, §2, §4, §5 implemented (Prompt 29). §3 travel/couriers specified here, built by Prompt 30; UI surfacing by Prompt 31.
+**Status:** §1, §2, §4, §5 implemented (Prompt 29). §3 travel/couriers implemented (Prompt 30 — `engine/travel.ts`, `config/transport.ts`, schema v9). UI surfacing by Prompt 31.
 
 This doc turns the five Ideas2 notes into mechanics that keep the three
 non-negotiables intact: **open access** (money is the only gate — never a time

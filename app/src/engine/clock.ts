@@ -20,6 +20,7 @@ import { restoreRng } from './rng';
 import { driftPrices } from './deals';
 import { applyHeatEscalation, decayHeat } from './heat';
 import { raidStep } from './storage';
+import { travelStep } from './travel';
 import { accrue } from './laundering';
 import { crewStep } from './crew';
 import { corruptionStep } from './corruption';
@@ -72,6 +73,11 @@ export const TICK_STEPS: readonly TickStep[] = [
   // (`raidStep` → `resolveRaid`) applies the seizure and queues the scene.
   // Active-only: offline is safe (GDD §6) — no raid fires while the player is away.
   { id: 'raid-roll', modes: ['active'], run: (s, dt) => raidStep(s, dt) },
+  // Shipments in flight resolve their arrivals/interdictions (design/11 §3;
+  // Prompt 30). ACTIVE-only: in-flight cargo is frozen while the player is
+  // away — never delivered, never seized offline (GDD §6). The roll compares
+  // one RNG draw against the odds snapshotted at launch (fairness law).
+  { id: 'travel', modes: ['active'], run: (s, dt) => travelStep(s, dt) },
   // Laundering fronts accrue clean cash + apply their passive heat footprint
   // (design/01 §3). Prompt 07. Active-only: the offline return payoff is settled
   // separately by `laundering.settleOffline` on its own piecewise curve.

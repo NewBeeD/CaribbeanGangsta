@@ -23,6 +23,7 @@ import {
   FRONT_TYPES,
   TRAIN_COST,
   describeLoyalty,
+  shipmentRoute,
   type CrewMember,
   type CrewRole,
   type CrewSkill,
@@ -122,6 +123,10 @@ export function assignmentLabel(state: GameState, member: CrewMember): string {
     }
     case 'deal-crew':
       return 'On the deal crew';
+    case 'courier': {
+      const shipment = state.shipments.find((s) => s.id === a.targetId);
+      return shipment ? `Riding a shipment (${shipmentRoute(state, shipment)})` : 'Riding a shipment';
+    }
   }
 }
 
