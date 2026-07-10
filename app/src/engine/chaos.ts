@@ -22,8 +22,7 @@
  */
 
 import { createRng, type Rng } from './rng';
-import { PRODUCT_IDS, type ProductId } from './config/countries';
-import { LOCATION_IDS, type LocationId } from './config/locations';
+import { COUNTRY_IDS, PRODUCT_IDS, type ProductId } from './config/countries';
 import {
   ALT_ROUTE_FLAG,
   CHAOS_BASE_RATE_PER_HOUR,
@@ -125,11 +124,11 @@ function applyPriceShock(
   magnitude: number,
   scope: 'all' | ProductId,
 ): GameState {
-  const markets = {} as Record<LocationId, Record<ProductId, MarketState>>;
-  for (const location of LOCATION_IDS) {
+  const markets = {} as Record<string, Record<ProductId, MarketState>>;
+  for (const countryId of COUNTRY_IDS) {
     const perProduct = {} as Record<ProductId, MarketState>;
     for (const product of PRODUCT_IDS) {
-      const current = state.markets[location][product];
+      const current = state.markets[countryId]![product];
       if (scope === 'all' || scope === product) {
         perProduct[product] = shockFactor(
           current,
@@ -141,7 +140,7 @@ function applyPriceShock(
         perProduct[product] = current;
       }
     }
-    markets[location] = perProduct;
+    markets[countryId] = perProduct;
   }
   return { ...state, markets: markets as Markets };
 }

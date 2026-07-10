@@ -28,6 +28,8 @@ import {
   type SellIntent,
 } from './deals';
 import { setLieLow, tierForHeat, type LeTier, type LieLowIntent } from './heat';
+import { convert, type ConvertIntent } from './conversions';
+import { buyPlug, type BuyPlugIntent } from './plugs';
 import { STARTING_STASH_TYPE, type StashType } from './config/stashes';
 import type {
   CrewAgenda,
@@ -52,8 +54,11 @@ import type {
  * v7: expanded `Debt` — the loan-shark ledger (`lenderId`/`rate`/`accruedInterest`/
  *     `dueDay`/`collateralRef`/`ladderRung`) replacing the `interestRatePerHour`
  *     stub (debt & loan sharks, Prompt 10).
+ * v8: regional markets (design/11; Ideas2) — `markets` re-keyed by countryId,
+ *     `plugs` (true-source connections), the expanded product roster in every
+ *     inventory, and `world` gains `exoticStrain` + supplier `demandFactor`.
  */
-export const SCHEMA_VERSION = 7 as const;
+export const SCHEMA_VERSION = 8 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -324,6 +329,11 @@ export interface GameState {
   readonly markets: Markets;
   /** Safe, launderable money (design/01 §1). Dirty cash lives in `stashes`. */
   readonly cleanCash: number;
+  /**
+   * Countries whose TRUE-SOURCE plug has been bought (Ideas2 §2; plugs.ts).
+   * A pure money gate — never a time lock or progression flag (Ideas.md).
+   */
+  readonly plugs: readonly string[];
   readonly reputation: Reputation;
   readonly heat: number;
   /** "Lie low" mode: heat decays faster, laundering income slows (Prompt 05/07). */
@@ -433,6 +443,7 @@ export function createInitialState(seed: number | string): GameState {
     clock: { hours: 0, day: 1, week: 1 },
     markets: createInitialMarkets(),
     cleanCash: 0,
+    plugs: [],
     reputation: { street: 0, business: 0, political: 0 },
     heat: country.heatBaseline,
     lyingLow: false,
@@ -483,6 +494,8 @@ export type Intent =
   | { readonly type: 'noop' }
   | BuyIntent
   | SellIntent
+  | ConvertIntent
+  | BuyPlugIntent
   | LieLowIntent;
 
 /**
@@ -498,6 +511,10 @@ export function applyIntent(state: GameState, intent: Intent): GameState {
     case 'buy':
     case 'sell':
       return resolveDeal(state, intent).state;
+    case 'convert':
+      return convert(state, intent).state;
+    case 'buyPlug':
+      return buyPlug(state, intent.countryId).state;
     case 'lieLow':
       return setLieLow(state, intent.enabled);
   }

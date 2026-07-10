@@ -19,15 +19,18 @@
 import {
   SCHEMA_VERSION,
   emptyDebt,
+  emptyInventory,
   type Corruption,
   type CrewMember,
   type Debt,
   type GameState,
+  type Inventory,
   type OfficialTie,
   type RunStatus,
   type Stash,
 } from '@/engine/state';
 import { createInitialMarkets, type Markets } from '@/engine/deals';
+import { hydrateLegacyWorld, type LegacyWorld } from '@/engine/world';
 import { tierForHeat, type LeTier } from '@/engine/heat';
 import { STARTING_STASH_TYPE } from '@/engine/config/stashes';
 import { hydrateLegacyCrew } from '@/engine/crew';
@@ -168,6 +171,32 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
     const legacy = env.state as GameState;
     const debt: Debt = { ...emptyDebt(), dueDay: legacy.clock.day };
     return { ...env, schemaVersion: 7, state: { ...legacy, debt } };
+  },
+  // 7 → 8: regional markets (design/11; Ideas2). The world grows the products/
+  // suppliers/strain it never resolved (deterministically from the save's own
+  // seed — `hydrateLegacyWorld`); every inventory gains the new product keys at
+  // 0; `plugs` starts empty (no run could have bought one); and `markets` is
+  // re-seeded fresh at base because the old shape was keyed by abstract route
+  // legs, not countries — only transient drift factors are reset, never
+  // holdings, cash, or the RNG stream.
+  7: (env) => {
+    const legacy = env.state as GameState & { plugs?: readonly string[] };
+    const fill = (inv: Partial<Inventory> | undefined): Inventory => ({
+      ...emptyInventory(),
+      ...(inv ?? {}),
+    });
+    return {
+      ...env,
+      schemaVersion: 8,
+      state: {
+        ...legacy,
+        world: hydrateLegacyWorld(legacy.world as unknown as LegacyWorld),
+        markets: createInitialMarkets(),
+        plugs: legacy.plugs ?? [],
+        inventory: fill(legacy.inventory),
+        stashes: legacy.stashes.map((s) => ({ ...s, inventory: fill(s.inventory) })),
+      },
+    };
   },
 };
 

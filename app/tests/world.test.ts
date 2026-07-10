@@ -1,18 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import {
   COUNTRIES,
+  EXOTIC_STRAINS,
   PRODUCT_PRICE_BANDS,
   RIVAL_ARCHETYPES,
+  START_COUNTRIES,
   VOLATILITY_RANGE,
+  basePriceAt,
   createRng,
   describeStartingHand,
   generateWorld,
+  getCountry,
   type ProductId,
 } from '@/engine';
 
 const bandById = new Map(PRODUCT_PRICE_BANDS.map((p) => [p.id, p] as const));
 const archetypeNames = new Set(RIVAL_ARCHETYPES.map((a) => a.name));
 const countryIds = new Set(COUNTRIES.map((c) => c.id));
+const startIds = new Set(START_COUNTRIES.map((c) => c.id));
 
 describe('generateWorld — determinism', () => {
   it('same seed → deep-equal world', () => {
@@ -43,10 +48,10 @@ describe('generateWorld — bounds', () => {
     }
   });
 
-  it('starting country is from the roster with a resolved cash inside its band', () => {
+  it('starting country is START-ELIGIBLE (a Caribbean island) with cash inside its band', () => {
     for (let s = 0; s < 250; s++) {
       const { startingCountry } = generateWorld(createRng(s));
-      expect(countryIds.has(startingCountry.id)).toBe(true);
+      expect(startIds.has(startingCountry.id)).toBe(true);
       const config = COUNTRIES.find((c) => c.id === startingCountry.id)!;
       expect(startingCountry.startingCash).toBeGreaterThanOrEqual(config.startingCash.min);
       expect(startingCountry.startingCash).toBeLessThanOrEqual(config.startingCash.max);
@@ -70,11 +75,28 @@ describe('generateWorld — bounds', () => {
     }
   });
 
-  it('supplier geography covers the full roster', () => {
+  it('supplier geography covers the full roster with in-band cost/demand factors', () => {
     const { supplierGeography } = generateWorld(createRng('suppliers'));
     expect(supplierGeography.map((s) => s.countryId).sort()).toEqual(
       [...countryIds].sort(),
     );
+    for (const supplier of supplierGeography) {
+      const config = getCountry(supplier.countryId);
+      expect(supplier.costFactor).toBeGreaterThanOrEqual(config.costBias.min);
+      expect(supplier.costFactor).toBeLessThanOrEqual(config.costBias.max);
+      expect(supplier.demandFactor).toBeGreaterThanOrEqual(config.demandBias.min);
+      expect(supplier.demandFactor).toBeLessThanOrEqual(config.demandBias.max);
+    }
+  });
+
+  it('draws the run’s exotic strain name from the pool (Ideas2 §5)', () => {
+    const strains = new Set<string>();
+    for (let s = 0; s < 50; s++) {
+      const { exoticStrain } = generateWorld(createRng(s));
+      expect(EXOTIC_STRAINS).toContain(exoticStrain);
+      strains.add(exoticStrain);
+    }
+    expect(strains.size).toBeGreaterThan(1); // it actually varies across runs
   });
 });
 
@@ -111,12 +133,14 @@ describe('describeStartingHand — fairness (GDD §5.4, no hidden traps)', () =>
     expect(hand.rivals.map((r) => r.name)).toEqual(world.rivals.map((r) => r.name));
   });
 
-  it('names the genuinely cheapest product to buy into', () => {
+  it('names the genuinely cheapest LOCALLY TRADED product to buy into', () => {
     const world = generateWorld(createRng('cheapest'));
     const hand = describeStartingHand(world);
-    const trueMin = world.priceBoards.reduce((lo, p) => (p.buy < lo.buy ? p : lo));
-    const cheapest: ProductId = trueMin.product;
-    expect(hand.cheapestProduct.product).toBe(cheapest);
+    const home = getCountry(world.startingCountry.id);
+    const trueMin = home.traded
+      .map((id: ProductId) => ({ product: id, buy: basePriceAt(world, id, home.id).buy }))
+      .reduce((lo, p) => (p.buy < lo.buy ? p : lo));
+    expect(hand.cheapestProduct.product).toBe(trueMin.product);
     expect(hand.cheapestProduct.buy).toBe(trueMin.buy);
   });
 });

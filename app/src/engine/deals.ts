@@ -1,8 +1,9 @@
 /**
  * Loop 1 — the deal engine: buy low / sell high / dodge heat, in REAL DOLLARS
- * (design/01 §2), with a displayed bust probability that is *exactly* the number
- * the RNG rolls against (design/01 §0.3 fairness; GDD §8). Failure returns a
- * *scene key*, never an error — the narrative layer (Prompt 13) renders it.
+ * (design/01 §2; design/11), with a displayed bust probability that is *exactly*
+ * the number the RNG rolls against (design/01 §0.3 fairness; GDD §8). Failure
+ * returns a *scene key*, never an error — the narrative layer (Prompt 13)
+ * renders it.
  *
  * The fairness law is the whole point: `computeBustProbability` produces the
  * number shown to the player, and `resolveDeal` rolls one draw from the run's
@@ -13,26 +14,33 @@
  * serialized `state.rngState` (restored via `./rng`, snapshot written back), so
  * a save/load round-trip reproduces every roll. No `Math.random`, no wall clock.
  *
- * Route economics: a location's `distanceFromSource` widens the sell margin,
- * strongly for cocaine (the margin engine) and weakly for weed — the mechanical
- * reason international routes feel like a paradigm shift (design/01 §2).
+ * Market model (design/11 §1): every COUNTRY is a market. A deal executes at the
+ * target stash's country — your foothold is your presence there (Prompt 16's
+ * territory model; the travel/shipment layer is Prompt 30). The local price is
+ * `world.basePriceAt` (geography: region distance from the product's source ×
+ * the country's per-run cost/demand character) times this country's live drift
+ * factor. Prices for every country are always computable (the world market
+ * board, Ideas2 §3); *execution* is bounded by the country's `traded` culture
+ * (Ideas2 §5) and, at a true source, by the plug (Ideas2 §2 — `plugs.ts`).
  *
  * Storage note: buys/sells target a stash (`stashId`, default the home stash). A
- * bust seizes the staked cash + product at THAT stash only (design/07 §1). Real
- * multi-stash capacity is owned by Prompt 06; a placeholder cap guards buys here.
+ * bust seizes the staked cash + product at THAT stash only (design/07 §1).
  */
 
 import { restoreRng, type Rng } from './rng';
-import { PRODUCT_IDS, type ProductId } from './config/countries';
-import { getProduct } from './config/products';
 import {
-  LOCATION_IDS,
-  SOURCE_LOCATION,
-  getLocation,
-  type LocationId,
-} from './config/locations';
+  COUNTRY_IDS,
+  PRODUCT_IDS,
+  findCountry,
+  getCountry,
+  isTraded,
+  requiresPlug,
+  type ProductId,
+} from './config/countries';
+import { getProduct } from './config/products';
 import { HEAT_MAX } from './config/heat';
 import { getStashType } from './config/stashes';
+import { basePriceAt } from './world';
 import { addHeat } from './heat';
 import type { GameState, Inventory, Stash } from './state';
 
@@ -48,20 +56,20 @@ export interface MarketState {
   readonly prevFactor: number;
 }
 
-/** Live prices for every location × product. Always fully populated. */
+/** Live prices for every country × product. Always fully populated. */
 export type Markets = Readonly<
-  Record<LocationId, Readonly<Record<ProductId, MarketState>>>
+  Record<string, Readonly<Record<ProductId, MarketState>>>
 >;
 
 /** Fresh markets: every price at its base (factor 1, flat trend). */
 export function createInitialMarkets(): Markets {
-  const markets = {} as Record<LocationId, Record<ProductId, MarketState>>;
-  for (const loc of LOCATION_IDS) {
+  const markets = {} as Record<string, Record<ProductId, MarketState>>;
+  for (const countryId of COUNTRY_IDS) {
     const perProduct = {} as Record<ProductId, MarketState>;
     for (const product of PRODUCT_IDS) {
       perProduct[product] = { factor: 1, prevFactor: 1 };
     }
-    markets[loc] = perProduct;
+    markets[countryId] = perProduct;
   }
   return markets;
 }
@@ -73,7 +81,7 @@ export const BUST_MIN = 0.03;
 export const BUST_MAX = 0.6;
 
 // Weights of each input to the displayed bust probability (design/01 §2:
-// f(heat, location risk, crew skill, product tier)). Chosen so the clamp is
+// f(heat, market risk, crew skill, product tier)). Chosen so the clamp is
 // reachable from both ends: a calm, skilled low-tier deal floors at 3%; a hot,
 // unskilled high-tier deal ceils at 60%.
 const BUST_BASE = 0.05;
@@ -87,7 +95,7 @@ const QTY_FULL_RISK = 100;
 /** Buying is quieter than selling: buy heat is scaled down from the per-unit rate. */
 const BUY_HEAT_FACTOR = 0.5;
 /**
- * Legacy per-stash unit cap. Real capacity is now per-archetype (Prompt 06:
+ * Legacy per-stash unit cap. Real capacity is per-archetype (Prompt 06:
  * `getStashType(stash.type).capacity`, enforced on buys below); this constant is
  * retained as a neutral reference value for callers/tests that want a round cap.
  */
@@ -104,50 +112,40 @@ export interface MarketPrice {
   readonly sell: number;
   readonly trend: PriceTrend;
   readonly volatility: number;
+  /** True when the buy side is a plug's fixed contract price (drift-free). */
+  readonly plugPriced: boolean;
 }
 
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
-/** The run's resolved source price board for `product` (throws if absent). */
-function boardFor(state: GameState, product: ProductId) {
-  const board = state.world.priceBoards.find((b) => b.product === product);
-  if (!board) throw new Error(`boardFor(): no price board for "${product}"`);
-  return board;
-}
-
 function marketStateFor(
   state: GameState,
-  location: LocationId,
+  countryId: string,
   product: ProductId,
 ): MarketState {
-  const atLocation = state.markets[location];
-  if (!atLocation) throw new Error(`market: unknown location "${location}"`);
-  const market = atLocation[product];
+  const atCountry = state.markets[countryId];
+  if (!atCountry) throw new Error(`market: unknown country "${countryId}"`);
+  const market = atCountry[product];
   if (!market) throw new Error(`market: unknown product "${product}"`);
   return market;
 }
 
 /**
- * The current LIVE buy/sell price for `product` at `location`: the resolved
- * source base, stretched by the leg's distance elasticity (cocaine widens hard),
- * then multiplied by the live drift factor. The trend arrow is derived from the
- * last drift cycle. This is exactly the price a deal executes at.
+ * The current LIVE buy/sell price for `product` at `countryId`: the geographic
+ * base (`world.basePriceAt`) times this country's live drift factor. The trend
+ * arrow is derived from the last drift cycle. This is exactly the price a deal
+ * executes at. A plug's buy price does NOT drift — the contract price is fixed
+ * and readable (Ideas2 §2); its sell side drifts like any market.
  */
 export function getMarketPrice(
   state: GameState,
   product: ProductId,
-  location: LocationId,
+  countryId: string,
 ): MarketPrice {
-  const cfg = getProduct(product);
-  const loc = getLocation(location);
-  const board = boardFor(state, product);
-  const market = marketStateFor(state, location, product);
-
-  const buyBase = board.buy * (1 + loc.distanceFromSource * cfg.buyDistanceElasticity);
-  const sellBase =
-    board.sell * (1 + loc.distanceFromSource * cfg.sellDistanceElasticity);
+  const base = basePriceAt(state.world, product, countryId);
+  const market = marketStateFor(state, countryId, product);
 
   const trend: PriceTrend =
     market.factor > market.prevFactor
@@ -157,10 +155,11 @@ export function getMarketPrice(
         : 'flat';
 
   return {
-    buy: Math.round(buyBase * market.factor),
-    sell: Math.round(sellBase * market.factor),
+    buy: Math.round(base.plugPriced ? base.buy : base.buy * market.factor),
+    sell: Math.round(base.sell * market.factor),
     trend,
-    volatility: board.volatility,
+    volatility: base.volatility,
+    plugPriced: base.plugPriced,
   };
 }
 
@@ -178,17 +177,17 @@ export function driftPrices(state: GameState, rng: Rng, dtHours: number): GameSt
   if (dtHours <= 0) return state;
   const dtScale = Math.min(dtHours, 24) / 24; // one full step per in-game day
 
-  const markets = {} as Record<LocationId, Record<ProductId, MarketState>>;
-  for (const location of LOCATION_IDS) {
+  const markets = {} as Record<string, Record<ProductId, MarketState>>;
+  for (const countryId of COUNTRY_IDS) {
     const perProduct = {} as Record<ProductId, MarketState>;
     for (const product of PRODUCT_IDS) {
-      const vol = boardFor(state, product).volatility;
-      const current = marketStateFor(state, location, product);
+      const vol = basePriceAt(state.world, product, countryId).volatility;
+      const current = marketStateFor(state, countryId, product);
       const delta = rng.float(-vol, vol) * dtScale;
       const factor = clamp(current.factor + delta, 1 - vol, 1 + vol);
       perProduct[product] = { factor, prevFactor: current.factor };
     }
-    markets[location] = perProduct;
+    markets[countryId] = perProduct;
   }
 
   return { ...state, markets, rngState: rng.getState() };
@@ -206,24 +205,24 @@ function crewSkill(state: GameState): number {
 
 /**
  * The bust probability shown to the player AND rolled against — one number, no
- * hidden second modifier (design/01 §0.3; GDD §8). `f(heat, location risk, crew
+ * hidden second modifier (design/01 §0.3; GDD §8). `f(heat, country risk, crew
  * skill, product tier)` plus a size term, clamped to `[BUST_MIN, BUST_MAX]`.
  */
 export function computeBustProbability(
   state: GameState,
   product: ProductId,
   qty: number,
-  location: LocationId,
+  countryId: string,
 ): number {
   const cfg = getProduct(product);
-  const loc = getLocation(location);
+  const country = getCountry(countryId);
   const heatN = clamp(state.heat / HEAT_MAX, 0, 1);
   const qtyN = clamp(qty / QTY_FULL_RISK, 0, 1);
 
   const raw =
     BUST_BASE +
     heatN * HEAT_WEIGHT +
-    loc.risk * LOCATION_WEIGHT +
+    country.risk * LOCATION_WEIGHT +
     cfg.tierRisk * TIER_WEIGHT +
     qtyN * QTY_WEIGHT -
     crewSkill(state) * CREW_WEIGHT;
@@ -249,7 +248,11 @@ export type RejectReason =
   | 'insufficient-funds'
   | 'insufficient-inventory'
   | 'insufficient-capacity'
-  | 'no-stash';
+  | 'no-stash'
+  /** The product has no market at the stash's country (Ideas2 §5). */
+  | 'not-traded'
+  /** Buying at a TRUE SOURCE requires the plug intro (Ideas2 §2; plugs.ts). */
+  | 'no-plug';
 
 /**
  * The result of resolving a deal. `outcome` extends the prompt's
@@ -274,9 +277,8 @@ export interface BuyIntent {
   readonly type: 'buy';
   readonly product: ProductId;
   readonly qty: number;
-  /** Which market to deal into; defaults to the source leg. */
-  readonly location?: LocationId;
-  /** Which stash holds/receives the goods; defaults to the home stash. */
+  /** Which stash holds/receives the goods; defaults to the home stash. The deal
+   * executes at this stash's COUNTRY market (design/11 §1). */
   readonly stashId?: string;
 }
 
@@ -284,14 +286,13 @@ export interface SellIntent {
   readonly type: 'sell';
   readonly product: ProductId;
   readonly qty: number;
-  readonly location?: LocationId;
   readonly stashId?: string;
 }
 
 export type DealIntent = BuyIntent | SellIntent;
 
 function stashUnits(stash: Stash): number {
-  return PRODUCT_IDS.reduce((sum, id) => sum + stash.inventory[id], 0);
+  return PRODUCT_IDS.reduce((sum, id) => sum + (stash.inventory[id] ?? 0), 0);
 }
 
 /** Resolve the deal's target stash (explicit id, else the home stash). */
@@ -310,7 +311,7 @@ function withStash(state: GameState, next: Stash): GameState {
 }
 
 function adjustInventory(inv: Inventory, product: ProductId, delta: number): Inventory {
-  return { ...inv, [product]: inv[product] + delta };
+  return { ...inv, [product]: (inv[product] ?? 0) + delta };
 }
 
 /** Bank peak trackers after a deal (design/01 §7 — score banks from peaks). */
@@ -341,15 +342,28 @@ function reject(state: GameState, reason: RejectReason): DealResult {
   };
 }
 
+/** Validate the stash's country carries this product's market (Ideas2 §5). */
+function marketCountryFor(stash: Stash, product: ProductId): string | null {
+  const country = findCountry(stash.countryId);
+  if (!country || !isTraded(country.id, product)) return null;
+  return country.id;
+}
+
 function resolveBuy(state: GameState, intent: BuyIntent): DealResult {
   const { product, qty } = intent;
   if (!Number.isInteger(qty) || qty <= 0) return reject(state, 'invalid-qty');
 
-  const location = intent.location ?? SOURCE_LOCATION;
   const stash = targetStash(state, intent.stashId);
   if (!stash) return reject(state, 'no-stash');
+  const countryId = marketCountryFor(stash, product);
+  if (!countryId) return reject(state, 'not-traded');
+  // A true source sells to CONNECTIONS, not walk-ins (Ideas2 §2). The plug is a
+  // pure money gate — buyable from minute one (plugs.ts), never a hidden flag.
+  if (requiresPlug(countryId, product) && !state.plugs.includes(countryId)) {
+    return reject(state, 'no-plug');
+  }
 
-  const price = getMarketPrice(state, product, location);
+  const price = getMarketPrice(state, product, countryId);
   const cost = price.buy * qty;
   if (stash.dirtyCash < cost) return reject(state, 'insufficient-funds');
   if (stashUnits(stash) + qty > getStashType(stash.type).capacity) {
@@ -380,14 +394,17 @@ function resolveSell(state: GameState, intent: SellIntent): DealResult {
   const { product, qty } = intent;
   if (!Number.isInteger(qty) || qty <= 0) return reject(state, 'invalid-qty');
 
-  const location = intent.location ?? SOURCE_LOCATION;
   const stash = targetStash(state, intent.stashId);
   if (!stash) return reject(state, 'no-stash');
-  if (stash.inventory[product] < qty) return reject(state, 'insufficient-inventory');
+  const countryId = marketCountryFor(stash, product);
+  if (!countryId) return reject(state, 'not-traded');
+  if ((stash.inventory[product] ?? 0) < qty) {
+    return reject(state, 'insufficient-inventory');
+  }
 
   const cfg = getProduct(product);
-  const price = getMarketPrice(state, product, location);
-  const displayedBustProb = computeBustProbability(state, product, qty, location);
+  const price = getMarketPrice(state, product, countryId);
+  const displayedBustProb = computeBustProbability(state, product, qty, countryId);
 
   // The fairness roll: ONE draw, bust iff it lands under the displayed number.
   const rng = restoreRng(state.rngState);
@@ -438,10 +455,11 @@ function resolveSell(state: GameState, intent: SellIntent): DealResult {
 }
 
 /**
- * Resolve a buy or sell against `state`: validate funds / inventory / capacity
- * (rejecting without mutation), roll the bust check for sells, and apply the
- * cash + inventory + heat changes. Returns the new state plus the scene key and
- * the fairness numbers the UI shows. Pure and deterministic.
+ * Resolve a buy or sell against `state`: validate market / plug / funds /
+ * inventory / capacity (rejecting without mutation), roll the bust check for
+ * sells, and apply the cash + inventory + heat changes. Returns the new state
+ * plus the scene key and the fairness numbers the UI shows. Pure and
+ * deterministic.
  */
 export function resolveDeal(state: GameState, intent: DealIntent): DealResult {
   return intent.type === 'buy'

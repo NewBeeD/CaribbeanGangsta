@@ -69,7 +69,8 @@ describe('DealScreen — fairness law (odds shown = odds rolled; GDD §8)', () =
     useGameStore.setState({ state });
 
     const view = mount(<DealScreen />);
-    const expectedPct = Math.round(computeBustProbability(state, 'weed', 1, 'source') * 100);
+    const homeId = state.stashes[0]!.countryId;
+    const expectedPct = Math.round(computeBustProbability(state, 'weed', 1, homeId) * 100);
 
     expect(view.container.textContent).toContain('Bust chance');
     expect(view.container.innerHTML).toContain(`${expectedPct}%`);
@@ -88,12 +89,13 @@ describe('DealScreen — fairness law (odds shown = odds rolled; GDD §8)', () =
 describe('DealScreen — market is legible', () => {
   it('reflects a rising price with an up trend arrow', () => {
     const base = stateWithWeed('deal-trend');
+    const homeId = base.stashes[0]!.countryId;
     const state: GameState = {
       ...base,
       markets: {
         ...base.markets,
-        source: {
-          ...base.markets.source,
+        [homeId]: {
+          ...base.markets[homeId]!,
           weed: { factor: 1.2, prevFactor: 1.0 }, // rising this cycle
         },
       },

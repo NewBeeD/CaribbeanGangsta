@@ -13,26 +13,43 @@
 export { createRng, restoreRng } from './rng';
 export type { Rng, RngState } from './rng';
 
-// Per-run world generation (Prompt 02).
-export { generateWorld, describeStartingHand, VOLATILITY_RANGE } from './world';
+// Per-run world generation (Prompt 02; design/11 regional markets).
+export {
+  generateWorld,
+  describeStartingHand,
+  basePriceAt,
+  boardFor,
+  neutralSupplier,
+  productDisplayName,
+  VOLATILITY_RANGE,
+} from './world';
 export type {
   World,
   StartingCountry,
   StartingHand,
   ResolvedPrice,
+  BasePrice,
   Rival,
   SupplierMarket,
   SupplierGeography,
 } from './world';
 
-// Economy / roster config (design/01 §0a, §2).
+// Economy / roster config (design/01 §0a, §2; design/11).
 export {
   COUNTRIES,
+  COUNTRY_IDS,
+  START_COUNTRIES,
+  REGION_DISTANCE,
   PRODUCT_PRICE_BANDS,
   PRODUCT_IDS,
+  getCountry,
+  findCountry,
+  isTraded,
+  requiresPlug,
 } from './config/countries';
 export type {
   ProductId,
+  Region,
   Band,
   ProductPriceBand,
   CountryConfig,
@@ -43,15 +60,8 @@ export {
   RIVAL_COUNT,
 } from './config/rivals';
 export type { RivalArchetype } from './config/rivals';
-export { PRODUCTS, getProduct } from './config/products';
+export { PRODUCTS, getProduct, EXOTIC_STRAINS } from './config/products';
 export type { ProductConfig } from './config/products';
-export {
-  LOCATIONS,
-  LOCATION_IDS,
-  SOURCE_LOCATION,
-  getLocation,
-} from './config/locations';
-export type { LocationId, LocationConfig } from './config/locations';
 
 // Core run state + reducer (Prompt 03).
 export {
@@ -120,6 +130,31 @@ export type {
   BuyIntent,
   SellIntent,
 } from './deals';
+
+// Product conversions — cook crack / press hash (Ideas2 §4; design/11 §4).
+export { CONVERSION_RECIPES, getRecipe } from './config/conversions';
+export type { RecipeId, ConversionRecipe } from './config/conversions';
+export { convert, maxBatches } from './conversions';
+export type {
+  ConvertIntent,
+  ConvertResult,
+  ConvertRejectReason,
+} from './conversions';
+
+// Plugs — true-source connections (Ideas2 §2; design/11 §2).
+export {
+  buyPlug,
+  hasPlug,
+  plugQuote,
+  plugQuotes,
+  PLUG_MEETING_HEAT,
+} from './plugs';
+export type {
+  BuyPlugIntent,
+  PlugQuote,
+  PlugResult,
+  PlugRejectReason,
+} from './plugs';
 
 // Heat & law enforcement — Prompt 05.
 export {

@@ -16,11 +16,11 @@ import { Button, Card, HeatDots, Panel, RiskMeter, SceneText, Stat, TrendArrow }
 import { currentTier, tierDots } from '@/engine';
 import type { DealIntent, ProductId } from '@/engine';
 import {
-  DEAL_LOCATION,
   clampQty,
   defaultMode,
   defaultProduct,
   homeStash,
+  marketName,
   maxQty,
   productRows,
   sceneFor,
@@ -82,8 +82,7 @@ export function DealScreen() {
   if (!state) return null;
 
   const stash = homeStash(state);
-  const location = DEAL_LOCATION;
-  const rows = productRows(state, location, stash);
+  const rows = productRows(state, stash);
   const row = rows.find((r) => r.id === selected) ?? rows[0]!;
 
   // Outcome view — the deal just resolved. Success and bust both read as a scene.
@@ -102,11 +101,11 @@ export function DealScreen() {
     );
   }
 
-  const max = maxQty(mode, state, selected, location, stash);
+  const max = maxQty(mode, state, selected, stash);
   const clamped = clampQty(qty, max);
   const canAct = max > 0;
   // Buys don't roll a bust; the risk panel appears only for a sell (design/07 §1).
-  const bustProb = mode === 'sell' ? sellBustProbability(state, selected, Math.max(1, clamped), location) : 0;
+  const bustProb = mode === 'sell' ? sellBustProbability(state, selected, Math.max(1, clamped), stash) : 0;
 
   const step = (delta: number) => setQty((q) => clampQty(clampQty(q, max) + delta, max));
 
@@ -123,7 +122,6 @@ export function DealScreen() {
       type: mode,
       product: selected,
       qty: q,
-      location,
       stashId: stash.id,
     };
     const r = useGameStore.getState().commitDeal(intent);
@@ -150,7 +148,7 @@ export function DealScreen() {
         <Button variant="ghost" onClick={() => window.history.back()} aria-label="Back">
           ‹ Back
         </Button>
-        <span className="cg-label">{state.world.startingCountry.name} · Source</span>
+        <span className="cg-label">{marketName(stash)} · Local market</span>
         <HeatDots value={heat.filled} max={heat.total} tier={currentTier(state)} />
       </header>
 

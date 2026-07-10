@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createInitialState,
   applyIntent,
+  emptyInventory,
   getMarketPrice,
   computeBustProbability,
   resolveDeal,
@@ -11,9 +12,10 @@ import {
   rngFor,
   BUST_MIN,
   BUST_MAX,
+  COUNTRY_IDS,
   DEFAULT_STASH_CAPACITY,
-  LOCATION_IDS,
   PRODUCT_IDS,
+  requiresPlug,
   spawnCrew,
   type GameState,
   type ProductId,
@@ -43,26 +45,71 @@ function seed(
   };
 }
 
-describe('getMarketPrice — route economics (design/01 §2)', () => {
-  it('cocaine sell margin widens with route distance (source < mid < wholesale)', () => {
-    const state = createInitialState('route');
-    const source = getMarketPrice(state, 'cocaine', 'source');
-    const mid = getMarketPrice(state, 'cocaine', 'mid-route');
-    const wholesale = getMarketPrice(state, 'cocaine', 'wholesale');
+/** Append a foothold stash in `countryId` (design/11 — your presence there). */
+function withStashIn(
+  state: GameState,
+  countryId: string,
+  opts: { cash?: number; inventory?: Partial<Record<ProductId, number>> } = {},
+): GameState {
+  const stash: Stash = {
+    id: `stash-${countryId}`,
+    name: countryId,
+    countryId,
+    type: 'floor',
+    dirtyCash: opts.cash ?? 0,
+    inventory: { ...emptyInventory(), ...(opts.inventory ?? {}) },
+  };
+  return { ...state, stashes: [...state.stashes, stash] };
+}
 
-    expect(source.sell).toBeLessThan(mid.sell);
-    expect(mid.sell).toBeLessThan(wholesale.sell);
+const homeId = (state: GameState): string => (state.stashes[0] as Stash).countryId;
+
+describe('getMarketPrice — geography is the margin engine (design/11 §1)', () => {
+  it('cocaine sell price widens from the source → the islands → Miami', () => {
+    const state = createInitialState('route');
+    const source = getMarketPrice(state, 'cocaine', 'colombia');
+    const local = getMarketPrice(state, 'cocaine', homeId(state));
+    const miami = getMarketPrice(state, 'cocaine', 'miami');
+
+    expect(source.sell).toBeLessThan(local.sell);
+    expect(local.sell).toBeLessThan(miami.sell);
     // Margin (sell − buy) also widens down the route for the margin engine.
-    expect(wholesale.sell - wholesale.buy).toBeGreaterThan(source.sell - source.buy);
+    expect(miami.sell - miami.buy).toBeGreaterThan(source.sell - source.buy);
+  });
+
+  it('the plug contract price is the cheapest standing buy in the game (Ideas2 §2)', () => {
+    for (const s of ['plug-a', 'plug-b', 'plug-c']) {
+      const state = createInitialState(s);
+      const buys = COUNTRY_IDS.map((c) => ({
+        country: c,
+        plug: requiresPlug(c, 'cocaine'),
+        buy: getMarketPrice(state, 'cocaine', c).buy,
+      }));
+      const cheapest = buys.reduce((lo, b) => (b.buy < lo.buy ? b : lo));
+      expect(cheapest.plug).toBe(true);
+      // The plug buy is flagged and drift-free at base.
+      expect(getMarketPrice(state, 'cocaine', 'colombia').plugPriced).toBe(true);
+    }
   });
 
   it('starts flat at base (factor 1) and reports volatility from the board', () => {
     const state = createInitialState('flat');
     for (const product of PRODUCT_IDS) {
-      const price = getMarketPrice(state, product, 'source');
+      const price = getMarketPrice(state, product, homeId(state));
       expect(price.trend).toBe('flat');
       expect(price.volatility).toBeGreaterThanOrEqual(0.2);
       expect(price.volatility).toBeLessThanOrEqual(0.5);
+    }
+  });
+
+  it('prices are visible for EVERY country — visibility is never gated', () => {
+    const state = createInitialState('visible');
+    for (const country of COUNTRY_IDS) {
+      for (const product of PRODUCT_IDS) {
+        const price = getMarketPrice(state, product, country);
+        expect(price.buy).toBeGreaterThan(0);
+        expect(price.sell).toBeGreaterThan(0);
+      }
     }
   });
 });
@@ -72,10 +119,10 @@ describe('computeBustProbability — clamp and fairness', () => {
     const calm = seed(createInitialState('calm'), { heat: 0 });
     const hot = seed(createInitialState('hot'), { heat: 100 });
     for (const product of PRODUCT_IDS) {
-      for (const loc of LOCATION_IDS) {
+      for (const country of COUNTRY_IDS) {
         for (const qty of [1, 50, 500]) {
-          const pCalm = computeBustProbability(calm, product, qty, loc);
-          const pHot = computeBustProbability(hot, product, qty, loc);
+          const pCalm = computeBustProbability(calm, product, qty, country);
+          const pHot = computeBustProbability(hot, product, qty, country);
           for (const p of [pCalm, pHot]) {
             expect(p).toBeGreaterThanOrEqual(BUST_MIN);
             expect(p).toBeLessThanOrEqual(BUST_MAX);
@@ -91,16 +138,16 @@ describe('computeBustProbability — clamp and fairness', () => {
       ...seed(createInitialState('floor'), { heat: 0 }),
       crew: [spawnCrew('deon', { id: 'c1', loyalty: 100 })],
     };
-    expect(computeBustProbability(calm, 'weed', 1, 'source')).toBe(BUST_MIN);
+    expect(computeBustProbability(calm, 'weed', 1, 'marigot-bay')).toBe(BUST_MIN);
     const hot = seed(createInitialState('ceil'), { heat: 100 });
-    expect(computeBustProbability(hot, 'arms', 500, 'wholesale')).toBe(BUST_MAX);
+    expect(computeBustProbability(hot, 'arms', 500, 'miami')).toBe(BUST_MAX);
   });
 });
 
 describe('resolveDeal — buy', () => {
   it('spends dirty cash and adds located inventory', () => {
     const state = seed(createInitialState('buy'), { cash: 100_000 });
-    const price = getMarketPrice(state, 'weed', 'source');
+    const price = getMarketPrice(state, 'weed', homeId(state));
     const result = resolveDeal(state, { type: 'buy', product: 'weed', qty: 10 });
 
     expect(result.outcome).toBe('success');
@@ -129,6 +176,41 @@ describe('resolveDeal — buy', () => {
     expect(capped.rejected).toBe('insufficient-capacity');
     expect(capped.state).toBe(full);
   });
+
+  it('rejects a product with no market in the stash country (Ideas2 §5)', () => {
+    // Meth never fronts on an island corner — the home stash is Caribbean.
+    const state = seed(createInitialState('culture'), { cash: 1_000_000 });
+    const result = resolveDeal(state, { type: 'buy', product: 'meth', qty: 1 });
+    expect(result.rejected).toBe('not-traded');
+    expect(result.state).toBe(state);
+  });
+
+  it('a true source requires the plug; with it, buys land at the contract price', () => {
+    const base = withStashIn(seed(createInitialState('plug'), {}), 'colombia', {
+      cash: 1_000_000,
+    });
+    const gated = resolveDeal(base, {
+      type: 'buy',
+      product: 'cocaine',
+      qty: 10,
+      stashId: 'stash-colombia',
+    });
+    expect(gated.rejected).toBe('no-plug');
+    expect(gated.state).toBe(base);
+
+    const connected: GameState = { ...base, plugs: ['colombia'] };
+    const price = getMarketPrice(connected, 'cocaine', 'colombia');
+    const bought = resolveDeal(connected, {
+      type: 'buy',
+      product: 'cocaine',
+      qty: 10,
+      stashId: 'stash-colombia',
+    });
+    expect(bought.outcome).toBe('success');
+    expect(bought.cashDelta).toBe(-price.buy * 10);
+    const stash = bought.state.stashes.find((s) => s.id === 'stash-colombia')!;
+    expect(stash.inventory.cocaine).toBe(10);
+  });
 });
 
 describe('resolveDeal — sell (fairness law, GDD §8)', () => {
@@ -149,7 +231,7 @@ describe('resolveDeal — sell (fairness law, GDD §8)', () => {
       inventory: { weed: 500 },
       cash: 0,
     });
-    const p = computeBustProbability(base, 'weed', 1, 'source');
+    const p = computeBustProbability(base, 'weed', 1, homeId(base));
 
     const N = 100_000;
     let busts = 0;
@@ -172,7 +254,7 @@ describe('resolveDeal — sell (fairness law, GDD §8)', () => {
       cash: 1000,
     });
     expect(hasBankedWin(state)).toBe(false);
-    const price = getMarketPrice(state, 'weed', 'source');
+    const price = getMarketPrice(state, 'weed', homeId(state));
     const result = resolveDeal(state, { type: 'sell', product: 'weed', qty: 5 });
 
     // Not guaranteed, but with BUST_MIN floor at heat 0 a bust is rare; assert the
@@ -194,37 +276,35 @@ describe('resolveDeal — sell (fairness law, GDD §8)', () => {
   });
 
   it('a bust seizes cash + product only at the deal’s stash and spikes heat', () => {
-    // Two stashes: the deal targets the home stash; the other must be untouched.
-    const start = seed(createInitialState('bust'), {
-      heat: 50,
+    // Two stashes: the deal targets the Miami foothold; home must be untouched.
+    const start = seed(createInitialState('bust'), { heat: 50, cash: 9999 });
+    const base = withStashIn(start, 'miami', {
       cash: 5000,
       inventory: { cocaine: 200 },
     });
-    const other: Stash = {
-      id: 'stash-other',
-      name: 'Other',
-      countryId: 'elsewhere',
-      type: 'floor',
-      dirtyCash: 9999,
-      inventory: { ...(start.stashes[0] as Stash).inventory, cocaine: 100 },
-    };
-    const base: GameState = { ...start, stashes: [start.stashes[0] as Stash, other] };
+    const homeBefore = base.stashes[0] as Stash;
 
-    // Advance the RNG until a bust lands (p ≈ 0.44 at wholesale), holding funds fixed.
+    // Advance the RNG until a bust lands (p ≈ 0.44 in hot Miami), holding funds fixed.
+    const intent = {
+      type: 'sell',
+      product: 'cocaine',
+      qty: 50,
+      stashId: 'stash-miami',
+    } as const;
     let rngState = base.rngState;
-    let bust = resolveDeal(base, { type: 'sell', product: 'cocaine', qty: 50, location: 'wholesale' });
+    let bust = resolveDeal(base, intent);
     for (let i = 0; i < 1000 && bust.outcome !== 'bust'; i++) {
       const trial: GameState = { ...base, rngState };
-      bust = resolveDeal(trial, { type: 'sell', product: 'cocaine', qty: 50, location: 'wholesale' });
+      bust = resolveDeal(trial, intent);
       rngState = bust.state.rngState;
     }
     expect(bust.outcome).toBe('bust');
 
     const home = bust.state.stashes[0] as Stash;
-    const untouched = bust.state.stashes[1] as Stash;
-    expect(home.dirtyCash).toBe(0); // staked cash seized
-    expect(home.inventory.cocaine).toBe(150); // 200 − 50 moved product lost
-    expect(untouched).toEqual(other); // the other location is not touched
+    const seized = bust.state.stashes.find((s) => s.id === 'stash-miami')!;
+    expect(seized.dirtyCash).toBe(0); // staked cash seized
+    expect(seized.inventory.cocaine).toBe(150); // 200 − 50 moved product lost
+    expect(home).toEqual(homeBefore); // the other location is not touched
     expect(bust.state.heat).toBeGreaterThan(50); // heat spikes on a bust
     expect(bust.cashDelta).toBe(-5000);
   });
@@ -235,10 +315,10 @@ describe('driftPrices — bounded live walk (design/01 §2)', () => {
     let state = createInitialState('drift');
     for (let i = 0; i < 50; i++) state = tick(state, 24); // 50 days of drift
 
-    for (const loc of LOCATION_IDS) {
+    for (const country of COUNTRY_IDS) {
       for (const product of PRODUCT_IDS) {
-        const base = getMarketPrice(createInitialState('drift'), product, loc);
-        const live = getMarketPrice(state, product, loc);
+        const base = getMarketPrice(createInitialState('drift'), product, country);
+        const live = getMarketPrice(state, product, country);
         const vol = live.volatility;
         // buy/sell stay within the volatility band around their (flat) base.
         expect(live.buy).toBeGreaterThanOrEqual(Math.floor(base.buy * (1 - vol)));
@@ -246,6 +326,13 @@ describe('driftPrices — bounded live walk (design/01 §2)', () => {
         expect(['up', 'down', 'flat']).toContain(live.trend);
       }
     }
+  });
+
+  it('a plug contract buy price never drifts (Ideas2 §2 — fixed and readable)', () => {
+    let state = createInitialState('plug-drift');
+    const contract = getMarketPrice(state, 'cocaine', 'colombia').buy;
+    for (let i = 0; i < 30; i++) state = tick(state, 24);
+    expect(getMarketPrice(state, 'cocaine', 'colombia').buy).toBe(contract);
   });
 
   it('does not advance the clock or run offline (frozen while away)', () => {
@@ -266,7 +353,7 @@ describe('determinism (Prompt 04 acceptance)', () => {
       });
       const script: Parameters<typeof applyIntent>[1][] = [
         { type: 'buy', product: 'weed', qty: 5 },
-        { type: 'sell', product: 'weed', qty: 3, location: 'mid-route' },
+        { type: 'sell', product: 'weed', qty: 3 },
         { type: 'buy', product: 'cocaine', qty: 2 },
       ];
       for (const intent of script) s = applyIntent(s, intent);

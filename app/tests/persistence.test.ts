@@ -90,6 +90,59 @@ describe('migrateEnvelope — schema version + migration hook', () => {
     expect(migrateEnvelope({ ...envelope, schemaVersion: SCHEMA_VERSION + 1 })).toBeNull();
   });
 
+  it('migrates a v7 save to regional markets (v8: plugs, roster, world — design/11)', () => {
+    // A pre-v8 save: no plugs, only the original four products anywhere, markets
+    // keyed by the old abstract route legs, world without strain/demand data.
+    const v7Inventory = { weed: 3, synthetics: 0, cocaine: 2, arms: 0 };
+    const v7World = {
+      ...state.world,
+      priceBoards: state.world.priceBoards.filter((b) =>
+        ['weed', 'synthetics', 'cocaine', 'arms'].includes(b.product),
+      ),
+      supplierGeography: state.world.supplierGeography
+        .filter((s) => ['san-cristo', 'puerto-verde'].includes(s.countryId))
+        .map(({ demandFactor: _drop, ...rest }) => rest),
+    } as Record<string, unknown>;
+    delete v7World.exoticStrain;
+    const legacy = {
+      ...state,
+      world: v7World,
+      markets: { source: {}, 'mid-route': {}, wholesale: {} },
+      inventory: v7Inventory,
+      stashes: [{ ...state.stashes[0]!, inventory: v7Inventory }],
+    } as Record<string, unknown>;
+    delete legacy.plugs;
+
+    const migrated = migrateEnvelope({
+      ...envelope,
+      schemaVersion: 7,
+      state: legacy as unknown as GameState,
+    });
+    expect(migrated).not.toBeNull();
+    // Plugs start empty; the new products exist everywhere at 0; holdings survive.
+    expect(migrated?.plugs).toEqual([]);
+    expect(migrated?.stashes[0]?.inventory.crack).toBe(0);
+    expect(migrated?.stashes[0]?.inventory.weed).toBe(3);
+    expect(migrated?.inventory.cocaine).toBe(2);
+    // Markets re-keyed by country, fresh at base.
+    expect(migrated?.markets['san-cristo']?.weed).toEqual({ factor: 1, prevFactor: 1 });
+    expect(migrated?.markets.source).toBeUndefined();
+    // The world grew boards for the new roster + strain + full supplier coverage.
+    expect(migrated?.world.priceBoards.map((b) => b.product)).toContain('crack');
+    expect(migrated?.world.exoticStrain).toBeTruthy();
+    expect(migrated?.world.supplierGeography.map((s) => s.countryId)).toContain(
+      'miami',
+    );
+    // Deterministic: migrating the same save twice yields the same state.
+    expect(
+      migrateEnvelope({
+        ...envelope,
+        schemaVersion: 7,
+        state: legacy as unknown as GameState,
+      }),
+    ).toEqual(migrated);
+  });
+
   it('migrates a v2 save up to the heat engine (Prompt 05 fields defaulted)', () => {
     // A pre-Prompt-05 save: heat sitting in DEA range, no heat-engine fields.
     const legacy = { ...state, heat: 45 } as Record<string, unknown>;

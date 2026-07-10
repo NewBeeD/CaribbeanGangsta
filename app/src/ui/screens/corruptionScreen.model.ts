@@ -21,13 +21,15 @@ import {
   HAGGLE_REFUSE_CHANCE,
   OFFICIALS,
   PRODUCT_IDS,
-  SOURCE_LOCATION,
+  boardFor,
   getMarketPrice,
   getStashType,
+  isTraded,
   quoteBribe,
   type GameState,
   type OfficialId,
   type OfficialTie,
+  type ProductId,
   type Stash,
 } from '@/engine';
 
@@ -53,11 +55,17 @@ function portStashes(state: GameState): readonly Stash[] {
  * so the shown ask matches what `payBribe` charges.
  */
 export function shipmentValueAt(state: GameState, countryId: string): number {
+  // Units are valued at THIS country's live sell price; a product with no local
+  // market (Ideas2 §5 regional cultures) is valued at its global source board.
+  const sellPrice = (s: Stash, id: ProductId): number =>
+    isTraded(s.countryId, id)
+      ? getMarketPrice(state, id, s.countryId).sell
+      : Math.round(boardFor(state.world, id).sell);
   return portStashes(state)
     .filter((s) => s.countryId === countryId)
     .reduce((sum, s) => {
       const product = PRODUCT_IDS.reduce(
-        (v, id) => v + s.inventory[id] * getMarketPrice(state, id, SOURCE_LOCATION).sell,
+        (v, id) => v + (s.inventory[id] ?? 0) * sellPrice(s, id),
         0,
       );
       return sum + s.dirtyCash + product;

@@ -6,7 +6,7 @@ import {
   restoreRng,
   getMarketPrice,
   PRODUCT_IDS,
-  LOCATION_IDS,
+  COUNTRY_IDS,
   // chaos — config
   CHAOS_EVENTS,
   getChaosEvent,
@@ -37,11 +37,11 @@ function firedEvent(id: (typeof CHAOS_EVENTS)[number]['id']): ChaosEvent {
 
 /** Assert every market factor stays inside the `1 ± volatility` band (bounded). */
 function expectFactorsInBand(state: GameState): void {
-  for (const location of LOCATION_IDS) {
+  for (const country of COUNTRY_IDS) {
     for (const product of PRODUCT_IDS) {
       const vol =
         state.world.priceBoards.find((b) => b.product === product)?.volatility ?? 0;
-      const { factor } = state.markets[location][product];
+      const { factor } = state.markets[country]![product];
       expect(factor).toBeGreaterThanOrEqual(1 - vol - 1e-9);
       expect(factor).toBeLessThanOrEqual(1 + vol + 1e-9);
     }
@@ -91,8 +91,8 @@ describe('chaos — bounded, estimable effects (GDD §5.4)', () => {
     const after = applyChaos(base, firedEvent('supply-crash'));
     expectFactorsInBand(after);
     // A price actually moved up somewhere.
-    const before = getMarketPrice(base, PRODUCT_IDS[0]!, LOCATION_IDS[0]!);
-    const now = getMarketPrice(after, PRODUCT_IDS[0]!, LOCATION_IDS[0]!);
+    const before = getMarketPrice(base, PRODUCT_IDS[0]!, COUNTRY_IDS[0]!);
+    const now = getMarketPrice(after, PRODUCT_IDS[0]!, COUNTRY_IDS[0]!);
     expect(now.sell).toBeGreaterThanOrEqual(before.sell);
   });
 

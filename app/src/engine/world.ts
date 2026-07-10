@@ -1,28 +1,43 @@
 /**
- * Per-run world generation (design/01 §0a; GDD §5.4).
+ * Per-run world generation (design/01 §0a; design/11; GDD §5.4).
  *
  * `generateWorld(rng)` turns a seed into a fully-specified, *playable and
- * readable* world: a starting country and its economy, resolved price boards, a
- * rival roster, a chaos sub-seed, and supplier geography. Each run differs; the
- * player's SKILL (reading the board) is what transfers — the world is what
+ * readable* world: a starting island and its economy, the global source price
+ * board, a per-country supplier geography (cost/demand/heat factors), a rival
+ * roster, a chaos sub-seed, and the run's exotic strain name. Each run differs;
+ * the player's SKILL (reading the board) is what transfers — the world is what
  * varies (design/01 §0.1).
+ *
+ * Pricing model (design/11 §1): one GLOBAL source board per product (resolved
+ * within its documented band) + geography. A country's local base price is the
+ * board stretched by the region distance from the product's source region
+ * (per-product elasticity — cocaine widens hard) and scaled by the country's
+ * per-run cost/demand factors and fixed product flavor. `basePriceAt` is that
+ * projection; the live drift factor on top of it is owned by `deals.ts`.
  *
  * Determinism: every draw comes from independent `rng.fork()` sub-streams, so
  * one facet's rolls can never desync another's, and the same seed always yields
  * a deep-equal `World`.
  *
  * Fairness: the world is fully describable to the player — `describeStartingHand`
- * surfaces the starting hand with no concealed modifiers (GDD §5.4).
+ * surfaces the starting hand with no concealed modifiers (GDD §5.4), and every
+ * country's prices are visible from minute one (Ideas2 §2/§3 — the world market
+ * board is open; money and geography are the only gates).
  */
 
-import type { Rng } from './rng';
+import { createRng, type Rng } from './rng';
 import {
   COUNTRIES,
   PRODUCT_PRICE_BANDS,
+  REGION_DISTANCE,
+  START_COUNTRIES,
+  getCountry,
+  requiresPlug,
   type Band,
   type CountryConfig,
   type ProductId,
 } from './config/countries';
+import { EXOTIC_STRAINS, getProduct } from './config/products';
 import {
   RIVAL_ARCHETYPES,
   RIVAL_COUNT,
@@ -33,11 +48,11 @@ export const VOLATILITY_RANGE: Band = { min: 0.2, max: 0.5 } as const;
 
 export interface ResolvedPrice {
   readonly product: ProductId;
-  /** Resolved local buy base, $/unit — always within the product's buy band. */
+  /** Resolved global source buy base, $/unit — always within the product's buy band. */
   readonly buy: number;
-  /** Resolved local wholesale sell base, $/unit — within the product's sell band. */
+  /** Resolved global source sell base, $/unit — within the product's sell band. */
   readonly sell: number;
-  /** Per-market price swing ∈ [0.20, 0.50]; live price = base × (1 ± volatility). */
+  /** Per-product price swing ∈ [0.20, 0.50]; live price = base × (1 ± volatility). */
   readonly volatility: number;
 }
 
@@ -65,8 +80,10 @@ export interface Rival {
 
 export interface SupplierMarket {
   readonly countryId: string;
-  /** <1 = a cheap source this run, >1 = expensive. */
+  /** Buy-side factor: <1 = a cheap source this run, >1 = expensive. */
   readonly costFactor: number;
+  /** Sell-side factor: >1 = strong demand this run (better sell prices). */
+  readonly demandFactor: number;
   /** >1 = a hot source this run (more heat to source from here). */
   readonly heatFactor: number;
   readonly cheap: boolean;
@@ -79,26 +96,14 @@ export interface World {
   /** The seed this world was generated from (for display / replay). */
   readonly seed: string;
   readonly startingCountry: StartingCountry;
+  /** The GLOBAL source price board, one entry per product (design/11 §1). */
   readonly priceBoards: readonly ResolvedPrice[];
   readonly rivals: readonly Rival[];
   /** Sub-seed handed to the Chaos Engine (Prompt 12) for reproducible timing. */
   readonly eventSeed: number;
   readonly supplierGeography: SupplierGeography;
-}
-
-function clamp(value: number, lo: number, hi: number): number {
-  return value < lo ? lo : value > hi ? hi : value;
-}
-
-/**
- * Resolve a base price inside `band`, biased by a country `multiplier` band, and
- * clamped so the result never leaves `band` (design/01 §2a acceptance).
- */
-function resolvePrice(rng: Rng, band: Band, multiplier: Band): number {
-  const mult = rng.float(multiplier.min, multiplier.max);
-  const effMin = clamp(band.min * mult, band.min, band.max);
-  const effMax = clamp(band.max * mult, band.min, band.max);
-  return rng.float(effMin, effMax);
+  /** This run's premium weed strain name — the `exotic` product's shelf name. */
+  readonly exoticStrain: string;
 }
 
 function resolveCountry(rng: Rng, config: CountryConfig): StartingCountry {
@@ -112,19 +117,13 @@ function resolveCountry(rng: Rng, config: CountryConfig): StartingCountry {
   };
 }
 
-function resolvePriceBoards(
-  rng: Rng,
-  config: CountryConfig,
-): readonly ResolvedPrice[] {
-  return PRODUCT_PRICE_BANDS.map((product) => {
-    const multiplier = config.priceMultipliers[product.id];
-    return {
-      product: product.id,
-      buy: resolvePrice(rng, product.buy, multiplier),
-      sell: resolvePrice(rng, product.sell, multiplier),
-      volatility: rng.float(VOLATILITY_RANGE.min, VOLATILITY_RANGE.max),
-    };
-  });
+function resolvePriceBoards(rng: Rng): readonly ResolvedPrice[] {
+  return PRODUCT_PRICE_BANDS.map((product) => ({
+    product: product.id,
+    buy: rng.float(product.buy.min, product.buy.max),
+    sell: rng.float(product.sell.min, product.sell.max),
+    volatility: rng.float(VOLATILITY_RANGE.min, VOLATILITY_RANGE.max),
+  }));
 }
 
 function resolveRivals(rng: Rng): readonly Rival[] {
@@ -151,13 +150,27 @@ function resolveRivals(rng: Rng): readonly Rival[] {
   return rivals;
 }
 
+/** A neutral supplier entry (also the fallback for legacy/foreign country ids). */
+export function neutralSupplier(countryId: string): SupplierMarket {
+  return {
+    countryId,
+    costFactor: 1,
+    demandFactor: 1,
+    heatFactor: 1,
+    cheap: false,
+    hot: false,
+  };
+}
+
 function resolveSupplierGeography(rng: Rng): SupplierGeography {
   return COUNTRIES.map((country) => {
-    const costFactor = rng.float(0.8, 1.2);
+    const costFactor = rng.float(country.costBias.min, country.costBias.max);
+    const demandFactor = rng.float(country.demandBias.min, country.demandBias.max);
     const heatFactor = rng.float(0.8, 1.5);
     return {
       countryId: country.id,
       costFactor,
+      demandFactor,
       heatFactor,
       cheap: costFactor < 0.95,
       hot: heatFactor > 1.2,
@@ -165,14 +178,17 @@ function resolveSupplierGeography(rng: Rng): SupplierGeography {
   });
 }
 
-/** Generate a full per-run world from a seeded RNG (design/01 §0a). */
+/** Generate a full per-run world from a seeded RNG (design/01 §0a; design/11). */
 export function generateWorld(rng: Rng): World {
-  const country = rng.fork('country').pick(COUNTRIES);
+  // Only the Caribbean home islands are start-eligible (design/11 §1); the wider
+  // world is reachable through footholds and plugs, never as a spawn.
+  const country = rng.fork('country').pick(START_COUNTRIES);
   const startingCountry = resolveCountry(rng.fork('country-resolve'), country);
-  const priceBoards = resolvePriceBoards(rng.fork('prices'), country);
+  const priceBoards = resolvePriceBoards(rng.fork('prices'));
   const rivals = resolveRivals(rng.fork('rivals'));
   const eventSeed = rng.fork('events').int(0, 2_147_483_647);
   const supplierGeography = resolveSupplierGeography(rng.fork('suppliers'));
+  const exoticStrain = rng.fork('strain').pick(EXOTIC_STRAINS);
 
   return {
     seed: rng.getState().key,
@@ -181,7 +197,140 @@ export function generateWorld(rng: Rng): World {
     rivals,
     eventSeed,
     supplierGeography,
+    exoticStrain,
   };
+}
+
+/**
+ * A pre-v8 world as stored in old saves: only the original four products on the
+ * board, suppliers without `demandFactor`, and no `exoticStrain`. Used by the
+ * v7→v8 persistence migration.
+ */
+export interface LegacyWorld
+  extends Omit<World, 'supplierGeography' | 'exoticStrain'> {
+  readonly supplierGeography: readonly (Omit<SupplierMarket, 'demandFactor'> & {
+    readonly demandFactor?: number;
+  })[];
+  readonly exoticStrain?: string;
+}
+
+/**
+ * Upgrade a pre-v8 world to the regional-markets shape (design/11): resolve
+ * boards for the products the save has never seen, extend the supplier
+ * geography to the full roster with per-country demand factors, and draw the
+ * run's exotic strain. Deterministic from the save's own seed (a dedicated
+ * `::migrate-v8` stream), so migrating the same save twice yields the same
+ * world. Everything the old save already resolved is preserved verbatim.
+ */
+export function hydrateLegacyWorld(legacy: LegacyWorld): World {
+  const rng = createRng(`${legacy.seed}::migrate-v8`);
+
+  const priceBoards: ResolvedPrice[] = PRODUCT_PRICE_BANDS.map((band) => {
+    const existing = legacy.priceBoards.find((b) => b.product === band.id);
+    if (existing) return existing;
+    return {
+      product: band.id,
+      buy: rng.float(band.buy.min, band.buy.max),
+      sell: rng.float(band.sell.min, band.sell.max),
+      volatility: rng.float(VOLATILITY_RANGE.min, VOLATILITY_RANGE.max),
+    };
+  });
+
+  const supplierGeography: SupplierMarket[] = COUNTRIES.map((country) => {
+    const existing = legacy.supplierGeography.find(
+      (s) => s.countryId === country.id,
+    );
+    const demandFactor =
+      existing?.demandFactor ??
+      rng.float(country.demandBias.min, country.demandBias.max);
+    if (existing) return { ...existing, demandFactor };
+    const costFactor = rng.float(country.costBias.min, country.costBias.max);
+    const heatFactor = rng.float(0.8, 1.5);
+    return {
+      countryId: country.id,
+      costFactor,
+      demandFactor,
+      heatFactor,
+      cheap: costFactor < 0.95,
+      hot: heatFactor > 1.2,
+    };
+  });
+
+  return {
+    ...legacy,
+    priceBoards,
+    supplierGeography,
+    exoticStrain: legacy.exoticStrain ?? rng.pick(EXOTIC_STRAINS),
+  };
+}
+
+// --- Price projection (design/11 §1) -----------------------------------------
+
+/** The run's resolved global source board for `product` (throws if absent). */
+export function boardFor(world: World, product: ProductId): ResolvedPrice {
+  const board = world.priceBoards.find((b) => b.product === product);
+  if (!board) throw new Error(`boardFor(): no price board for "${product}"`);
+  return board;
+}
+
+function supplierFor(world: World, countryId: string): SupplierMarket {
+  return (
+    world.supplierGeography.find((s) => s.countryId === countryId) ??
+    neutralSupplier(countryId)
+  );
+}
+
+export interface BasePrice {
+  /** Local base buy price, $/unit (before live drift). */
+  readonly buy: number;
+  /** Local base sell price, $/unit (before live drift). */
+  readonly sell: number;
+  readonly volatility: number;
+  /** True when the buy side is the plug's fixed contract price (Ideas2 §2). */
+  readonly plugPriced: boolean;
+}
+
+/**
+ * The BASE local price of `product` at `countryId` (design/11 §1): the global
+ * source board stretched by region distance from the product's source region
+ * (per-product elasticity), scaled by the country's per-run cost/demand factors
+ * and fixed product flavor. At a TRUE SOURCE (`plugFor`), the buy side is the
+ * plug's fixed contract price — `board.buy × plugPriceFactor`, the cheapest
+ * standing price in the game, drift-free and readable (Ideas2 §2).
+ *
+ * Live prices are this base × the country's drift factor (`deals.getMarketPrice`);
+ * prices are computable for EVERY country — visibility is never gated, only
+ * deal execution is (`isTraded` / the plug).
+ */
+export function basePriceAt(
+  world: World,
+  product: ProductId,
+  countryId: string,
+): BasePrice {
+  const cfg = getProduct(product);
+  const country = getCountry(countryId);
+  const board = boardFor(world, product);
+  const supplier = supplierFor(world, countryId);
+  const bias = country.productBias?.[product] ?? 1;
+  const dist = REGION_DISTANCE[country.region][cfg.sourceRegion];
+
+  const plugPriced = requiresPlug(countryId, product);
+  const buy = plugPriced
+    ? board.buy * (country.plugPriceFactor ?? 1)
+    : board.buy * (1 + dist * cfg.buyDistanceElasticity) * supplier.costFactor * bias;
+  const sell =
+    board.sell *
+    (1 + dist * cfg.sellDistanceElasticity) *
+    supplier.demandFactor *
+    bias;
+
+  return { buy, sell, volatility: board.volatility, plugPriced };
+}
+
+/** The shelf name a product renders under — the run's strain for `exotic`. */
+export function productDisplayName(world: World, product: ProductId): string {
+  if (product === 'exotic') return world.exoticStrain;
+  return getProduct(product).name;
 }
 
 export interface StartingHand {
@@ -190,7 +339,7 @@ export interface StartingHand {
   readonly heatBaseline: number;
   readonly portProtection: number;
   readonly openingHooks: readonly string[];
-  /** The cheapest product to buy into — the obvious first move. */
+  /** The cheapest LOCALLY TRADED product to buy into — the obvious first move. */
   readonly cheapestProduct: { readonly product: ProductId; readonly buy: number };
   readonly prices: readonly ResolvedPrice[];
   readonly rivals: readonly {
@@ -205,14 +354,17 @@ export interface StartingHand {
  * starting hand, no hidden traps). Pure projection of `World`, nothing hidden.
  */
 export function describeStartingHand(world: World): StartingHand {
-  const cheapest = world.priceBoards.reduce((lo, p) => (p.buy < lo.buy ? p : lo));
+  const home = getCountry(world.startingCountry.id);
+  const cheapest = home.traded
+    .map((id) => ({ product: id, buy: basePriceAt(world, id, home.id).buy }))
+    .reduce((lo, p) => (p.buy < lo.buy ? p : lo));
   return {
     country: world.startingCountry.name,
     startingCash: world.startingCountry.startingCash,
     heatBaseline: world.startingCountry.heatBaseline,
     portProtection: world.startingCountry.portProtection,
     openingHooks: world.startingCountry.openingHooks,
-    cheapestProduct: { product: cheapest.product, buy: cheapest.buy },
+    cheapestProduct: cheapest,
     prices: world.priceBoards,
     rivals: world.rivals.map((r) => ({
       name: r.name,

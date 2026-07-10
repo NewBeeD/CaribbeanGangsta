@@ -126,4 +126,12 @@ Copy this checklist into any PR touching player-facing loops:
 - `27_pwa_notifications_accessibility.md`
 - `28_integration_and_acceptance_pass.md`
 
+**Phase 4 — World expansion (Ideas2.md; design/11)**
+- `29_regional_markets_products_and_plugs.md` ✅ implemented (per-country
+  markets, 11-product roster, conversions, plugs, exotic strains, schema v8)
+- `30_travel_transport_and_couriers.md` (go-fast/ferry/plane shipments,
+  courier consignments & escorts)
+- `31_world_market_and_travel_ui.md` (world price board, plug/conversion/
+  shipment surfacing)
+
 Each prompt is written to be executed independently given its dependencies are done.
