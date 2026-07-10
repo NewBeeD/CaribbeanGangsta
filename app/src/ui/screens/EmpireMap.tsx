@@ -13,6 +13,7 @@
 
 import { useGameState, useGameStore } from '@/store';
 import { Button, Card, Panel, Stat } from '@/ui/components';
+import { ShipmentDesk } from './ShipmentDesk';
 import {
   EXPANSION_TYPE,
   cleanRate,
@@ -153,6 +154,9 @@ export function EmpireMap() {
           })}
         </div>
       </Card>
+
+      {/* Move product between countries — priced, risky, readable (Prompt 31). */}
+      <ShipmentDesk />
 
       <Panel heading="Empire at a glance">
         <div className="cg-label">

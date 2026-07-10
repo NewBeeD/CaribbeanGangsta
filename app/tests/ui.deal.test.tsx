@@ -7,8 +7,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   computeBustProbability,
   createInitialState,
+  emptyInventory,
+  getRecipe,
   type DealResult,
   type GameState,
+  type Stash,
 } from '@/engine';
 import { LocalSaveStore, useGameStore, type SaveStore } from '@/store';
 import { DealScreen, DealOutcome } from '@/ui/screens/DealScreen';
@@ -34,6 +37,16 @@ function mount(ui: JSX.Element) {
     click(el: Element) {
       act(() => {
         el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+    },
+    change(el: HTMLSelectElement, value: string) {
+      act(() => {
+        // Native setter so React's value tracker sees the change (controlled select).
+        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(
+          el,
+          value,
+        );
+        el.dispatchEvent(new Event('change', { bubbles: true }));
       });
     },
     unmount() {
@@ -123,6 +136,83 @@ describe('DealScreen — the outcome is a scene, not a toast (design/05 §4)', (
     // The store actually applied the buy (inventory now holds product).
     const after = useGameStore.getState().state!;
     expect(after.stashes[0]!.inventory.weed).toBeGreaterThan(0);
+    view.unmount();
+  });
+});
+
+describe('DealScreen — the kitchen (conversions, Prompt 31; Ideas2 §4)', () => {
+  it('shows the recipe config verbatim, commits through the store, and renders the scene', () => {
+    const base = createInitialState('deal-cook');
+    const state: GameState = {
+      ...base,
+      stashes: base.stashes.map((s, i) =>
+        i === 0
+          ? { ...s, dirtyCash: 10_000, inventory: { ...s.inventory, cocaine: 15 } }
+          : s,
+      ),
+    };
+    useGameStore.setState({ state });
+    const view = mount(<DealScreen />);
+
+    // Terms disclosed BEFORE commit — the recipe config, verbatim.
+    const recipe = getRecipe('cook-crack');
+    const terms = view.container.querySelector('[data-testid="convert-terms-cook-crack"]')!;
+    expect(terms.textContent).toContain(`${recipe.fromQty} cocaine`);
+    expect(terms.textContent).toContain(`$${recipe.costPerBatch.toLocaleString('en-US')}`);
+    expect(terms.textContent).toContain(`${recipe.toQty} crack`);
+    expect(terms.textContent).toContain(`+${recipe.heatPerBatch} heat`);
+
+    view.click(view.container.querySelector('[data-testid="convert-cook-crack"]')!);
+
+    // Outcome is the recipe's scene (never a toast) and the store really cooked.
+    expect(view.container.querySelector('.cg-scene')).not.toBeNull();
+    expect(view.container.textContent).toContain('Baking soda');
+    const home = useGameStore.getState().state!.stashes[0]!;
+    expect(home.inventory.crack).toBe(recipe.toQty);
+    expect(home.inventory.cocaine).toBe(15 - recipe.fromQty);
+    expect(home.dirtyCash).toBe(10_000 - recipe.costPerBatch);
+    view.unmount();
+  });
+});
+
+describe('DealScreen — market switcher & the plug gate as prose (Prompt 31)', () => {
+  /** A run with a Colombia foothold — a market where cocaine needs the plug. */
+  function stateWithColombia(seed: string): GameState {
+    const base = createInitialState(seed);
+    const colombia: Stash = {
+      id: 'stash-colombia',
+      name: 'Bogotá room',
+      countryId: 'colombia',
+      type: 'floor',
+      dirtyCash: 500_000,
+      inventory: emptyInventory(),
+    };
+    return { ...base, stashes: [...base.stashes, colombia] };
+  }
+
+  it('switching markets re-renders the board for that stash country and shows the gate prose', () => {
+    useGameStore.setState({ state: stateWithColombia('deal-switch') });
+    const view = mount(<DealScreen />);
+
+    // Switch the board to the Colombia stash's market.
+    const switcher = view.container.querySelector<HTMLSelectElement>(
+      '[data-testid="market-switcher"]',
+    )!;
+    expect(switcher).not.toBeNull();
+    view.change(switcher, 'stash-colombia');
+    expect(view.container.textContent).toContain('Colombia');
+
+    // Pick the gated product: the buy side reads as prose with the intro price.
+    const cocaineRow = [...view.container.querySelectorAll('button.cg-panel')].find((b) =>
+      b.textContent!.includes('Cocaine'),
+    )!;
+    view.click(cocaineRow);
+    expect(view.container.textContent).toContain('doesn’t sell cocaine to strangers');
+    expect(view.container.textContent).toContain('$220,000 buys the introduction');
+    // …with a jump to the plug flow, and the primary action disabled.
+    expect(view.container.querySelector('[data-testid="jump-to-plug"]')).not.toBeNull();
+    const primary = view.container.querySelector<HTMLButtonElement>('.cg-btn--primary')!;
+    expect(primary.disabled).toBe(true);
     view.unmount();
   });
 });

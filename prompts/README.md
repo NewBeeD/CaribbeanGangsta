@@ -131,7 +131,7 @@ Copy this checklist into any PR touching player-facing loops:
   markets, 11-product roster, conversions, plugs, exotic strains, schema v8)
 - `30_travel_transport_and_couriers.md` ✅ implemented (go-fast/ferry/plane
   shipments, courier consignments & escorts, schema v9)
-- `31_world_market_and_travel_ui.md` (world price board, plug/conversion/
-  shipment surfacing)
+- `31_world_market_and_travel_ui.md` ✅ implemented (World Market screen,
+  deal-screen market switcher & kitchen, shipment desk on the Empire map)
 
 Each prompt is written to be executed independently given its dependencies are done.

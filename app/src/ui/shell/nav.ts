@@ -13,6 +13,7 @@ export type ScreenId =
   | 'money'
   | 'heat'
   | 'empire'
+  | 'market'
   | 'storage'
   | 'corruption'
   | 'debt'
@@ -66,6 +67,13 @@ export const SCREEN_NODES: readonly ScreenNode[] = [
     route: 'empire',
     inNav: false,
     tagline: 'Your territory, at a glance.',
+  },
+  {
+    id: 'market',
+    label: 'Market',
+    route: 'market',
+    inNav: false,
+    tagline: 'Every price, every island, always.',
   },
   {
     id: 'storage',

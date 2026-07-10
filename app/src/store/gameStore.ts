@@ -68,6 +68,10 @@ import {
   type PesoExchangeResult,
 } from '@/engine/laundering';
 import { bribeToCoolHeat, setLieLow, type BribeCoolResult } from '@/engine/heat';
+import { buyPlug as buyPlugEngine, type PlugResult } from '@/engine/plugs';
+import { convert as convertEngine, type ConvertResult } from '@/engine/conversions';
+import type { RecipeId } from '@/engine/config/conversions';
+import { ship as shipEngine, type ShipIntent, type ShipResult } from '@/engine/travel';
 import {
   borrow as borrowEngine,
   repay as repayEngine,
@@ -249,6 +253,30 @@ export interface GameStore {
    * Autosaves so the cleared queue survives a refresh.
    */
   dismissPendingChoice(choiceId: string): void;
+  /**
+   * World-market actions (Prompt 31) — each wraps the pure engine, commits only
+   * when the operation lands, and autosaves. The UI authors no price/odds math;
+   * it shows the disclosed quote and dispatches the intent.
+   */
+  /**
+   * Buy the one-time plug intro to a true source (Ideas2 §2 — a pure money
+   * gate). Cost and meeting heat are disclosed by `plugQuote` BEFORE this is
+   * called; returns the full `PlugResult` so the outcome renders as a scene.
+   */
+  buyPlugIntro(countryId: string): PlugResult | null;
+  /**
+   * Run conversion batches at a stash (cook crack / press hash — Ideas2 §4).
+   * Deterministic, no roll; commits + autosaves only when it lands. Returns the
+   * full `ConvertResult` (consumed/produced/cost + scene key) or `null`.
+   */
+  convertProduct(recipe: RecipeId, batches: number, stashId?: string): ConvertResult | null;
+  /**
+   * Launch a cross-country shipment (Prompt 30/31). The quote — cost, cuts,
+   * eta, and the EXACT interdiction odds rolled on arrival — is disclosed by
+   * `quoteShipment` before commit (fairness law). Commits + autosaves only when
+   * the launch lands; returns the full `ShipResult` or `null`.
+   */
+  shipCargo(intent: ShipIntent): ShipResult | null;
   /** Advance the sim by `dtHours` of online in-game time. */
   tickBy(dtHours: number): void;
   /** Load a slot and settle any offline time since it was last played. */
@@ -557,6 +585,45 @@ export const useGameStore = create<GameStore>((set, get) => ({
       pendingChoices: state.pendingChoices.filter((c) => c.id !== choiceId),
     }));
     void get().persist(AUTOSAVE_SLOT).catch(() => {});
+  },
+
+  buyPlugIntro(countryId) {
+    const { state } = get();
+    if (!state) return null;
+    const result = buyPlugEngine(state, countryId);
+    // Only commit + autosave when the intro landed (funds sufficed, a real source).
+    if (result.ok) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  convertProduct(recipe, batches, stashId) {
+    const { state } = get();
+    if (!state) return null;
+    const intent =
+      stashId === undefined
+        ? ({ type: 'convert', recipe, batches } as const)
+        : ({ type: 'convert', recipe, batches, stashId } as const);
+    const result = convertEngine(state, intent);
+    if (result.ok) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  shipCargo(intent) {
+    const { state } = get();
+    if (!state) return null;
+    const result = shipEngine(state, intent);
+    // Only commit + autosave when the launch landed (validated + funded).
+    if (result.ok) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
   },
 
   tickBy(dtHours) {

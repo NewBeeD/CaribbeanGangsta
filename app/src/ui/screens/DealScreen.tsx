@@ -10,21 +10,26 @@
  */
 
 import { useState } from 'react';
-import type { DealResult } from '@/engine';
+import type { ConvertResult, DealResult } from '@/engine';
 import { useGameState, useGameStore } from '@/store';
 import { Button, Card, HeatDots, Panel, RiskMeter, SceneText, Stat, TrendArrow } from '@/ui/components';
 import { currentTier, tierDots } from '@/engine';
 import type { DealIntent, ProductId } from '@/engine';
+import { navigate } from '@/ui/shell/useHash';
 import {
   clampQty,
+  conversionRows,
+  dealStashes,
   defaultMode,
   defaultProduct,
-  homeStash,
   marketName,
   maxQty,
+  plugGateProse,
   productRows,
   sceneFor,
   sellBustProbability,
+  stashById,
+  type ConversionRow,
   type DealMode,
 } from './dealScreen.model';
 
@@ -76,12 +81,17 @@ export function DealScreen() {
   const [selected, setSelected] = useState<ProductId>(() => defaultProduct(state));
   const [mode, setMode] = useState<DealMode>(() => defaultMode(state, defaultProduct(state)));
   const [qty, setQty] = useState(1);
+  const [stashId, setStashId] = useState<string | null>(null);
   const [result, setResult] = useState<DealResult | null>(null);
+  const [cooked, setCooked] = useState<{ row: ConversionRow; result: ConvertResult } | null>(
+    null,
+  );
 
   // The shell only routes here with a live run; guard so hooks stay unconditional.
   if (!state) return null;
 
-  const stash = homeStash(state);
+  const stash = stashById(state, stashId);
+  const markets = dealStashes(state);
   const rows = productRows(state, stash);
   const row = rows.find((r) => r.id === selected) ?? rows[0]!;
 
@@ -101,7 +111,26 @@ export function DealScreen() {
     );
   }
 
-  const max = maxQty(mode, state, selected, stash);
+  // A finished conversion reads as its recipe's scene (design/05 §4).
+  if (cooked) {
+    return (
+      <Card heading={cooked.row.name}>
+        <SceneText tone="win">{cooked.row.prose}</SceneText>
+        <p className="cg-label" style={{ marginTop: 12 }}>
+          {cooked.result.consumed} {cooked.row.fromName.toLowerCase()} + {money(cooked.result.cost)}{' '}
+          → {cooked.result.produced} {cooked.row.toName.toLowerCase()}
+        </p>
+        <div style={{ marginTop: 16 }}>
+          <Button variant="primary" fullWidth onClick={() => setCooked(null)}>
+            Back to the corner
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
+  const plugBlocked = mode === 'buy' && row.plugGated;
+  const max = plugBlocked ? 0 : maxQty(mode, state, selected, stash);
   const clamped = clampQty(qty, max);
   const canAct = max > 0;
   // Buys don't roll a bust; the risk panel appears only for a sell (design/07 §1).
@@ -148,13 +177,38 @@ export function DealScreen() {
         <Button variant="ghost" onClick={() => window.history.back()} aria-label="Back">
           ‹ Back
         </Button>
-        <span className="cg-label">{marketName(stash)} · Local market</span>
+        {markets.length > 1 ? (
+          // Market switcher (Prompt 31): a stash you own = a market you stand in.
+          <select
+            className="cg-select"
+            aria-label="Market"
+            data-testid="market-switcher"
+            value={stash.id}
+            onChange={(e) => {
+              setStashId(e.target.value);
+              setQty(1);
+            }}
+          >
+            {markets.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.marketName} · {m.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="cg-label">{marketName(stash)} · Local market</span>
+        )}
         <HeatDots value={heat.filled} max={heat.total} tier={currentTier(state)} />
       </header>
 
       <Card heading="The board">
         <div style={{ marginBottom: 12 }}>
           <Stat label="Cash on hand" value={money(stash.dirtyCash)} tone="gold" big />
+          {state.cleanCash > 0 ? (
+            <p className="cg-label" style={{ marginTop: 4 }}>
+              + {money(state.cleanCash)} clean — spends here too
+            </p>
+          ) : null}
         </div>
 
         <div style={{ display: 'grid', gap: 8 }}>
@@ -187,7 +241,8 @@ export function DealScreen() {
                   <TrendArrow direction={r.trend} />
                 </div>
                 <div className="cg-label" style={{ marginTop: 4 }}>
-                  Buy {money(r.buy)} · Sell {money(r.sell)} ({r.marginPct >= 0 ? '+' : ''}
+                  {r.plugGated ? '🔌 ' : ''}Buy {money(r.buy)} · Sell {money(r.sell)} (
+                  {r.marginPct >= 0 ? '+' : ''}
                   {r.marginPct}%) · You hold {r.held}
                 </div>
               </button>
@@ -231,6 +286,19 @@ export function DealScreen() {
           </Panel>
         )}
 
+        {plugBlocked && (
+          // A true source sells to connections — the gate reads as prose with
+          // the price of fixing it, and a jump to the plug flow (Ideas2 §2).
+          <Panel heading="No plug">
+            <SceneText tone="default">{plugGateProse(row, marketName(stash))}</SceneText>
+            <div style={{ marginTop: 10 }}>
+              <Button variant="ghost" fullWidth onClick={() => navigate('market')} data-testid="jump-to-plug">
+                Meet the plug on the World Market →
+              </Button>
+            </div>
+          </Panel>
+        )}
+
         <div
           style={{
             display: 'flex',
@@ -256,12 +324,102 @@ export function DealScreen() {
           <small>
             {mode === 'sell'
               ? `${money(row.sell)} / unit`
-              : canAct
-                ? `${money(row.buy)} / unit`
-                : 'No room / no cash'}
+              : plugBlocked
+                ? 'Needs the plug'
+                : canAct
+                  ? `${money(row.buy)} / unit`
+                  : 'No room / no cash'}
           </small>
         </Button>
       </Card>
+
+      {/* The kitchen — cook crack / press hash at this stash (Ideas2 §4). */}
+      {conversionRows(state, stash).map((c) => (
+        <ConversionPanel
+          key={c.id}
+          row={c}
+          stashId={stash.id}
+          onDone={(convRow, convResult) => setCooked({ row: convRow, result: convResult })}
+        />
+      ))}
     </div>
+  );
+}
+
+/**
+ * One recipe's kitchen panel: a batch stepper clamped by the engine's
+ * `maxBatches`, with consumed/produced/cost/heat disclosed BEFORE commit
+ * (no dark patterns — the whole trade is on the label). Dispatches through
+ * the store; the outcome renders as the recipe's scene, never a toast.
+ */
+function ConversionPanel({
+  row,
+  stashId,
+  onDone,
+}: {
+  readonly row: ConversionRow;
+  readonly stashId: string;
+  readonly onDone: (row: ConversionRow, result: ConvertResult) => void;
+}) {
+  const [batches, setBatches] = useState(1);
+  const clamped = Math.min(Math.max(1, batches), Math.max(1, row.max));
+  const canCook = row.max > 0;
+
+  const cook = () => {
+    if (!canCook) return;
+    const result = useGameStore.getState().convertProduct(row.id, clamped, stashId);
+    if (result?.ok) onDone(row, result);
+  };
+
+  return (
+    <Card heading={row.name}>
+      <p className="cg-label" style={{ marginBottom: 10 }} data-testid={`convert-terms-${row.id}`}>
+        Per batch: {row.fromQty} {row.fromName.toLowerCase()} + {money(row.costPerBatch)} →{' '}
+        {row.toQty} {row.toName.toLowerCase()} · +{row.heatPerBatch} heat
+      </p>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 16,
+          margin: '6px 0 12px',
+        }}
+      >
+        <Button
+          variant="secondary"
+          onClick={() => setBatches((b) => Math.max(1, Math.min(b, row.max) - 1))}
+          disabled={!canCook}
+          aria-label="Fewer batches"
+        >
+          −
+        </Button>
+        <span className="cg-stat__value" aria-live="polite">
+          {canCook ? clamped : 0} batch{clamped === 1 && canCook ? '' : 'es'}
+        </span>
+        <Button
+          variant="secondary"
+          onClick={() => setBatches((b) => Math.min(row.max, Math.max(1, b) + 1))}
+          disabled={!canCook}
+          aria-label="More batches"
+        >
+          +
+        </Button>
+      </div>
+      <Button
+        variant="secondary"
+        fullWidth
+        onClick={cook}
+        disabled={!canCook}
+        data-testid={`convert-${row.id}`}
+      >
+        {row.name}
+        <small>
+          {canCook
+            ? `${clamped * row.fromQty} ${row.fromName.toLowerCase()} + ${money(clamped * row.costPerBatch)}`
+            : 'Not enough on hand'}
+        </small>
+      </Button>
+    </Card>
   );
 }

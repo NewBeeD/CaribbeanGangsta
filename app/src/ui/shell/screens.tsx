@@ -20,6 +20,7 @@ import { CrewScreen } from '@/ui/screens/CrewScreen';
 import { MoneyScreen } from '@/ui/screens/MoneyScreen';
 import { HeatScreen } from '@/ui/screens/HeatScreen';
 import { StorageScreen } from '@/ui/screens/StorageScreen';
+import { WorldMarketScreen } from '@/ui/screens/WorldMarketScreen';
 import { CorruptionScreen } from '@/ui/screens/CorruptionScreen';
 import { DebtScreen } from '@/ui/screens/DebtScreen';
 import { getScreenNode, type ScreenId } from './nav';
@@ -55,6 +56,7 @@ function PlaceholderScreen({ id, promptNo }: PlaceholderProps) {
 export const SCREENS: Readonly<Record<ScreenId, () => JSX.Element>> = {
   deals: () => <DealScreen />,
   empire: () => <EmpireMap />,
+  market: () => <WorldMarketScreen />,
   crew: () => <CrewScreen />,
   money: () => <MoneyScreen />,
   heat: () => <HeatScreen />,

@@ -17,18 +17,24 @@
  */
 
 import {
+  CONVERSION_RECIPES,
   PRODUCTS,
   computeBustProbability,
   getCountry,
   getMarketPrice,
   getStashType,
+  hasPlug,
   isTraded,
+  maxBatches,
+  plugQuote,
   productDisplayName,
+  requiresPlug,
   spendableAt,
   stashUnits,
   type GameState,
   type PriceTrend,
   type ProductId,
+  type RecipeId,
   type Stash,
 } from '@/engine';
 
@@ -38,6 +44,31 @@ export type DealMode = 'buy' | 'sell';
 /** The run's home stash — the default buy/sell target (design/07 §1). */
 export function homeStash(state: GameState): Stash {
   return state.stashes[0]!;
+}
+
+/** One choice on the market switcher: a stash you own = a market you stand in. */
+export interface StashChoice {
+  readonly id: string;
+  readonly name: string;
+  readonly marketName: string;
+}
+
+/**
+ * Every stash as a market choice (Prompt 31 — the market switcher). The engine
+ * already prices/validates by the stash's country (design/11 §1), so picking a
+ * stash IS picking the market the board renders and the deal executes in.
+ */
+export function dealStashes(state: GameState): readonly StashChoice[] {
+  return state.stashes.map((s) => ({
+    id: s.id,
+    name: s.name,
+    marketName: getCountry(s.countryId).name,
+  }));
+}
+
+/** The deal target for a picked stash id (falls back to the home stash). */
+export function stashById(state: GameState, stashId: string | null): Stash {
+  return state.stashes.find((s) => s.id === stashId) ?? homeStash(state);
 }
 
 /** The country market a deal at `stash` executes in (design/11 §1). */
@@ -66,10 +97,20 @@ export interface ProductRow {
   readonly trend: PriceTrend;
   /** Units of this product currently held in the target stash. */
   readonly held: number;
+  /**
+   * True when buying here needs the plug you don't hold yet (Ideas2 §2 — a
+   * true source sells to connections). Selling stays open; the buy gate reads
+   * as prose with the intro price, never a locked row.
+   */
+  readonly plugGated: boolean;
+  /** The one-time intro cost when `plugGated` (money is the only gate). */
+  readonly plugCost: number;
 }
 
 function productRow(state: GameState, product: ProductId, stash: Stash): ProductRow {
-  const price = getMarketPrice(state, product, marketCountryId(stash));
+  const countryId = marketCountryId(stash);
+  const price = getMarketPrice(state, product, countryId);
+  const plugGated = requiresPlug(countryId, product) && !hasPlug(state, countryId);
   return {
     id: product,
     name: productDisplayName(state.world, product),
@@ -78,7 +119,18 @@ function productRow(state: GameState, product: ProductId, stash: Stash): Product
     marginPct: marginPct(price.buy, price.sell),
     trend: price.trend,
     held: stash.inventory[product] ?? 0,
+    plugGated,
+    plugCost: plugGated ? (plugQuote(state, countryId)?.cost ?? 0) : 0,
   };
+}
+
+/**
+ * The no-plug reject reason as PROSE (Prompt 31) — the same fact the engine's
+ * `no-plug` rejection enforces, told in-world with the price of fixing it.
+ */
+export function plugGateProse(row: ProductRow, countryName: string): string {
+  const cost = `$${Math.round(row.plugCost).toLocaleString('en-US')}`;
+  return `${countryName} doesn’t sell ${row.name.toLowerCase()} to strangers — ${cost} buys the introduction.`;
 }
 
 /**
@@ -183,4 +235,44 @@ export const DEAL_SCENES: Readonly<Record<string, DealScene>> = {
 /** Resolve outcome prose for a scene key, with a neutral fallback. */
 export function sceneFor(sceneKey: string): DealScene {
   return DEAL_SCENES[sceneKey] ?? { tone: 'default', text: 'The deal is done.' };
+}
+
+// --- Conversions — cook crack / press hash (Prompt 31; Ideas2 §4) --------------
+
+/** One recipe's panel row: everything disclosed BEFORE commit (fairness). */
+export interface ConversionRow {
+  readonly id: RecipeId;
+  readonly name: string;
+  readonly fromName: string;
+  readonly toName: string;
+  /** Per-batch terms — the recipe config verbatim (config, not literals). */
+  readonly fromQty: number;
+  readonly toQty: number;
+  readonly costPerBatch: number;
+  readonly heatPerBatch: number;
+  /** The most batches this stash can run right now (units/cash/space). */
+  readonly max: number;
+  /** The completed-batch scene line (never a toast — design/05 §4). */
+  readonly prose: string;
+}
+
+/**
+ * Every recipe as a panel row for `stash` — shown whenever the stash holds any
+ * of the input (a kitchen is always an option; `max` is the honest clamp).
+ * Numbers are the recipe config verbatim; `max` is the engine's `maxBatches`,
+ * exactly what `convert` will accept.
+ */
+export function conversionRows(state: GameState, stash: Stash): readonly ConversionRow[] {
+  return CONVERSION_RECIPES.filter((r) => (stash.inventory[r.from] ?? 0) > 0).map((r) => ({
+    id: r.id,
+    name: r.name,
+    fromName: productDisplayName(state.world, r.from),
+    toName: productDisplayName(state.world, r.to),
+    fromQty: r.fromQty,
+    toQty: r.toQty,
+    costPerBatch: r.costPerBatch,
+    heatPerBatch: r.heatPerBatch,
+    max: maxBatches(r.id, stash, state.cleanCash),
+    prose: r.prose,
+  }));
 }

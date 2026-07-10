@@ -17,10 +17,12 @@ import {
   cleanCashRate,
   frontUpgradeCost,
   getFrontType,
+  plugQuotes,
   totalDirtyCash,
   type FrontType,
   type GameState,
 } from '@/engine';
+import { widestSpread } from '@/ui/screens/worldMarket.model';
 
 /** The always-present open loop shown at a stopping point (design/07 §3, GDD §11). */
 export interface OpenLoop {
@@ -63,6 +65,29 @@ function hasAffordableNewFront(state: GameState): boolean {
   return FRONT_TYPES.some((cfg) => state.cleanCash >= cfg.buyIn);
 }
 
+/** A cross-country spread must at least this-many-x the buy to be worth the line. */
+export const SPREAD_HOOK_MULTIPLE = 4;
+
+/**
+ * An affordable plug intro (Prompt 31; Ideas2 §2) — a REAL "one more day" move:
+ * the meeting is priced from minute one, and being able to pay it is news.
+ */
+function affordablePlugLine(state: GameState): string | null {
+  const quote = plugQuotes(state).find((q) => !q.connected && state.cleanCash >= q.cost);
+  if (!quote) return null;
+  const cost = `$${Math.round(quote.cost).toLocaleString('en-US')}`;
+  return `${quote.countryName} will take the meeting — ${cost} opens the source.`;
+}
+
+/** A wide cross-country margin on the world board (Prompt 31; Ideas2 §3). */
+function marginLine(state: GameState): string | null {
+  const spread = widestSpread(state);
+  if (!spread || spread.multiple < SPREAD_HOOK_MULTIPLE) return null;
+  const buy = `$${Math.round(spread.buy).toLocaleString('en-US')}`;
+  const sell = `$${Math.round(spread.sell).toLocaleString('en-US')}`;
+  return `${spread.productName} buys at ${buy} in ${spread.buyCountryName} and sells at ${sell} in ${spread.sellCountryName} — the water in between is the margin.`;
+}
+
 /**
  * The decision still open — the "something pending" signal (GDD §11). A queued scene
  * takes priority (it's a real choice waiting); otherwise the best move within reach,
@@ -71,8 +96,12 @@ function hasAffordableNewFront(state: GameState): boolean {
 function pendingDecision(state: GameState): string {
   const queued = state.pendingChoices[0];
   if (queued) return queued.summary;
+  const plug = affordablePlugLine(state);
+  if (plug) return plug;
   if (hasAffordableUpgrade(state)) return 'A front upgrade is within reach — more clean per hour.';
   if (hasAffordableNewFront(state)) return 'Open a front and it banks money while you’re gone.';
+  const margin = marginLine(state);
+  if (margin) return margin;
   if (totalDirtyCash(state) > 0) return 'Dirty cash is ready to wash into spendable clean.';
   const first = getFrontType(FRONT_TYPES[0]!.id);
   return `Save toward a ${first.name.toLowerCase()} — your first idle income.`;

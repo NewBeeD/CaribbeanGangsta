@@ -1,7 +1,7 @@
 # 11 — Regional Markets, Plugs, Travel & Product Lines
 
 **Source:** `Ideas2.md`, reconciled with the open-access rule (`Ideas.md`, design/01 §0)
-**Status:** §1, §2, §4, §5 implemented (Prompt 29). §3 travel/couriers implemented (Prompt 30 — `engine/travel.ts`, `config/transport.ts`, schema v9). UI surfacing by Prompt 31.
+**Status:** §1, §2, §4, §5 implemented (Prompt 29). §3 travel/couriers implemented (Prompt 30 — `engine/travel.ts`, `config/transport.ts`, schema v9). UI surfaced (Prompt 31 — World Market screen, deal-screen market switcher & conversions, shipment desk on the Empire map).
 
 This doc turns the five Ideas2 notes into mechanics that keep the three
 non-negotiables intact: **open access** (money is the only gate — never a time
