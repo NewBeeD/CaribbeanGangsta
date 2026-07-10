@@ -2,6 +2,7 @@ import { GlobalStyles } from '@/ui/theme';
 import { StyleGallery } from '@/ui/screens/StyleGallery';
 import { AppShell } from './AppShell';
 import { ErrorBoundary } from './ErrorBoundary';
+import { TelemetryOverlay } from './TelemetryOverlay';
 import { useHash } from './useHash';
 
 /**
@@ -21,6 +22,7 @@ export function App() {
       ) : (
         <ErrorBoundary>
           <AppShell />
+          <TelemetryOverlay />
         </ErrorBoundary>
       )}
     </>

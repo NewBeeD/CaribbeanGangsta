@@ -610,3 +610,78 @@ button {
   outline: 2px solid var(--cg-brass);
   outline-offset: 1px;
 }
+
+/* ------------------------------------------------- telemetry overlay (Prompt 25) */
+/* Dev-only instrument panel (design/06). Fixed over the shell, deliberately
+   utilitarian — it is a lab window, not part of the fiction. */
+.cg-telemetry__toggle {
+  position: fixed;
+  right: 8px;
+  bottom: 72px;
+  z-index: 60;
+  font: 600 11px/1 var(--cg-font-mono, monospace);
+  letter-spacing: 0.08em;
+  color: var(--cg-brass);
+  background: var(--cg-ink-750);
+  border: 1px solid var(--cg-line);
+  border-radius: var(--cg-radius-md);
+  padding: 6px 8px;
+  opacity: 0.75;
+  cursor: pointer;
+}
+.cg-telemetry {
+  position: fixed;
+  right: 8px;
+  bottom: 72px;
+  z-index: 60;
+  width: min(340px, calc(100vw - 16px));
+  max-height: min(60vh, 480px);
+  overflow-y: auto;
+  font: 11px/1.5 var(--cg-font-mono, monospace);
+  color: var(--cg-paper);
+  background: var(--cg-ink-750);
+  border: 1px solid var(--cg-line);
+  border-radius: var(--cg-radius-md);
+  padding: 8px 10px;
+}
+.cg-telemetry__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+.cg-telemetry__head button {
+  font: inherit;
+  color: var(--cg-brass);
+  background: none;
+  border: none;
+  cursor: pointer;
+  margin-left: 8px;
+}
+.cg-telemetry__funnel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 10px;
+  margin: 0 0 8px;
+}
+.cg-telemetry__funnel div {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+.cg-telemetry__funnel dt {
+  opacity: 0.65;
+}
+.cg-telemetry__funnel dd {
+  margin: 0;
+  text-align: right;
+}
+.cg-telemetry__log {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0 0;
+  border-top: 1px dashed var(--cg-line);
+}
+.cg-telemetry__log code {
+  color: var(--cg-brass);
+}

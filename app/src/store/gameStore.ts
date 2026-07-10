@@ -104,6 +104,21 @@ import {
   LEADERBOARD_MAX_ENTRIES,
   type Leaderboard,
 } from './leaderboard';
+import {
+  trackBorrow,
+  trackBribe,
+  trackCardChoice,
+  trackDeal,
+  trackFront,
+  trackOfficialHired,
+  trackOfflineSettled,
+  trackRepay,
+  trackRunEnded,
+  trackRunStarted,
+  trackSessionStart,
+  trackShipmentLaunched,
+  trackTick,
+} from '@/telemetry';
 
 const MS_PER_HOUR = 3_600_000;
 
@@ -447,7 +462,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   newGame(seed) {
     const runSeed = seed ?? `run-${Date.now()}-${runMint++}`;
-    set({ state: createInitialState(runSeed), lastOfflineReport: null, lastRunEnd: null });
+    const state = createInitialState(runSeed);
+    set({ state, lastOfflineReport: null, lastRunEnd: null });
+    trackSessionStart('new-run', state);
+    trackRunStarted(state);
   },
 
   dispatch(intent) {
@@ -459,6 +477,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!state) return null;
     const result = resolveDeal(state, intent);
     set({ state: result.state });
+    trackDeal(intent, result);
     // Keep the autosave current so a refresh resumes on the post-deal state.
     void get().persist(AUTOSAVE_SLOT).catch(() => {});
     return result;
@@ -517,6 +536,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Only commit + autosave when the bribe cleared (funds sufficed).
     if (result.ok) {
       set({ state: result.state });
+      trackBribe(portId, shipmentValue, result);
       void get().persist(AUTOSAVE_SLOT).catch(() => {});
     }
     return result;
@@ -542,6 +562,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Only commit + autosave when the hire landed (funds sufficed, not a duplicate).
     if (result.official) {
       set({ state: result.state });
+      trackOfficialHired(result);
       void get().persist(AUTOSAVE_SLOT).catch(() => {});
     }
     return result;
@@ -570,6 +591,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Only commit + autosave when the upgrade landed (funds sufficed, not maxed).
     if (!result.rejected) {
       set({ state: result.state });
+      trackFront('upgraded', state, result);
       void get().persist(AUTOSAVE_SLOT).catch(() => {});
     }
     return result;
@@ -581,6 +603,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const result = buyFrontEngine(state, type);
     if (!result.rejected) {
       set({ state: result.state });
+      trackFront('opened', state, result);
       void get().persist(AUTOSAVE_SLOT).catch(() => {});
     }
     return result;
@@ -681,6 +704,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Only commit + autosave when the loan actually opened (opt-in, within cap).
     if (result.ok) {
       set({ state: result.state });
+      trackBorrow(state, lenderId, result, collateralRef);
       void get().persist(AUTOSAVE_SLOT).catch(() => {});
     }
     return result;
@@ -693,6 +717,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Only commit + autosave when the payment cleared (funds sufficed, loan active).
     if (result.ok) {
       set({ state: result.state });
+      trackRepay(state, result);
       void get().persist(AUTOSAVE_SLOT).catch(() => {});
     }
     return result;
@@ -713,6 +738,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         pendingChoices: applied.pendingChoices.filter((c) => c.id !== choiceId),
       },
     });
+    if (card) trackCardChoice(card.id, choiceIndex);
     void get().persist(AUTOSAVE_SLOT).catch(() => {});
   },
 
@@ -758,6 +784,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Only commit + autosave when the launch landed (validated + funded).
     if (result.ok) {
       set({ state: result.state });
+      trackShipmentLaunched(result);
       void get().persist(AUTOSAVE_SLOT).catch(() => {});
     }
     return result;
@@ -768,6 +795,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!state || state.runStatus !== 'active') return null;
 
     const result = endRun(state, cause);
+    trackRunEnded(state, result);
     if (result.comeback) {
       // A payrolled judge buried the charge — the run continues; nothing banks.
       set({ state: result.state });
@@ -834,7 +862,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   tickBy(dtHours) {
-    withState(get, set, (state) => tick(state, dtHours));
+    const { state } = get();
+    if (!state) return;
+    const next = tick(state, dtHours);
+    set({ state: next });
+    // Everything the tick did (raids, beats, arrivals, the spiral) as telemetry.
+    trackTick(state, next);
   },
 
   async hydrate(slot) {
@@ -849,6 +882,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       await get().refreshMeta();
       const summary = await summarizeEndedRun(loaded, get().meta, leaderboard);
       set({ state: loaded, lastOfflineReport: null, lastRunEnd: summary });
+      trackSessionStart('continue', loaded);
       return true;
     }
 
@@ -859,8 +893,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (realHoursAway > 0) {
       const { state, report } = settleOffline(loaded, realHoursAway);
       set({ state, lastOfflineReport: report, lastRunEnd: null });
+      trackSessionStart('continue', state);
+      // The return payoff + the offline-freeze guarantee audit (design/10 §6).
+      trackOfflineSettled(loaded, state, report);
     } else {
       set({ state: loaded, lastOfflineReport: null, lastRunEnd: null });
+      trackSessionStart('continue', loaded);
     }
     return true;
   },

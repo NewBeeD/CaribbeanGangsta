@@ -20,6 +20,9 @@ export { nextCardScene, pendingCardScenes } from './storyCardPresenter.model';
 export type { CardScene } from './storyCardPresenter.model';
 export { openLoop } from './sessionEnd.model';
 export type { OpenLoop } from './sessionEnd.model';
+export { TelemetryOverlay, telemetryOverlayEnabled } from './TelemetryOverlay';
+export { telemetryOverlayModel, describeEvent } from './telemetryOverlay.model';
+export type { TelemetryOverlayModel, OverlayLogRow } from './telemetryOverlay.model';
 export { useHash, navigate } from './useHash';
 export { SCREENS } from './screens';
 export {

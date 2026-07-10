@@ -14,6 +14,7 @@ import { StoryCardModal } from './StoryCardModal';
 import { nextCardScene } from './storyCardPresenter.model';
 import { SCREENS } from './screens';
 import { navigate, useHash } from './useHash';
+import { trackReturnToAllocate } from '@/telemetry';
 
 /**
  * The React shell (Prompt 14, revised per Ideas.md — open access). It renders the
@@ -87,6 +88,7 @@ export function AppShell() {
         report={report}
         onContinue={() => useGameStore.getState().acknowledgeOffline()}
         onSee={() => {
+          trackReturnToAllocate();
           useGameStore.getState().acknowledgeOffline();
           navigate('money');
         }}
