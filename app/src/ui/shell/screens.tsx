@@ -1,19 +1,14 @@
 /**
  * Screen registry (Prompt 14). The shell routes to one component per `ScreenId`.
- * The remaining entries are minimal, wired PLACEHOLDERS that later prompts replace
- * one-for-one (deals is now the real screen, Prompt 15):
+ * Every entry is now a real screen — the placeholder era (prompts 15–23) is over:
  *
- *   deals → Prompt 15 (live)   empire → Prompt 16 (live)   crew  → Prompt 17 (live)
- *   money → Prompt 18 (live)   heat   → Prompt 19 (live)   storage/corruption → 20 (live)
- *   debt  → Prompt 21 (live)   highscore → Prompt 23
+ *   deals → Prompt 15   empire → Prompt 16   crew → Prompt 17   money → Prompt 18
+ *   heat  → Prompt 19   storage/corruption → 20   debt → 21   highscore → 23
  *
- * They already read live run state through the store selector (proving the shell
- * plumbs state through), and render nothing but glanceable status — no intents, no
- * game logic (README UI rule). Swap the mapping entry as each real screen lands.
+ * Screens read live run state through store selectors and dispatch intents through
+ * store actions only — no game logic lives in the UI (README rule).
  */
 
-import { useGameState } from '@/store';
-import { Card, SceneText } from '@/ui/components';
 import { DealScreen } from '@/ui/screens/DealScreen';
 import { EmpireMap } from '@/ui/screens/EmpireMap';
 import { CrewScreen } from '@/ui/screens/CrewScreen';
@@ -23,34 +18,8 @@ import { StorageScreen } from '@/ui/screens/StorageScreen';
 import { WorldMarketScreen } from '@/ui/screens/WorldMarketScreen';
 import { CorruptionScreen } from '@/ui/screens/CorruptionScreen';
 import { DebtScreen } from '@/ui/screens/DebtScreen';
-import { getScreenNode, type ScreenId } from './nav';
-
-interface PlaceholderProps {
-  readonly id: ScreenId;
-  readonly promptNo: number;
-}
-
-function PlaceholderScreen({ id, promptNo }: PlaceholderProps) {
-  const state = useGameState();
-  const node = getScreenNode(id);
-  const label = node?.label ?? id;
-
-  return (
-    <Card heading={label}>
-      <SceneText tone="default">
-        {node?.tagline ?? 'Coming together.'}
-      </SceneText>
-      <p className="cg-label" style={{ marginTop: 12 }}>
-        Screen under construction · Prompt {promptNo}
-      </p>
-      {state ? (
-        <p className="cg-label" style={{ marginTop: 6 }}>
-          Day {state.clock.day} · Week {state.clock.week}
-        </p>
-      ) : null}
-    </Card>
-  );
-}
+import { HighScoreScreen } from '@/ui/screens/HighScoreScreen';
+import type { ScreenId } from './nav';
 
 /** The route-to-component table the shell renders from. */
 export const SCREENS: Readonly<Record<ScreenId, () => JSX.Element>> = {
@@ -63,5 +32,5 @@ export const SCREENS: Readonly<Record<ScreenId, () => JSX.Element>> = {
   storage: () => <StorageScreen />,
   corruption: () => <CorruptionScreen />,
   debt: () => <DebtScreen />,
-  highscore: () => <PlaceholderScreen id="highscore" promptNo={23} />,
+  highscore: () => <HighScoreScreen />,
 };

@@ -1,3 +1,4 @@
 1) Armsdealing should have its own separate page, and not sold together with drugs. Arms dealing should be unlocked the same way as paying the large sum for access to plug (source) cheaper prices. The access should be very expensive, in the millions, since arms dealing is very high risk andshould carry the most heat. Can you study how the arms market work in real life and add it to the game.
 
 2) A player should have the option to restart the game and start fresh. 
+

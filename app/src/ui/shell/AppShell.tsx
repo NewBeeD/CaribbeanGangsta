@@ -9,6 +9,7 @@ import { BottomNav, type BottomNavItem } from '@/ui/components';
 import { SCREEN_NODES, screenForHash, type ScreenId } from './nav';
 import { NewRunGate } from './NewRunGate';
 import { ReturnHook } from './ReturnHook';
+import { RunEndScreen } from '@/ui/screens/RunEndScreen';
 import { StoryCardModal } from './StoryCardModal';
 import { nextCardScene } from './storyCardPresenter.model';
 import { SCREENS } from './screens';
@@ -38,6 +39,7 @@ export function AppShell() {
     let cancelled = false;
     void (async () => {
       const store = useGameStore.getState();
+      void store.refreshMeta();
       try {
         const saves = await store.listSaves();
         const found = saves.some((s) => s.slot === AUTOSAVE_SLOT);
@@ -93,6 +95,19 @@ export function AppShell() {
   }
 
   const current: ScreenId = screenForHash(hash);
+
+  // The run is over → present THE FALL (Prompt 23; design/07 §6) instead of the
+  // shell. The one exception is the High Score screen, so [ Leaderboard ] works;
+  // any other route falls back here until the player takes the dare.
+  if (state.runStatus !== 'active' && current !== 'highscore') {
+    return (
+      <RunEndScreen
+        onStartNextRun={() => useGameStore.getState().startNextRun()}
+        onLeaderboard={() => navigate('highscore')}
+      />
+    );
+  }
+
   const Screen = SCREENS[current];
 
   // A fired beat / chained card presents as an in-world scene, over everything else

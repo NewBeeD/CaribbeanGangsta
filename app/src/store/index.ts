@@ -1,15 +1,34 @@
 /**
- * Zustand store bridging the pure engine <-> React, plus save/load and
- * leaderboard adapters. Leaderboard adapters arrive in Prompt 23.
+ * Zustand store bridging the pure engine <-> React, plus save/load, cross-run
+ * meta, and leaderboard adapters (local-first; remote is a drop-in stub).
  */
 
 export {
   useGameStore,
   useGameState,
   useOfflineReport,
+  useMeta,
+  useRunEnd,
   AUTOSAVE_SLOT,
 } from './gameStore';
-export type { GameStore, BuildStashIntent } from './gameStore';
+export type { GameStore, BuildStashIntent, RunEndSummary } from './gameStore';
+
+export {
+  LEADERBOARD_VERSION,
+  LEADERBOARD_MAX_ENTRIES,
+  seasonKey,
+  entryFromRunEnd,
+  MemoryStorage,
+  LocalLeaderboard,
+  RemoteLeaderboard,
+} from './leaderboard';
+export type {
+  Leaderboard,
+  LeaderboardBoard,
+  LeaderboardEntry,
+  KeyValueStorage,
+  LocalLeaderboardOptions,
+} from './leaderboard';
 
 export {
   LocalSaveStore,

@@ -80,7 +80,30 @@ import {
 } from '@/engine/debt';
 import type { LenderId } from '@/engine/config/lenders';
 import { applyChoice, cardForPending } from '@/engine/cards';
+import {
+  endRun,
+  evaluatePrestige,
+  runStats,
+  type RunEndCause,
+  type RunEndResult,
+  type RunRecap,
+} from '@/engine/endgame';
 import { CloudSaveStore, LocalSaveStore, type SaveStore, type SlotMeta } from './persistence';
+import {
+  bankScore,
+  emptyMeta,
+  CloudMetaProgressStore,
+  LocalMetaProgressStore,
+  type MetaProgress,
+  type MetaProgressStore,
+} from './metaProgress';
+import {
+  entryFromRunEnd,
+  LocalLeaderboard,
+  MemoryStorage,
+  LEADERBOARD_MAX_ENTRIES,
+  type Leaderboard,
+} from './leaderboard';
 
 const MS_PER_HOUR = 3_600_000;
 
@@ -99,11 +122,42 @@ export interface BuildStashIntent {
   readonly name?: string;
 }
 
+/**
+ * Everything the run-end recap presents (Prompt 23; design/07 §6): the engine's
+ * banked result plus the cross-run chase context — was it a personal best, how
+ * short otherwise, and where it landed on the (local) board. Built by
+ * `endCurrentRun` the moment a run ends, and REBUILT (without re-banking) when an
+ * already-ended save hydrates, so a refresh still shows the fall.
+ */
+export interface RunEndSummary {
+  readonly cause: RunEndCause;
+  /** The banked score = peak net worth (design/01 §7 — a late wipe still shows the height). */
+  readonly score: number;
+  readonly recap: RunRecap;
+  /** Prestige unlock ids this run earned (non-power — GDD §7). */
+  readonly unlockedPrestige: readonly string[];
+  /** The personal best BEFORE this run banked (what this run was chasing). */
+  readonly previousBest: number;
+  readonly newPersonalBest: boolean;
+  /** How far short of the best this run fell ($0 when it IS the new best). */
+  readonly shortBy: number;
+  /** 1-based position on the local all-time board, or `null` when unranked. */
+  readonly rank: number | null;
+}
+
 export interface GameStore {
   /** Current run, or `null` before a game is created/loaded. */
   readonly state: GameState | null;
   /** Save backend (swappable; defaults to on-device IndexedDB). */
   readonly saveStore: SaveStore;
+  /** Cross-run meta store (its own IndexedDB — survives permadeath). */
+  readonly metaStore: MetaProgressStore;
+  /** The leaderboard adapter (local-first; the remote is a drop-in stub). */
+  readonly leaderboard: Leaderboard;
+  /** The loaded cross-run meta profile (personal best, prestige, runs played). */
+  readonly meta: MetaProgress;
+  /** The most recent run-end recap, or `null` while a run is alive. */
+  readonly lastRunEnd: RunEndSummary | null;
   /**
    * The payoff from the most recent offline settlement (clean cash earned + the
    * choices queued on return) — the "welcome back" the Money screen presents.
@@ -277,6 +331,21 @@ export interface GameStore {
    * the launch lands; returns the full `ShipResult` or `null`.
    */
   shipCargo(intent: ShipIntent): ShipResult | null;
+  /**
+   * Run-end (Prompt 23; design/01 §7): end the run through the engine's `endRun`,
+   * bank the peak score into meta (survives permadeath), submit the line to the
+   * leaderboard, and build the `lastRunEnd` recap the run-end screen renders. A
+   * judge-granted comeback banks NOTHING — the run continues. Only ever called
+   * from an explicit, telegraphed in-game decision (GDD §8 — absence never kills).
+   */
+  endCurrentRun(cause: RunEndCause): Promise<RunEndResult | null>;
+  /**
+   * The dare taken: start the next run in a NEW random world (fresh seed —
+   * design/01 §0a). Clears the recap and autosaves the newborn run.
+   */
+  startNextRun(): void;
+  /** (Re)load the cross-run meta profile from the meta store. */
+  refreshMeta(): Promise<void>;
   /** Advance the sim by `dtHours` of online in-game time. */
   tickBy(dtHours: number): void;
   /** Load a slot and settle any offline time since it was last played. */
@@ -303,14 +372,82 @@ function withState(
   set({ state: fn(state) });
 }
 
+/** Monotonic tail so two runs minted in the same millisecond still get distinct seeds. */
+let runMint = 0;
+
+/** Map a persisted terminal `runStatus` back onto the cause that produced it. */
+function causeForStatus(state: GameState): RunEndCause {
+  return state.runStatus === 'dead'
+    ? 'killed'
+    : state.runStatus === 'prison'
+      ? 'prison'
+      : 'retired';
+}
+
+/** 1-based all-time rank of the entry matching `seed`+`score`, or `null` if unranked. */
+async function rankOnBoard(
+  leaderboard: Leaderboard,
+  seed: string,
+  score: number,
+): Promise<number | null> {
+  try {
+    const board = await leaderboard.top(LEADERBOARD_MAX_ENTRIES, 'all-time');
+    const i = board.findIndex((e) => e.seed === seed && e.score === score);
+    return i >= 0 ? i + 1 : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Rebuild a `RunEndSummary` for an ALREADY-ENDED run that just hydrated (a refresh
+ * on the fall screen). Everything is re-derived from the banked peaks in the save +
+ * the persisted meta — nothing is re-banked, so runs-played/prestige can't double.
+ */
+async function summarizeEndedRun(
+  state: GameState,
+  meta: MetaProgress,
+  leaderboard: Leaderboard,
+): Promise<RunEndSummary> {
+  const cause = causeForStatus(state);
+  const score = state.highScore.peakNetWorth;
+  const stats = runStats(state);
+  const recap: RunRecap = {
+    cause,
+    seed: state.seed,
+    day: state.clock.day,
+    week: state.clock.week,
+    peakNetWorth: state.highScore.peakNetWorth,
+    peakCleanCash: state.highScore.peakCleanCash,
+    peakEmpireSize: state.highScore.peakEmpireSize,
+    rivalsToppled: stats.rivalsToppled,
+  };
+  // Meta already includes this run, so matching the best means this run set it.
+  const newPersonalBest = score > 0 && score >= meta.personalBest;
+  return {
+    cause,
+    score,
+    recap,
+    unlockedPrestige: evaluatePrestige(stats),
+    previousBest: meta.personalBest,
+    newPersonalBest,
+    shortBy: newPersonalBest ? 0 : Math.max(0, meta.personalBest - score),
+    rank: await rankOnBoard(leaderboard, state.seed, score),
+  };
+}
+
 export const useGameStore = create<GameStore>((set, get) => ({
   state: null,
   saveStore: safeLocalSaveStore(),
+  metaStore: safeMetaStore(),
+  leaderboard: safeLeaderboard(),
+  meta: emptyMeta(),
+  lastRunEnd: null,
   lastOfflineReport: null,
 
   newGame(seed) {
-    const runSeed = seed ?? `run-${Date.now()}`;
-    set({ state: createInitialState(runSeed), lastOfflineReport: null });
+    const runSeed = seed ?? `run-${Date.now()}-${runMint++}`;
+    set({ state: createInitialState(runSeed), lastOfflineReport: null, lastRunEnd: null });
   },
 
   dispatch(intent) {
@@ -626,14 +763,94 @@ export const useGameStore = create<GameStore>((set, get) => ({
     return result;
   },
 
+  async endCurrentRun(cause) {
+    const { state, metaStore, leaderboard } = get();
+    if (!state || state.runStatus !== 'active') return null;
+
+    const result = endRun(state, cause);
+    if (result.comeback) {
+      // A payrolled judge buried the charge — the run continues; nothing banks.
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+      return result;
+    }
+
+    set({ state: result.state });
+
+    // Bank into meta — read the persisted prior FIRST so `previousBest` is the
+    // number this run was chasing, then fold and save. Persistence hiccups never
+    // block the recap (the fall must always show).
+    let prior = get().meta;
+    try {
+      prior = await metaStore.loadMeta();
+    } catch {
+      /* keep the in-memory profile */
+    }
+    const banked = bankScore(prior, result);
+    try {
+      await metaStore.saveMeta(banked);
+    } catch {
+      /* on-device meta unavailable — the in-memory profile still updates */
+    }
+
+    // Submit the banked line to the (local-first) leaderboard, then find its rank.
+    const entry = entryFromRunEnd(result, Date.now());
+    try {
+      await leaderboard.submit(entry);
+    } catch {
+      /* a stub/offline board never blocks the recap */
+    }
+
+    set({
+      meta: banked,
+      lastRunEnd: {
+        cause: result.cause,
+        score: result.score,
+        recap: result.recap,
+        unlockedPrestige: result.unlockedPrestige,
+        previousBest: prior.personalBest,
+        newPersonalBest: result.score > prior.personalBest,
+        shortBy: Math.max(0, prior.personalBest - result.score),
+        rank: await rankOnBoard(leaderboard, entry.seed, entry.score),
+      },
+    });
+    // Persist the ENDED run — a refresh comes back to the fall, not a live run.
+    void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    return result;
+  },
+
+  startNextRun() {
+    // `newGame` mints a fresh wall-clock seed → a brand-new random world (design/01 §0a).
+    get().newGame();
+    void get().persist(AUTOSAVE_SLOT).catch(() => {});
+  },
+
+  async refreshMeta() {
+    try {
+      set({ meta: await get().metaStore.loadMeta() });
+    } catch {
+      /* no meta backend — keep the in-memory profile */
+    }
+  },
+
   tickBy(dtHours) {
     withState(get, set, (state) => tick(state, dtHours));
   },
 
   async hydrate(slot) {
-    const { saveStore } = get();
+    const { saveStore, leaderboard } = get();
     const loaded = await saveStore.load(slot);
     if (!loaded) return false;
+
+    // An ended run hydrates straight back onto the fall: no offline settlement
+    // (the run is over), and the recap is REBUILT from the banked peaks + meta —
+    // never re-banked, so a refresh can't double-count the score.
+    if (loaded.runStatus !== 'active') {
+      await get().refreshMeta();
+      const summary = await summarizeEndedRun(loaded, get().meta, leaderboard);
+      set({ state: loaded, lastOfflineReport: null, lastRunEnd: summary });
+      return true;
+    }
 
     // Settle the gap since this save was last played (frozen/safe accrual).
     const away = loaded.lastPlayedRealTime;
@@ -641,9 +858,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       away === null ? 0 : Math.max(0, (Date.now() - away) / MS_PER_HOUR);
     if (realHoursAway > 0) {
       const { state, report } = settleOffline(loaded, realHoursAway);
-      set({ state, lastOfflineReport: report });
+      set({ state, lastOfflineReport: report, lastRunEnd: null });
     } else {
-      set({ state: loaded, lastOfflineReport: null });
+      set({ state: loaded, lastOfflineReport: null, lastRunEnd: null });
     }
     return true;
   },
@@ -674,6 +891,12 @@ export const useGameState = (): GameState | null => useGameStore((s) => s.state)
 export const useOfflineReport = (): OfflineReport | null =>
   useGameStore((s) => s.lastOfflineReport);
 
+/** The cross-run meta profile (personal best, prestige, runs played). */
+export const useMeta = (): MetaProgress => useGameStore((s) => s.meta);
+
+/** The run-end recap to present, or `null` while a run is alive (Prompt 23). */
+export const useRunEnd = (): RunEndSummary | null => useGameStore((s) => s.lastRunEnd);
+
 /**
  * A `LocalSaveStore` when IndexedDB is present, otherwise the cloud stub — so
  * importing the store never throws in an environment without IndexedDB (e.g. a
@@ -685,5 +908,23 @@ function safeLocalSaveStore(): SaveStore {
   } catch {
     // No IndexedDB here — fall back to the no-op read stub.
     return new CloudSaveStore();
+  }
+}
+
+/** On-device meta store when IndexedDB exists, else the cloud stub (never throws on import). */
+function safeMetaStore(): MetaProgressStore {
+  try {
+    return new LocalMetaProgressStore();
+  } catch {
+    return new CloudMetaProgressStore();
+  }
+}
+
+/** The local board over `localStorage`, else an in-memory board (never throws on import). */
+function safeLeaderboard(): Leaderboard {
+  try {
+    return new LocalLeaderboard();
+  } catch {
+    return new LocalLeaderboard({ storage: new MemoryStorage() });
   }
 }
