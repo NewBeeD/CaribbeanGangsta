@@ -74,32 +74,12 @@ export function createInitialMarkets(): Markets {
   return markets;
 }
 
-// --- Tuning constants (v1 hypotheses; Prompt 26 centralizes) -----------------
+// --- Tuning (v1 hypotheses; Prompt 26 centralized into config/deals.ts) ------
+// The live numbers are read from `state.config.deals` (the injected tuning);
+// the module re-exports the v1 defaults for the existing engine surface.
 
-/** Bust probability is always clamped into this window (design/01 §2). */
-export const BUST_MIN = 0.03;
-export const BUST_MAX = 0.6;
+export { BUST_MIN, BUST_MAX, DEFAULT_STASH_CAPACITY } from './config/deals';
 
-// Weights of each input to the displayed bust probability (design/01 §2:
-// f(heat, market risk, crew skill, product tier)). Chosen so the clamp is
-// reachable from both ends: a calm, skilled low-tier deal floors at 3%; a hot,
-// unskilled high-tier deal ceils at 60%.
-const BUST_BASE = 0.05;
-const HEAT_WEIGHT = 0.35;
-const LOCATION_WEIGHT = 0.15;
-const TIER_WEIGHT = 0.12;
-const QTY_WEIGHT = 0.1;
-const CREW_WEIGHT = 0.15;
-/** Quantity at which the size term saturates its weight. */
-const QTY_FULL_RISK = 100;
-/** Buying is quieter than selling: buy heat is scaled down from the per-unit rate. */
-const BUY_HEAT_FACTOR = 0.5;
-/**
- * Legacy per-stash unit cap. Real capacity is per-archetype (Prompt 06:
- * `getStashType(stash.type).capacity`, enforced on buys below); this constant is
- * retained as a neutral reference value for callers/tests that want a round cap.
- */
-export const DEFAULT_STASH_CAPACITY = 1000;
 /** Flag set once a deal has been banked this run (loss-sequencing hook, Prompt 24). */
 export const DEAL_WIN_FLAG = 'dealWinBanked';
 
@@ -144,7 +124,7 @@ export function getMarketPrice(
   product: ProductId,
   countryId: string,
 ): MarketPrice {
-  const base = basePriceAt(state.world, product, countryId);
+  const base = basePriceAt(state.world, product, countryId, state.config.products.PRODUCTS);
   const market = marketStateFor(state, countryId, product);
 
   const trend: PriceTrend =
@@ -181,7 +161,12 @@ export function driftPrices(state: GameState, rng: Rng, dtHours: number): GameSt
   for (const countryId of COUNTRY_IDS) {
     const perProduct = {} as Record<ProductId, MarketState>;
     for (const product of PRODUCT_IDS) {
-      const vol = basePriceAt(state.world, product, countryId).volatility;
+      const vol = basePriceAt(
+        state.world,
+        product,
+        countryId,
+        state.config.products.PRODUCTS,
+      ).volatility;
       const current = marketStateFor(state, countryId, product);
       const delta = rng.float(-vol, vol) * dtScale;
       const factor = clamp(current.factor + delta, 1 - vol, 1 + vol);
@@ -214,20 +199,21 @@ export function computeBustProbability(
   qty: number,
   countryId: string,
 ): number {
-  const cfg = getProduct(product);
+  const d = state.config.deals;
+  const cfg = getProduct(product, state.config.products.PRODUCTS);
   const country = getCountry(countryId);
   const heatN = clamp(state.heat / HEAT_MAX, 0, 1);
-  const qtyN = clamp(qty / QTY_FULL_RISK, 0, 1);
+  const qtyN = clamp(qty / d.BUST_QTY_FULL_RISK, 0, 1);
 
   const raw =
-    BUST_BASE +
-    heatN * HEAT_WEIGHT +
-    country.risk * LOCATION_WEIGHT +
-    cfg.tierRisk * TIER_WEIGHT +
-    qtyN * QTY_WEIGHT -
-    crewSkill(state) * CREW_WEIGHT;
+    d.BUST_BASE +
+    heatN * d.BUST_HEAT_WEIGHT +
+    country.risk * d.BUST_LOCATION_WEIGHT +
+    cfg.tierRisk * d.BUST_TIER_WEIGHT +
+    qtyN * d.BUST_QTY_WEIGHT -
+    crewSkill(state) * d.BUST_CREW_WEIGHT;
 
-  return clamp(raw, BUST_MIN, BUST_MAX);
+  return clamp(raw, d.BUST_MIN, d.BUST_MAX);
 }
 
 /**
@@ -370,7 +356,8 @@ function resolveBuy(state: GameState, intent: BuyIntent): DealResult {
   // buy the shipment it was taken out for, not just fronts (the come-up hook).
   const charge = splitCharge(state, stash, cost);
   if (!charge) return reject(state, 'insufficient-funds');
-  if (stashUnits(stash) + qty > getStashType(stash.type).capacity) {
+  const capacity = getStashType(stash.type, state.config.stashes.STASH_TYPES).capacity;
+  if (stashUnits(stash) + qty > capacity) {
     return reject(state, 'insufficient-capacity');
   }
 
@@ -379,10 +366,10 @@ function resolveBuy(state: GameState, intent: BuyIntent): DealResult {
     dirtyCash: stash.dirtyCash - charge.fromDirty,
     inventory: adjustInventory(stash.inventory, product, qty),
   };
-  const cfg = getProduct(product);
+  const cfg = getProduct(product, state.config.products.PRODUCTS);
   let next = withStash(state, nextStash);
   next = { ...next, cleanCash: next.cleanCash - charge.fromClean };
-  next = addHeat(next, cfg.heatPerUnit * qty * BUY_HEAT_FACTOR, 'deal.buy');
+  next = addHeat(next, cfg.heatPerUnit * qty * state.config.deals.BUY_HEAT_FACTOR, 'deal.buy');
   next = bankPeaks(next);
 
   return {
@@ -407,7 +394,7 @@ function resolveSell(state: GameState, intent: SellIntent): DealResult {
     return reject(state, 'insufficient-inventory');
   }
 
-  const cfg = getProduct(product);
+  const cfg = getProduct(product, state.config.products.PRODUCTS);
   const price = getMarketPrice(state, product, countryId);
   const displayedBustProb = computeBustProbability(state, product, qty, countryId);
 

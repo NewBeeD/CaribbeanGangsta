@@ -32,14 +32,10 @@ import {
   CREW_LOYALTY_MIN,
   CREW_SKILL_MAX,
   CREW_SKILLS,
-  LIEUTENANT_FRONT_BONUS,
   LOYALTY_DOLLARS_PER_POINT,
   LOYALTY_EVENT_BASE,
   LOYALTY_PAY_POINT_CAP,
-  TRAIN_COST,
-  TRAIN_SKILL_GAIN,
   TRAIT_EVENT_MULTIPLIER,
-  WIRE_HEAT_PER_HOUR,
   emptyCrewSkills,
   findCrewArchetype,
   getCrewArchetype,
@@ -47,6 +43,7 @@ import {
   type CrewSkill,
   type LoyaltyEventKind,
 } from './config/crew';
+import type { CrewTuning } from './config';
 import type {
   BetrayalArc,
   BetrayalStage,
@@ -199,19 +196,40 @@ export type LoyaltyEvent =
   | { readonly kind: 'confronted' }
   | { readonly kind: 'neglected' };
 
+/** The loyalty-model slice of `CrewTuning` the delta math reads. */
+type LoyaltyTuning = Pick<
+  CrewTuning,
+  | 'LOYALTY_EVENT_BASE'
+  | 'LOYALTY_DOLLARS_PER_POINT'
+  | 'LOYALTY_PAY_POINT_CAP'
+  | 'TRAIT_EVENT_MULTIPLIER'
+>;
+
+const DEFAULT_LOYALTY_TUNING: LoyaltyTuning = {
+  LOYALTY_EVENT_BASE,
+  LOYALTY_DOLLARS_PER_POINT,
+  LOYALTY_PAY_POINT_CAP,
+  TRAIT_EVENT_MULTIPLIER,
+};
+
 /** Loyalty points a `$amount` pay/short is worth, capped (pay is felt, not decisive). */
-function payPoints(amount: number): number {
-  return clamp(amount / LOYALTY_DOLLARS_PER_POINT, 0, LOYALTY_PAY_POINT_CAP);
+function payPoints(amount: number, tuning: LoyaltyTuning): number {
+  return clamp(
+    amount / tuning.LOYALTY_DOLLARS_PER_POINT,
+    0,
+    tuning.LOYALTY_PAY_POINT_CAP,
+  );
 }
 
 /** Product of every trait's multiplier for this event kind (absent → ×1). */
 function traitMultiplier(
   traits: CrewMember['traits'],
   kind: LoyaltyEventKind,
+  tuning: LoyaltyTuning,
 ): number {
   let m = 1;
   for (const t of traits) {
-    const f = TRAIT_EVENT_MULTIPLIER[t][kind];
+    const f = tuning.TRAIT_EVENT_MULTIPLIER[t][kind];
     if (f !== undefined) m *= f;
   }
   return m;
@@ -224,24 +242,28 @@ function traitMultiplier(
  * (an ambitious lieutenant passed over drops far more than a content runner), and
  * pay alone never decides it. Pure; no clamping (the caller clamps loyalty).
  */
-export function loyaltyDeltaValue(npc: CrewMember, event: LoyaltyEvent): number {
+export function loyaltyDeltaValue(
+  npc: CrewMember,
+  event: LoyaltyEvent,
+  tuning: LoyaltyTuning = DEFAULT_LOYALTY_TUNING,
+): number {
   let base: number;
   switch (event.kind) {
     case 'paid':
-      base = payPoints(event.amount);
+      base = payPoints(event.amount, tuning);
       break;
     case 'shortchanged':
       base = -(event.amount !== undefined
-        ? payPoints(event.amount)
-        : Math.abs(LOYALTY_EVENT_BASE.shortchanged));
+        ? payPoints(event.amount, tuning)
+        : Math.abs(tuning.LOYALTY_EVENT_BASE.shortchanged));
       break;
     case 'sharedSuccess':
-      base = LOYALTY_EVENT_BASE.sharedSuccess * (event.magnitude ?? 1);
+      base = tuning.LOYALTY_EVENT_BASE.sharedSuccess * (event.magnitude ?? 1);
       break;
     default:
-      base = LOYALTY_EVENT_BASE[event.kind];
+      base = tuning.LOYALTY_EVENT_BASE[event.kind];
   }
-  return base * traitMultiplier(npc.traits, event.kind);
+  return base * traitMultiplier(npc.traits, event.kind, tuning);
 }
 
 /** Prose for a memory entry, written from the NPC's side (design/02 §3). */
@@ -292,7 +314,7 @@ export function loyaltyDelta(
   const npc = findCrew(state, npcId);
   if (!npc) return { state, crew: null, delta: 0, rejected: 'no-crew' };
 
-  const delta = loyaltyDeltaValue(npc, event);
+  const delta = loyaltyDeltaValue(npc, event, state.config.crew);
   const loyalty = clamp(npc.loyalty + delta, CREW_LOYALTY_MIN, CREW_LOYALTY_MAX);
   const memory: MemoryEntry = {
     atHours: state.clock.hours,
@@ -361,13 +383,23 @@ function hasGrievance(npc: CrewMember): boolean {
  * grievance — so it's always a consequence of how you treated them, never a bolt
  * from the blue. The arc walks toward this target one step at a time.
  */
-export function betrayalTarget(npc: CrewMember): BetrayalStage | 'none' {
+export function betrayalTarget(
+  npc: CrewMember,
+  thresholds?: Pick<
+    CrewTuning,
+    'BETRAYAL_WARNING_LOYALTY' | 'BETRAYAL_PONR_LOYALTY' | 'BETRAYAL_FLIP_LOYALTY'
+  >,
+): BetrayalStage | 'none' {
   if (npc.isWire) return 'flipped'; // a full flip is terminal (dismiss to be rid of them)
   if (!isBetrayalProne(npc.agenda) || !hasGrievance(npc)) return 'none';
   const L = npc.loyalty;
-  if (L < BETRAYAL_FLIP_LOYALTY) return 'flipped';
-  if (L < BETRAYAL_PONR_LOYALTY) return 'point-of-no-return';
-  if (L < BETRAYAL_WARNING_LOYALTY) return 'warning';
+  if (L < (thresholds?.BETRAYAL_FLIP_LOYALTY ?? BETRAYAL_FLIP_LOYALTY)) return 'flipped';
+  if (L < (thresholds?.BETRAYAL_PONR_LOYALTY ?? BETRAYAL_PONR_LOYALTY)) {
+    return 'point-of-no-return';
+  }
+  if (L < (thresholds?.BETRAYAL_WARNING_LOYALTY ?? BETRAYAL_WARNING_LOYALTY)) {
+    return 'warning';
+  }
   return 'none';
 }
 
@@ -400,7 +432,7 @@ export function advanceBetrayalArc(state: GameState, npcId: string): GameState {
   if (!npc) return state;
 
   const current = npc.activeArc?.stage ?? 'none';
-  const target = betrayalTarget(npc);
+  const target = betrayalTarget(npc, state.config.crew);
   const ci = stageIndex(current);
   const ti = stageIndex(target);
   if (ti === ci) return state; // stable — nothing to telegraph
@@ -449,7 +481,7 @@ export function advanceBetrayalArcs(state: GameState): GameState {
 
 /** Passive heat/hr from every flipped crew member acting as an embedded wire. */
 export function wireHeatPerHour(state: GameState): number {
-  return state.crew.filter((c) => c.isWire).length * WIRE_HEAT_PER_HOUR;
+  return state.crew.filter((c) => c.isWire).length * state.config.crew.WIRE_HEAT_PER_HOUR;
 }
 
 /**
@@ -501,14 +533,15 @@ export function train(
   if (!npc) return { state, crew: null, rejected: 'no-crew' };
   if (!CREW_SKILLS.includes(skill)) return { state, crew: npc, rejected: 'invalid-skill' };
   if (npc.skills[skill] >= CREW_SKILL_MAX) return { state, crew: npc, rejected: 'max-skill' };
-  if (state.cleanCash < TRAIN_COST) {
+  const cfg = state.config.crew;
+  if (state.cleanCash < cfg.TRAIN_COST) {
     return { state, crew: npc, rejected: 'insufficient-funds' };
   }
 
-  const raised = Math.min(CREW_SKILL_MAX, npc.skills[skill] + TRAIN_SKILL_GAIN);
+  const raised = Math.min(CREW_SKILL_MAX, npc.skills[skill] + cfg.TRAIN_SKILL_GAIN);
   const next: CrewMember = { ...npc, skills: { ...npc.skills, [skill]: raised } };
   return {
-    state: withCrew({ ...state, cleanCash: state.cleanCash - TRAIN_COST }, next),
+    state: withCrew({ ...state, cleanCash: state.cleanCash - cfg.TRAIN_COST }, next),
     crew: next,
   };
 }
@@ -604,5 +637,5 @@ export function frontLieutenantBonus(state: GameState, frontId: string): number 
       c.assignment.kind === 'front' &&
       c.assignment.targetId === frontId,
   );
-  return running ? LIEUTENANT_FRONT_BONUS : 0;
+  return running ? state.config.crew.LIEUTENANT_FRONT_BONUS : 0;
 }

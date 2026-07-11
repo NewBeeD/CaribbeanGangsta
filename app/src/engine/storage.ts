@@ -20,13 +20,11 @@ import type { Rng } from './rng';
 import { restoreRng } from './rng';
 import { PRODUCT_IDS, type ProductId } from './config/countries';
 import {
-  GUARD_CASH_THRESHOLD,
-  GUARD_MAX_PENALTY,
-  GUARD_UNGUARDED_PENALTY,
-  WIPE_CAPITAL_THRESHOLD,
+  STASH_TYPES,
   getStashType,
   stashCost,
   type StashType,
+  type StashTypeConfig,
 } from './config/stashes';
 import { rollRaid, type RaidEvent } from './heat';
 import {
@@ -62,13 +60,19 @@ export function totalUnits(state: GameState): number {
 }
 
 /** The unit capacity of a stash, from its archetype (config/stashes.ts). */
-export function stashCapacity(stash: Stash): number {
-  return getStashType(stash.type).capacity;
+export function stashCapacity(
+  stash: Stash,
+  types: readonly StashTypeConfig[] = STASH_TYPES,
+): number {
+  return getStashType(stash.type, types).capacity;
 }
 
 /** Free unit capacity left in a stash (never negative). */
-export function capacityRemaining(stash: Stash): number {
-  return Math.max(0, stashCapacity(stash) - stashUnits(stash));
+export function capacityRemaining(
+  stash: Stash,
+  types: readonly StashTypeConfig[] = STASH_TYPES,
+): number {
+  return Math.max(0, stashCapacity(stash, types) - stashUnits(stash));
 }
 
 function findStash(state: GameState, id: string): Stash | null {
@@ -91,15 +95,16 @@ function withStash(state: GameState, next: Stash): GameState {
  * carries the full unguarded penalty. A fully loyal guard adds nothing.
  */
 function guardPenalty(state: GameState, stash: Stash): number {
-  const cfg = getStashType(stash.type);
-  const needsGuard = cfg.requiresGuard || stash.dirtyCash >= GUARD_CASH_THRESHOLD;
+  const tuning = state.config.stashes;
+  const cfg = getStashType(stash.type, tuning.STASH_TYPES);
+  const needsGuard = cfg.requiresGuard || stash.dirtyCash >= tuning.GUARD_CASH_THRESHOLD;
 
   if (stash.guardCrewId !== undefined) {
     const guard = state.crew.find((c) => c.id === stash.guardCrewId);
     const loyalty = guard ? clamp(guard.loyalty / 100, 0, 1) : 0;
-    return (1 - loyalty) * GUARD_MAX_PENALTY;
+    return (1 - loyalty) * tuning.GUARD_MAX_PENALTY;
   }
-  return needsGuard ? GUARD_UNGUARDED_PENALTY : 0;
+  return needsGuard ? tuning.GUARD_UNGUARDED_PENALTY : 0;
 }
 
 /**
@@ -126,7 +131,7 @@ function isPortPaid(state: GameState, stash: Stash): boolean {
 export function effectiveSeizurePct(state: GameState, stashId: string): number {
   const stash = findStash(state, stashId);
   if (!stash) return 0;
-  const cfg = getStashType(stash.type);
+  const cfg = getStashType(stash.type, state.config.stashes.STASH_TYPES);
 
   let pct = cfg.seizurePct;
   if (cfg.portLinked && isPortPaid(state, stash) && cfg.seizurePctPaid !== undefined) {
@@ -183,9 +188,9 @@ export function addStash(
   type: StashType,
   opts: { readonly name?: string; readonly countryId?: string } = {},
 ): AddStashResult {
-  const cfg = getStashType(type);
+  const cfg = getStashType(type, state.config.stashes.STASH_TYPES);
   const nOwned = state.stashes.filter((s) => s.type === type).length;
-  const cost = stashCost(type, nOwned);
+  const cost = stashCost(type, nOwned, state.config.stashes);
   if (state.cleanCash < cost) {
     return { state, stash: null, rejected: 'insufficient-funds' };
   }
@@ -222,10 +227,14 @@ function rejectMove(state: GameState, rejected: StorageRejectReason): MoveResult
   return { state, ok: false, travelDelayHours: 0, rejected };
 }
 
-function travelDelayBetween(from: Stash, to: Stash): number {
+function travelDelayBetween(
+  from: Stash,
+  to: Stash,
+  types: readonly StashTypeConfig[],
+): number {
   return Math.max(
-    getStashType(from.type).travelDelayHours,
-    getStashType(to.type).travelDelayHours,
+    getStashType(from.type, types).travelDelayHours,
+    getStashType(to.type, types).travelDelayHours,
   );
 }
 
@@ -252,7 +261,8 @@ export function moveProduct(
   if (!from || !to) return rejectMove(state, 'no-stash');
   if (from.countryId !== to.countryId) return rejectMove(state, 'cross-country');
   if (from.inventory[product] < qty) return rejectMove(state, 'insufficient-inventory');
-  if (stashUnits(to) + qty > stashCapacity(to)) {
+  const types = state.config.stashes.STASH_TYPES;
+  if (stashUnits(to) + qty > stashCapacity(to, types)) {
     return rejectMove(state, 'insufficient-capacity');
   }
 
@@ -261,7 +271,7 @@ export function moveProduct(
   return {
     state: withStash(withStash(state, nextFrom), nextTo),
     ok: true,
-    travelDelayHours: travelDelayBetween(from, to),
+    travelDelayHours: travelDelayBetween(from, to, types),
   };
 }
 
@@ -289,7 +299,7 @@ export function storeCash(
   return {
     state: withStash(withStash(state, nextFrom), nextTo),
     ok: true,
-    travelDelayHours: travelDelayBetween(from, to),
+    travelDelayHours: travelDelayBetween(from, to, state.config.stashes.STASH_TYPES),
   };
 }
 
@@ -376,7 +386,8 @@ export function resolveRaid(state: GameState, raid: RaidEvent, rng: Rng): RaidRe
   let next = withStash(advanced, emptied);
 
   const operatingCapitalAfter = totalDirtyCash(next) + next.cleanCash;
-  const wipedOperatingCapital = operatingCapitalAfter <= WIPE_CAPITAL_THRESHOLD;
+  const wipedOperatingCapital =
+    operatingCapitalAfter <= state.config.stashes.WIPE_CAPITAL_THRESHOLD;
   if (wipedOperatingCapital) {
     next = { ...next, flags: { ...next.flags, [WIPED_CAPITAL_FLAG]: true } };
   }

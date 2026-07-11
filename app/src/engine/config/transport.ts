@@ -70,9 +70,17 @@ const TRANSPORT_BY_ID: ReadonlyMap<TransportId, TransportConfig> = new Map(
   TRANSPORTS.map((t) => [t.id, t]),
 );
 
-/** Resolve a transport config, throwing on an unknown id (closed union guard). */
-export function getTransport(id: TransportId): TransportConfig {
-  const transport = TRANSPORT_BY_ID.get(id);
+/**
+ * Resolve a transport config, throwing on an unknown id (closed union guard).
+ * Pass an alternate `table` (e.g. `state.config.transport.TRANSPORTS`) to
+ * resolve against an injected tuning (Prompt 26).
+ */
+export function getTransport(
+  id: TransportId,
+  table: readonly TransportConfig[] = TRANSPORTS,
+): TransportConfig {
+  const transport =
+    table === TRANSPORTS ? TRANSPORT_BY_ID.get(id) : table.find((t) => t.id === id);
   if (!transport) throw new Error(`getTransport(): unknown transport "${id}"`);
   return transport;
 }

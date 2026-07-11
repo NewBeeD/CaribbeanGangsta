@@ -136,9 +136,16 @@ const STASH_BY_ID: ReadonlyMap<StashType, StashTypeConfig> = new Map(
   STASH_TYPES.map((s) => [s.id, s]),
 );
 
-/** Resolve a stash-type config, throwing on an unknown id (closed union guard). */
-export function getStashType(id: StashType): StashTypeConfig {
-  const cfg = STASH_BY_ID.get(id);
+/**
+ * Resolve a stash-type config, throwing on an unknown id (closed union guard).
+ * Pass an alternate `types` (e.g. `state.config.stashes.STASH_TYPES`) to
+ * resolve against an injected tuning (Prompt 26).
+ */
+export function getStashType(
+  id: StashType,
+  types: readonly StashTypeConfig[] = STASH_TYPES,
+): StashTypeConfig {
+  const cfg = types === STASH_TYPES ? STASH_BY_ID.get(id) : types.find((s) => s.id === id);
   if (!cfg) throw new Error(`getStashType(): unknown stash type "${id}"`);
   return cfg;
 }
@@ -150,10 +157,20 @@ export const STASH_COST_GROWTH = 1.15;
 
 /**
  * Cost to build the `nOwned`-th+1 stash of `type`: `base × 1.15^nOwned`
- * (design/09 A.5). Deterministic, non-gambling progression.
+ * (design/09 A.5). Deterministic, non-gambling progression. `tuning` injects an
+ * alternate roster/growth (e.g. `state.config.stashes` — Prompt 26).
  */
-export function stashCost(type: StashType, nOwned: number): number {
-  return Math.round(getStashType(type).baseCost * Math.pow(STASH_COST_GROWTH, nOwned));
+export function stashCost(
+  type: StashType,
+  nOwned: number,
+  tuning?: {
+    readonly STASH_TYPES?: readonly StashTypeConfig[];
+    readonly STASH_COST_GROWTH?: number;
+  },
+): number {
+  const base = getStashType(type, tuning?.STASH_TYPES ?? STASH_TYPES).baseCost;
+  const growth = tuning?.STASH_COST_GROWTH ?? STASH_COST_GROWTH;
+  return Math.round(base * Math.pow(growth, nOwned));
 }
 
 /**

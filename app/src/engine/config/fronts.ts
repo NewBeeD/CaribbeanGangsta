@@ -87,9 +87,16 @@ const FRONT_BY_ID: ReadonlyMap<FrontType, FrontTypeConfig> = new Map(
   FRONT_TYPES.map((f) => [f.id, f]),
 );
 
-/** Resolve a front-type config, throwing on an unknown id (closed-union guard). */
-export function getFrontType(id: FrontType): FrontTypeConfig {
-  const cfg = FRONT_BY_ID.get(id);
+/**
+ * Resolve a front-type config, throwing on an unknown id (closed-union guard).
+ * Pass an alternate `types` (e.g. `state.config.fronts.FRONT_TYPES`) to
+ * resolve against an injected tuning (Prompt 26).
+ */
+export function getFrontType(
+  id: FrontType,
+  types: readonly FrontTypeConfig[] = FRONT_TYPES,
+): FrontTypeConfig {
+  const cfg = types === FRONT_TYPES ? FRONT_BY_ID.get(id) : types.find((f) => f.id === id);
   if (!cfg) throw new Error(`getFrontType(): unknown front type "${id}"`);
   return cfg;
 }
@@ -102,9 +109,19 @@ export const FRONT_COST_GROWTH = 1.15;
 /**
  * Cost to raise a `type` front from `level` → `level + 1`: `buy_in × 1.15^level`
  * (design/01 §3). Keeps a next affordable step always in reach (design/01 §0.4).
+ * `tuning` injects an alternate roster/growth (`state.config.fronts` — Prompt 26).
  */
-export function frontUpgradeCost(type: FrontType, level: number): number {
-  return Math.round(getFrontType(type).buyIn * Math.pow(FRONT_COST_GROWTH, level));
+export function frontUpgradeCost(
+  type: FrontType,
+  level: number,
+  tuning?: {
+    readonly FRONT_TYPES?: readonly FrontTypeConfig[];
+    readonly FRONT_COST_GROWTH?: number;
+  },
+): number {
+  const buyIn = getFrontType(type, tuning?.FRONT_TYPES ?? FRONT_TYPES).buyIn;
+  const growth = tuning?.FRONT_COST_GROWTH ?? FRONT_COST_GROWTH;
+  return Math.round(buyIn * Math.pow(growth, level));
 }
 
 // --- Offline curve (design/01 §3: soft cap, then 25% — never zero) ------------

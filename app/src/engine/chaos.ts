@@ -29,7 +29,6 @@ import {
   CHAOS_EVENTS,
   CHAOS_FLAG_PREFIX,
   CHAOS_MAJOR_DISRUPTION_FLAG,
-  CHAOS_MAX_PER_TICK,
   CHAOS_SUPPLY_SHOCK_FLAG,
   type ChaosEffect,
   type ChaosEventConfig,
@@ -71,9 +70,12 @@ function toEvent(cfg: ChaosEventConfig): ChaosEvent {
  * base per-hour rate compounded over the window (never exceeds 1). Estimable and
  * bounded — the same fair-across-tick-size shape the raid roll uses.
  */
-export function chaosChance(dtHours: number): number {
+export function chaosChance(
+  dtHours: number,
+  ratePerHour: number = CHAOS_BASE_RATE_PER_HOUR,
+): number {
   if (dtHours <= 0) return 0;
-  return clamp(1 - Math.pow(1 - CHAOS_BASE_RATE_PER_HOUR, dtHours), 0, 1);
+  return clamp(1 - Math.pow(1 - ratePerHour, dtHours), 0, 1);
 }
 
 /**
@@ -82,11 +84,12 @@ export function chaosChance(dtHours: number): number {
  * Consumes the passed `rng` — an independent, run-seeded stream, so it is
  * reproducible per run and can never desync the main deal/raid RNG.
  */
-export function rollChaos(_state: GameState, rng: Rng, dtHours: number): ChaosEvent[] {
+export function rollChaos(state: GameState, rng: Rng, dtHours: number): ChaosEvent[] {
   if (dtHours <= 0) return [];
+  const tuning = state.config.events;
   const events: ChaosEvent[] = [];
-  for (let i = 0; i < CHAOS_MAX_PER_TICK; i++) {
-    if (!rng.chance(chaosChance(dtHours))) break;
+  for (let i = 0; i < tuning.CHAOS_MAX_PER_TICK; i++) {
+    if (!rng.chance(chaosChance(dtHours, tuning.CHAOS_BASE_RATE_PER_HOUR))) break;
     const cfg = rng.weighted(CHAOS_EVENTS.map((e) => [e, e.weight]));
     events.push(toEvent(cfg));
   }

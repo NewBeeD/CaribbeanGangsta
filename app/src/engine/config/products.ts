@@ -165,9 +165,17 @@ const PRODUCT_BY_ID: ReadonlyMap<ProductId, ProductConfig> = new Map(
   PRODUCTS.map((p) => [p.id, p]),
 );
 
-/** Resolve a product config, throwing on an unknown id (closed union guard). */
-export function getProduct(id: ProductId): ProductConfig {
-  const product = PRODUCT_BY_ID.get(id);
+/**
+ * Resolve a product config, throwing on an unknown id (closed union guard).
+ * Pass an alternate `table` (e.g. `state.config.products.PRODUCTS`) to resolve
+ * against an injected tuning (Prompt 26).
+ */
+export function getProduct(
+  id: ProductId,
+  table: readonly ProductConfig[] = PRODUCTS,
+): ProductConfig {
+  const product =
+    table === PRODUCTS ? PRODUCT_BY_ID.get(id) : table.find((p) => p.id === id);
   if (!product) throw new Error(`getProduct(): unknown product "${id}"`);
   return product;
 }

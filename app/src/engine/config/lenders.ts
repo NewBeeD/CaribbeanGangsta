@@ -95,16 +95,28 @@ const LENDER_BY_ID: ReadonlyMap<LenderId, LenderConfig> = new Map(
   LENDERS.map((l) => [l.id, l]),
 );
 
-/** Resolve a lender config, throwing on an unknown id (closed-roster guard). */
-export function getLender(id: LenderId): LenderConfig {
-  const cfg = LENDER_BY_ID.get(id);
+/**
+ * Resolve a lender config, throwing on an unknown id (closed-roster guard).
+ * Pass an alternate `table` (e.g. `state.config.lenders.LENDERS`) to resolve
+ * against an injected tuning (Prompt 26).
+ */
+export function getLender(
+  id: LenderId,
+  table: readonly LenderConfig[] = LENDERS,
+): LenderConfig {
+  const cfg = table === LENDERS ? LENDER_BY_ID.get(id) : table.find((l) => l.id === id);
   if (!cfg) throw new Error(`getLender(): unknown lender "${id}"`);
   return cfg;
 }
 
 /** Look up a lender config WITHOUT throwing (tolerant prose/migration). */
-export function findLender(id: string): LenderConfig | undefined {
-  return LENDER_BY_ID.get(id as LenderId);
+export function findLender(
+  id: string,
+  table: readonly LenderConfig[] = LENDERS,
+): LenderConfig | undefined {
+  return table === LENDERS
+    ? LENDER_BY_ID.get(id as LenderId)
+    : table.find((l) => l.id === id);
 }
 
 // --- Borrow cap = f(reputation, collateral) (design/10 §2) -------------------

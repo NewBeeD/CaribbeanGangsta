@@ -23,16 +23,7 @@ import type { Rng } from './rng';
 import { restoreRng } from './rng';
 import { addHeat } from './heat';
 import { frontLieutenantBonus } from './crew';
-import { LIE_LOW_INCOME_MULTIPLIER } from './config/heat';
 import {
-  CRYPTO_SWING,
-  CRYPTO_SWING_PERIOD_HOURS,
-  FRONT_MAX_LEVEL,
-  GOLDEN_HOUR_BONUS_HOURS,
-  GOLDEN_HOUR_MAX_MINUTES,
-  GOLDEN_HOUR_MEAN_HOURS,
-  GOLDEN_HOUR_MIN_BONUS,
-  GOLDEN_HOUR_MIN_MINUTES,
   OFFLINE_REDUCED_RATE,
   OFFLINE_SOFT_CAP_HOURS,
   PESO_EXCHANGE_HAIRCUT,
@@ -53,8 +44,9 @@ export type { FrontType } from './config/fronts';
  * While offline the clock is frozen, so the swing holds at its last online value.
  */
 export function cryptoSwingFactor(state: GameState): number {
-  const phase = (state.clock.hours / CRYPTO_SWING_PERIOD_HOURS) * 2 * Math.PI;
-  return 1 + CRYPTO_SWING * Math.sin(phase);
+  const cfg = state.config.fronts;
+  const phase = (state.clock.hours / cfg.CRYPTO_SWING_PERIOD_HOURS) * 2 * Math.PI;
+  return 1 + cfg.CRYPTO_SWING * Math.sin(phase);
 }
 
 /**
@@ -64,7 +56,7 @@ export function cryptoSwingFactor(state: GameState): number {
  * bonus is 0, so a crew-less run's rates are unchanged.
  */
 function frontRate(state: GameState, front: Front): number {
-  const cfg = getFrontType(front.type as FrontType);
+  const cfg = getFrontType(front.type as FrontType, state.config.fronts.FRONT_TYPES);
   const base = cfg.ratePerLevel * front.level;
   const swung = cfg.swing > 0 ? base * cryptoSwingFactor(state) : base;
   return swung * (1 + frontLieutenantBonus(state, front.id));
@@ -81,14 +73,15 @@ export function cleanCashRate(state: GameState): number {
 
 /** Rate after the lying-low income slowdown (design/07 §5): lower heat, lower income. */
 function effectiveRate(state: GameState): number {
-  const mult = state.lyingLow ? LIE_LOW_INCOME_MULTIPLIER : 1;
+  const mult = state.lyingLow ? state.config.heat.LIE_LOW_INCOME_MULTIPLIER : 1;
   return cleanCashRate(state) * mult;
 }
 
 /** Passive heat/hr summed across all operating fronts (active-only footprint). */
 function frontHeatPerHour(state: GameState): number {
   return state.fronts.reduce(
-    (sum, f) => sum + getFrontType(f.type as FrontType).heatPerHour,
+    (sum, f) =>
+      sum + getFrontType(f.type as FrontType, state.config.fronts.FRONT_TYPES).heatPerHour,
     0,
   );
 }
@@ -159,11 +152,20 @@ export interface OfflineReport {
  * to the soft cap, then `OFFLINE_REDUCED_RATE` beyond — never zero, so a long
  * absence idles instead of being punished.
  */
-export function offlineEarnings(rate: number, hoursAway: number): number {
+export function offlineEarnings(
+  rate: number,
+  hoursAway: number,
+  tuning?: {
+    readonly OFFLINE_SOFT_CAP_HOURS?: number;
+    readonly OFFLINE_REDUCED_RATE?: number;
+  },
+): number {
   if (rate <= 0 || hoursAway <= 0) return 0;
-  const full = Math.min(hoursAway, OFFLINE_SOFT_CAP_HOURS);
-  const overflow = Math.max(0, hoursAway - OFFLINE_SOFT_CAP_HOURS);
-  return rate * full + rate * OFFLINE_REDUCED_RATE * overflow;
+  const softCap = tuning?.OFFLINE_SOFT_CAP_HOURS ?? OFFLINE_SOFT_CAP_HOURS;
+  const reduced = tuning?.OFFLINE_REDUCED_RATE ?? OFFLINE_REDUCED_RATE;
+  const full = Math.min(hoursAway, softCap);
+  const overflow = Math.max(0, hoursAway - softCap);
+  return rate * full + rate * reduced * overflow;
 }
 
 /** Return-hook templates surfaced on return — "decisions to allocate" (design/01 §3). */
@@ -178,8 +180,8 @@ const RETURN_HOOKS: readonly { readonly kind: string; readonly summary: string }
  * honoring "the longer you're away, the more options await" (design/07 §4) —
  * capped at the number of distinct hook templates (≤3). Deterministic in hours.
  */
-function returnHookCount(hoursAway: number): number {
-  const byTime = 1 + Math.floor(hoursAway / (OFFLINE_SOFT_CAP_HOURS / 2));
+function returnHookCount(hoursAway: number, softCapHours: number): number {
+  const byTime = 1 + Math.floor(hoursAway / (softCapHours / 2));
   return Math.min(RETURN_HOOKS.length, Math.max(1, byTime));
 }
 
@@ -196,14 +198,17 @@ export function rollGoldenHour(
   dtHours = 1,
 ): GoldenHourEvent | null {
   if (dtHours <= 0) return null;
-  const perHour = 1 / GOLDEN_HOUR_MEAN_HOURS;
-  const chance = 1 - Math.pow(1 - perHour, Math.min(dtHours, OFFLINE_SOFT_CAP_HOURS));
+  const cfg = state.config.fronts;
+  const perHour = 1 / cfg.GOLDEN_HOUR_MEAN_HOURS;
+  const chance = 1 - Math.pow(1 - perHour, Math.min(dtHours, cfg.OFFLINE_SOFT_CAP_HOURS));
   if (rng.next() >= chance) return null;
 
-  const bonusBase = cleanCashRate(state) * GOLDEN_HOUR_BONUS_HOURS;
-  const bonusCash = Math.round(Math.max(GOLDEN_HOUR_MIN_BONUS, bonusBase));
+  const bonusBase = cleanCashRate(state) * cfg.GOLDEN_HOUR_BONUS_HOURS;
+  const bonusCash = Math.round(Math.max(cfg.GOLDEN_HOUR_MIN_BONUS, bonusBase));
+  // Flavor split only (buyer vs. bent cop) — both pay the same disclosed bonus,
+  // so this is texture, not a balance knob.
   const buyer = rng.chance(0.5);
-  const expiresInMinutes = rng.int(GOLDEN_HOUR_MIN_MINUTES, GOLDEN_HOUR_MAX_MINUTES);
+  const expiresInMinutes = rng.int(cfg.GOLDEN_HOUR_MIN_MINUTES, cfg.GOLDEN_HOUR_MAX_MINUTES);
   return {
     id: `golden-${state.clock.hours}-${Math.round(rng.next() * 1e6)}`,
     kind: buyer ? 'buyer' : 'bent-cop',
@@ -215,10 +220,10 @@ export function rollGoldenHour(
   };
 }
 
-function emptyReport(hoursAway: number): OfflineReport {
+function emptyReport(hoursAway: number, softCapHours: number): OfflineReport {
   return {
     hoursAway,
-    cappedAt: OFFLINE_SOFT_CAP_HOURS,
+    cappedAt: softCapHours,
     cleanEarned: 0,
     pendingChoices: [],
   };
@@ -239,12 +244,15 @@ export function settleOffline(
   if (realHoursAway < 0) {
     throw new Error(`settleOffline(): realHoursAway must be >= 0 (got ${realHoursAway})`);
   }
-  if (realHoursAway === 0) return { state, report: emptyReport(0) };
+  const cfg = state.config.fronts;
+  if (realHoursAway === 0) {
+    return { state, report: emptyReport(0, cfg.OFFLINE_SOFT_CAP_HOURS) };
+  }
 
-  const cleanEarned = offlineEarnings(effectiveRate(state), realHoursAway);
+  const cleanEarned = offlineEarnings(effectiveRate(state), realHoursAway, cfg);
 
   const rng = restoreRng(state.rngState);
-  const count = returnHookCount(realHoursAway);
+  const count = returnHookCount(realHoursAway, cfg.OFFLINE_SOFT_CAP_HOURS);
   const pendingChoices: PendingChoice[] = [];
   for (let i = 0; i < count; i++) {
     const hook = RETURN_HOOKS[i]!;
@@ -268,7 +276,7 @@ export function settleOffline(
 
   const report: OfflineReport = {
     hoursAway: realHoursAway,
-    cappedAt: OFFLINE_SOFT_CAP_HOURS,
+    cappedAt: cfg.OFFLINE_SOFT_CAP_HOURS,
     cleanEarned,
     pendingChoices,
     ...(goldenHour ? { goldenHour } : {}),
@@ -336,7 +344,7 @@ export interface FrontResult {
  * sink — design/01 §1). Rejects without mutating on insufficient funds.
  */
 export function buyFront(state: GameState, type: FrontType): FrontResult {
-  const cfg = getFrontType(type);
+  const cfg = getFrontType(type, state.config.fronts.FRONT_TYPES);
   if (state.cleanCash < cfg.buyIn) {
     return { state, front: null, rejected: 'insufficient-funds' };
   }
@@ -356,9 +364,11 @@ export function buyFront(state: GameState, type: FrontType): FrontResult {
 export function upgradeFront(state: GameState, frontId: string): FrontResult {
   const front = state.fronts.find((f) => f.id === frontId) ?? null;
   if (!front) return { state, front: null, rejected: 'no-front' };
-  if (front.level >= FRONT_MAX_LEVEL) return { state, front, rejected: 'max-level' };
+  if (front.level >= state.config.fronts.FRONT_MAX_LEVEL) {
+    return { state, front, rejected: 'max-level' };
+  }
 
-  const cost = frontUpgradeCost(front.type as FrontType, front.level);
+  const cost = frontUpgradeCost(front.type as FrontType, front.level, state.config.fronts);
   if (state.cleanCash < cost) return { state, front, rejected: 'insufficient-funds' };
 
   const upgraded: Front = { ...front, level: front.level + 1 };
@@ -382,9 +392,12 @@ export interface PesoQuote {
 }
 
 /** The quote shown before committing — exactly what `pesoExchange` applies. */
-export function pesoExchangeQuote(amount: number): PesoQuote {
-  const clean = Math.round(Math.max(0, amount) * (1 - PESO_EXCHANGE_HAIRCUT));
-  return { haircut: PESO_EXCHANGE_HAIRCUT, clean };
+export function pesoExchangeQuote(
+  amount: number,
+  haircut: number = PESO_EXCHANGE_HAIRCUT,
+): PesoQuote {
+  const clean = Math.round(Math.max(0, amount) * (1 - haircut));
+  return { haircut, clean };
 }
 
 export interface PesoExchangeResult {
@@ -406,7 +419,7 @@ export function pesoExchange(
   amount: number,
   stashId?: string,
 ): PesoExchangeResult {
-  const quote = pesoExchangeQuote(amount);
+  const quote = pesoExchangeQuote(amount, state.config.fronts.PESO_EXCHANGE_HAIRCUT);
   if (!(amount > 0)) {
     return { state, ok: false, clean: 0, haircut: quote.haircut, rejected: 'invalid-amount' };
   }

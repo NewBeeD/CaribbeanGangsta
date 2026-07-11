@@ -62,9 +62,17 @@ const RECIPE_BY_ID: ReadonlyMap<RecipeId, ConversionRecipe> = new Map(
   CONVERSION_RECIPES.map((r) => [r.id, r]),
 );
 
-/** Resolve a recipe config, throwing on an unknown id (closed union guard). */
-export function getRecipe(id: RecipeId): ConversionRecipe {
-  const recipe = RECIPE_BY_ID.get(id);
+/**
+ * Resolve a recipe config, throwing on an unknown id (closed union guard).
+ * Pass an alternate `table` (e.g. `state.config.conversions.CONVERSION_RECIPES`)
+ * to resolve against an injected tuning (Prompt 26).
+ */
+export function getRecipe(
+  id: RecipeId,
+  table: readonly ConversionRecipe[] = CONVERSION_RECIPES,
+): ConversionRecipe {
+  const recipe =
+    table === CONVERSION_RECIPES ? RECIPE_BY_ID.get(id) : table.find((r) => r.id === id);
   if (!recipe) throw new Error(`getRecipe(): unknown recipe "${id}"`);
   return recipe;
 }

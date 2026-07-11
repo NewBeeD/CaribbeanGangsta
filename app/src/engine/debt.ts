@@ -32,22 +32,9 @@ import type { Rng } from './rng';
 import { restoreRng } from './rng';
 import { getFrontType, type FrontType } from './config/fronts';
 import {
-  CAP_COLLATERAL_FRACTION,
-  CAP_REPUTATION_FLOOR,
-  CAP_REPUTATION_SCALE,
-  CEILING_MAX_RUNG,
-  DEBT_ONTIME_REP_BONUS,
-  DEBT_REPAY_REP_BONUS,
   HOURS_PER_DAY,
   INTEREST_DAYS_PER_WEEK,
-  LADDER_DAYS_PER_RUNG,
-  LADDER_INCOME_CUT,
   LADDER_SIGNS,
-  LADDER_VIG_RATE_INCREASE,
-  LIFELINE_CAPITAL_THRESHOLD,
-  LIFELINE_MIN_REPUTATION,
-  LIFELINE_OFFER_FRACTION,
-  LENDERS,
   findLender,
   getLender,
   type LadderRung,
@@ -86,7 +73,12 @@ function assetValue(state: GameState, ref: string): number {
   const stash = state.stashes.find((s) => s.id === ref);
   if (stash) return stash.dirtyCash;
   const front = state.fronts.find((f) => f.id === ref);
-  if (front) return getFrontType(front.type as FrontType).buyIn * front.level;
+  if (front) {
+    return (
+      getFrontType(front.type as FrontType, state.config.fronts.FRONT_TYPES).buyIn *
+      front.level
+    );
+  }
   return 0;
 }
 
@@ -101,12 +93,15 @@ export function borrowCap(
   lenderId: LenderId,
   collateralRef?: string,
 ): number {
-  const cfg = getLender(lenderId);
-  const repFrac = clamp(state.reputation.street / CAP_REPUTATION_SCALE, 0, 1);
-  const repMult = CAP_REPUTATION_FLOOR + (1 - CAP_REPUTATION_FLOOR) * repFrac;
+  const L = state.config.lenders;
+  const cfg = getLender(lenderId, L.LENDERS);
+  const repFrac = clamp(state.reputation.street / L.CAP_REPUTATION_SCALE, 0, 1);
+  const repMult = L.CAP_REPUTATION_FLOOR + (1 - L.CAP_REPUTATION_FLOOR) * repFrac;
   const base = cfg.maxPrincipal * repMult;
   const collateral =
-    collateralRef !== undefined ? assetValue(state, collateralRef) * CAP_COLLATERAL_FRACTION : 0;
+    collateralRef !== undefined
+      ? assetValue(state, collateralRef) * L.CAP_COLLATERAL_FRACTION
+      : 0;
   return Math.round(base + collateral);
 }
 
@@ -133,8 +128,13 @@ export interface LoanQuote {
 }
 
 /** Compound `principal` forward `days` in-game days at `weeklyRate/7` (the interest curve). */
-function compound(principal: number, weeklyRate: number, days: number): number {
-  return principal * Math.pow(1 + weeklyRate / INTEREST_DAYS_PER_WEEK, days);
+function compound(
+  principal: number,
+  weeklyRate: number,
+  days: number,
+  daysPerWeek: number = INTEREST_DAYS_PER_WEEK,
+): number {
+  return principal * Math.pow(1 + weeklyRate / daysPerWeek, days);
 }
 
 /**
@@ -148,7 +148,8 @@ export function quoteLoan(
   amount: number,
   collateralRef?: string,
 ): LoanQuote {
-  const cfg = getLender(lenderId);
+  const L = state.config.lenders;
+  const cfg = getLender(lenderId, L.LENDERS);
   const cap = borrowCap(state, lenderId, collateralRef);
   const principal = Math.max(0, Math.min(amount, cap));
   return {
@@ -158,7 +159,9 @@ export function quoteLoan(
     cap,
     dueDay: state.clock.day + cfg.softDueDays,
     softDueDays: cfg.softDueDays,
-    totalToRepayAtDue: Math.round(compound(principal, cfg.weeklyRate, cfg.softDueDays)),
+    totalToRepayAtDue: Math.round(
+      compound(principal, cfg.weeklyRate, cfg.softDueDays, L.INTEREST_DAYS_PER_WEEK),
+    ),
   };
 }
 
@@ -204,7 +207,7 @@ export function borrow(
   }
   if (amount > quote.cap) return reject('exceeds-cap');
 
-  const cfg = getLender(lenderId);
+  const cfg = getLender(lenderId, state.config.lenders.LENDERS);
   const debt: Debt = {
     lenderId,
     principal: amount,
@@ -235,7 +238,12 @@ export function accrueInterest(state: GameState, activeDaysElapsed: number): Gam
   if (!state.debt.active || activeDaysElapsed <= 0) return state;
   const owed = debtOwed(state.debt);
   if (owed <= 0) return state;
-  const grown = compound(owed, state.debt.rate, activeDaysElapsed);
+  const grown = compound(
+    owed,
+    state.debt.rate,
+    activeDaysElapsed,
+    state.config.lenders.INTEREST_DAYS_PER_WEEK,
+  );
   const accruedInterest = state.debt.accruedInterest + (grown - owed);
   return { ...state, debt: { ...state.debt, accruedInterest } };
 }
@@ -281,10 +289,11 @@ export function repay(state: GameState, amount: number): RepayResult {
   const remaining = principal + accruedInterest;
 
   if (remaining <= 1e-6) {
+    const L = state.config.lenders;
     const clean = state.cleanCash - pay;
     const onTime = state.debt.ladderRung === 0 && state.clock.day <= state.debt.dueDay;
-    const repBonus = DEBT_REPAY_REP_BONUS + (onTime ? DEBT_ONTIME_REP_BONUS : 0);
-    const cfg = findLender(state.debt.lenderId);
+    const repBonus = L.DEBT_REPAY_REP_BONUS + (onTime ? L.DEBT_ONTIME_REP_BONUS : 0);
+    const cfg = findLender(state.debt.lenderId, L.LENDERS);
     const cleared: GameState = {
       ...state,
       cleanCash: clean,
@@ -304,7 +313,7 @@ export function repay(state: GameState, amount: number): RepayResult {
   }
 
   // Partial payment: patience reset — push the soft due date back out (halts escalation).
-  const cfg = getLender(state.debt.lenderId as LenderId);
+  const cfg = getLender(state.debt.lenderId as LenderId, state.config.lenders.LENDERS);
   const debt: Debt = {
     ...state.debt,
     principal,
@@ -342,7 +351,10 @@ function seizeOneStash(state: GameState, rng: Rng): GameState {
   if (state.stashes.length === 0) return state;
   if (state.stashes.length === 1) {
     const only = state.stashes[0]!;
-    const cut: Stash = { ...only, dirtyCash: Math.round(only.dirtyCash * (1 - LADDER_INCOME_CUT)) };
+    const cut: Stash = {
+      ...only,
+      dirtyCash: Math.round(only.dirtyCash * (1 - state.config.lenders.LADDER_INCOME_CUT)),
+    };
     return { ...state, stashes: [cut] };
   }
   const maxVal = Math.max(...state.stashes.map(stashValue));
@@ -374,7 +386,13 @@ function applyRung(state: GameState, rng: Rng, rung: LadderRung): GameState {
   let next: GameState = { ...state, debt: { ...state.debt, ladderRung: rung } };
   switch (rung) {
     case 1: // vig — the shark quietly raises the rate (a warning felt in the balance).
-      next = { ...next, debt: { ...next.debt, rate: next.debt.rate + LADDER_VIG_RATE_INCREASE } };
+      next = {
+        ...next,
+        debt: {
+          ...next.debt,
+          rate: next.debt.rate + state.config.lenders.LADDER_VIG_RATE_INCREASE,
+        },
+      };
       break;
     case 2: // a visit — a scare, explicitly HEAT-FREE (design/10 §5). No state effect.
       break;
@@ -413,9 +431,10 @@ export function defaultLadder(state: GameState, rng: Rng): GameState {
   const overdueDays = state.clock.day - state.debt.dueDay;
   if (overdueDays <= 0) return state; // consequences begin only past the soft due date
 
-  const cfg = findLender(state.debt.lenderId);
-  const ceiling = cfg ? CEILING_MAX_RUNG[cfg.consequenceCeiling] : 3;
-  const target = clamp(Math.floor(overdueDays / LADDER_DAYS_PER_RUNG), 1, ceiling) as LadderRung;
+  const L = state.config.lenders;
+  const cfg = findLender(state.debt.lenderId, L.LENDERS);
+  const ceiling = cfg ? L.CEILING_MAX_RUNG[cfg.consequenceCeiling] : 3;
+  const target = clamp(Math.floor(overdueDays / L.LADDER_DAYS_PER_RUNG), 1, ceiling) as LadderRung;
   if (state.debt.ladderRung >= target) return state;
 
   return applyRung(state, rng, (state.debt.ladderRung + 1) as LadderRung);
@@ -465,14 +484,15 @@ export interface LenderOffer {
  */
 export function lifelineOffer(state: GameState): LenderOffer | null {
   if (state.debt.active) return null;
+  const L = state.config.lenders;
   const capital = state.cleanCash + totalDirtyCash(state);
-  if (capital > LIFELINE_CAPITAL_THRESHOLD) return null;
-  if (state.reputation.street < LIFELINE_MIN_REPUTATION) return null;
+  if (capital > L.LIFELINE_CAPITAL_THRESHOLD) return null;
+  if (state.reputation.street < L.LIFELINE_MIN_REPUTATION) return null;
 
-  const lender = LENDERS[0]!;
+  const lender = L.LENDERS[0]!;
   return {
     lenderId: lender.id,
-    amount: Math.round(lender.maxPrincipal * LIFELINE_OFFER_FRACTION),
+    amount: Math.round(lender.maxPrincipal * L.LIFELINE_OFFER_FRACTION),
     weeklyRate: lender.weeklyRate,
     reason: `${lender.name} will front you a stake — because you've always been good for it.`,
   };

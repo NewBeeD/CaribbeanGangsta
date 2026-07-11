@@ -35,6 +35,7 @@ import { tierForHeat, type LeTier } from '@/engine/heat';
 import { STARTING_STASH_TYPE } from '@/engine/config/stashes';
 import { hydrateLegacyCrew } from '@/engine/crew';
 import { hydrateLegacyOfficial } from '@/engine/corruption';
+import { DEFAULT_GAME_CONFIG, type GameConfig } from '@/engine/config';
 
 /** Lightweight listing of a saved slot (no full state payload). */
 export interface SlotMeta {
@@ -207,6 +208,17 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
       ...env,
       schemaVersion: 9,
       state: { ...legacy, shipments: legacy.shipments ?? [] },
+    };
+  },
+  // 9 → 10: the injected balance config (Prompt 26). Every pre-v10 run was played
+  // under the v1 numbers, so it simply carries the default `GameConfig` forward —
+  // no in-run value changes.
+  9: (env) => {
+    const legacy = env.state as GameState & { config?: GameConfig };
+    return {
+      ...env,
+      schemaVersion: 10,
+      state: { ...legacy, config: legacy.config ?? DEFAULT_GAME_CONFIG },
     };
   },
 };

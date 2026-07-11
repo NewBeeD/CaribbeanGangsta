@@ -184,3 +184,14 @@ export const CHAOS_MAJOR_DISRUPTION_FLAG = 'chaos:major-disruption';
 
 /** Flag set the first time a supply glut/crash fires (drives the market-swing beat). */
 export const CHAOS_SUPPLY_SHOCK_FLAG = 'chaos:supply-shock';
+
+// --- Narrative-beat thresholds (design/05 §2/§3; consumed by beats.ts) --------
+
+/** Clean cash at which "you're on the map now" — the DEA opens a file (design/05 §2). */
+export const ON_THE_MAP_CLEAN_CASH = 1_000_000;
+
+/** Peak net worth at which the crown-weighs-heavy beat fires (design/05 §2). */
+export const CROWN_PEAK_NET_WORTH = 10_000_000;
+
+/** At most this many act-defining beats fire per tick — plateau spacing (design/05 §3). */
+export const MAJOR_BEATS_PER_TICK = 1;

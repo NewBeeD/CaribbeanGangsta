@@ -26,14 +26,7 @@
 
 import { judgeCanDismiss } from './corruption';
 import { isDebtMarked, lifelineOffer } from './debt';
-import { WIPE_CAPITAL_THRESHOLD } from './config/stashes';
-import {
-  EMPIRE_WEIGHTS,
-  PRESTIGE_UNLOCKS,
-  SPIRAL_HEAT_HUNTED,
-  SPIRAL_HEAT_UNMANAGED,
-  SPIRAL_RIVAL_HUNTED,
-} from './config/prestige';
+import { PRESTIGE_UNLOCKS } from './config/prestige';
 import {
   debtOwed,
   netWorth,
@@ -65,7 +58,7 @@ export function empireComposite(state: GameState): number {
   const districts = countries.size;
   const homeCountry = state.world.startingCountry.id;
   const routes = [...countries].filter((c) => c !== homeCountry).length;
-  const w = EMPIRE_WEIGHTS;
+  const w = state.config.prestige.EMPIRE_WEIGHTS;
   return (
     w.district * districts +
     w.route * routes +
@@ -165,16 +158,17 @@ function maxRivalTension(state: GameState): number {
  * to offer the consensual, telegraphed final choice.
  */
 export function evaluateSpiral(state: GameState): SpiralStatus {
+  const P = state.config.prestige;
   const capital = operatingCapital(state);
-  const wiped = capital <= WIPE_CAPITAL_THRESHOLD;
+  const wiped = capital <= state.config.stashes.WIPE_CAPITAL_THRESHOLD;
   const cantPay = wiped && obligations(state) > capital;
   const protectionCollapsed =
-    cantPay && (wireCount(state) > 0 || state.heat >= SPIRAL_HEAT_UNMANAGED);
+    cantPay && (wireCount(state) > 0 || state.heat >= P.SPIRAL_HEAT_UNMANAGED);
   const hunted =
     protectionCollapsed &&
     (isDebtMarked(state) ||
-      maxRivalTension(state) >= SPIRAL_RIVAL_HUNTED ||
-      state.heat >= SPIRAL_HEAT_HUNTED);
+      maxRivalTension(state) >= P.SPIRAL_RIVAL_HUNTED ||
+      state.heat >= P.SPIRAL_HEAT_HUNTED);
 
   const exits: SpiralExit[] = [
     {

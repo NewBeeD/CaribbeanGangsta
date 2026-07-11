@@ -31,38 +31,12 @@
 
 import { restoreRng } from './rng';
 import { addHeat } from './heat';
-import {
-  BETRAYAL_FLIP_LOYALTY,
-  BETRAYAL_PONR_LOYALTY,
-  BETRAYAL_WARNING_LOYALTY,
-  WIRE_HEAT_PER_HOUR,
-} from './config/crew';
 import { HEAT_MAX } from './config/heat';
 import {
-  BUSINESS_LEVEL_SCALE,
-  HAGGLE_DISCOUNT,
-  HAGGLE_REFUSE_CHANCE,
-  MAX_REP_DISCOUNT,
   OFFICIAL_LOYALTY_MAX,
   OFFICIAL_LOYALTY_MIN,
-  PORT_BRIBE_BASE_FRACTION,
-  PORT_BRIBE_MAX_FRACTION,
-  PORT_BRIBE_MIN_FRACTION,
-  PORT_DRIFT_PERIOD_HOURS,
   PORT_GREED_MAX,
   PORT_GREED_MIN,
-  PORT_PAID_DURATION_HOURS,
-  PORT_PAID_SEIZURE,
-  PORT_PRICE_DRIFT,
-  POLITICIAN_REP_BONUS,
-  RAISE_ACCEPT_LOYALTY,
-  RAISE_MIN_MARGIN,
-  REP_DISCOUNT_SCALE,
-  RETAINER_MISSED_LOYALTY,
-  RETAINER_PAID_LOYALTY,
-  RETAINER_UNDERPAY_LOYALTY,
-  RIVAL_PRESSURE_CAP,
-  RIVAL_TENSION_SCALE,
   findOfficial,
   getOfficial,
   type OfficialId,
@@ -104,8 +78,12 @@ function hash01(s: string): number {
  * (design/09 B.1). Stable and RNG-free, so a quote is reproducible and the same
  * port always reads the same way — greed is a fact about the official, not a roll.
  */
-export function portGreed(portId: string): number {
-  return PORT_GREED_MIN + hash01(`greed:${portId}`) * (PORT_GREED_MAX - PORT_GREED_MIN);
+export function portGreed(
+  portId: string,
+  greedMin: number = PORT_GREED_MIN,
+  greedMax: number = PORT_GREED_MAX,
+): number {
+  return greedMin + hash01(`greed:${portId}`) * (greedMax - greedMin);
 }
 
 /**
@@ -114,8 +92,9 @@ export function portGreed(portId: string): number {
  * tension yet), so an early quote is clean.
  */
 export function rivalPressure(state: GameState): number {
+  const cfg = state.config.corruption;
   const maxTension = state.rivals.reduce((m, r) => Math.max(m, r.tension), 0);
-  return clamp(maxTension / RIVAL_TENSION_SCALE, 0, RIVAL_PRESSURE_CAP);
+  return clamp(maxTension / cfg.RIVAL_TENSION_SCALE, 0, cfg.RIVAL_PRESSURE_CAP);
 }
 
 /**
@@ -123,8 +102,9 @@ export function rivalPressure(state: GameState): number {
  * high Business/Political reputation buys cheaper protection. `1` at run start.
  */
 export function repDiscount(state: GameState): number {
+  const cfg = state.config.corruption;
   const rep = state.reputation.business + state.reputation.political;
-  return 1 - clamp(rep / REP_DISCOUNT_SCALE, 0, MAX_REP_DISCOUNT);
+  return 1 - clamp(rep / cfg.REP_DISCOUNT_SCALE, 0, cfg.MAX_REP_DISCOUNT);
 }
 
 /**
@@ -134,9 +114,11 @@ export function repDiscount(state: GameState): number {
  * port so different ports peak at different times.
  */
 export function portDriftFactor(state: GameState, portId: string): number {
+  const cfg = state.config.corruption;
   const phaseOffset = hash01(`drift:${portId}`) * 2 * Math.PI;
-  const phase = (state.clock.hours / PORT_DRIFT_PERIOD_HOURS) * 2 * Math.PI + phaseOffset;
-  return 1 + PORT_PRICE_DRIFT * Math.sin(phase);
+  const phase =
+    (state.clock.hours / cfg.PORT_DRIFT_PERIOD_HOURS) * 2 * Math.PI + phaseOffset;
+  return 1 + cfg.PORT_PRICE_DRIFT * Math.sin(phase);
 }
 
 // --- Port bribes (design/09 B.1) ---------------------------------------------
@@ -172,29 +154,30 @@ export function quoteBribe(
   portId: string,
   shipmentValue: number,
 ): BribeQuote {
+  const cfg = state.config.corruption;
   const value = Math.max(0, shipmentValue);
   const heat = clamp(state.heat / HEAT_MAX, 0, 1);
   const fraction = clamp(
-    PORT_BRIBE_BASE_FRACTION,
-    PORT_BRIBE_MIN_FRACTION,
-    PORT_BRIBE_MAX_FRACTION,
+    cfg.PORT_BRIBE_BASE_FRACTION,
+    cfg.PORT_BRIBE_MIN_FRACTION,
+    cfg.PORT_BRIBE_MAX_FRACTION,
   );
   const ask =
     fraction *
     value *
     (1 + heat) *
     (1 + rivalPressure(state)) *
-    portGreed(portId) *
+    portGreed(portId, cfg.PORT_GREED_MIN, cfg.PORT_GREED_MAX) *
     repDiscount(state) *
     portDriftFactor(state, portId);
 
   return {
     portId,
     ask: Math.round(ask),
-    resultingSeizurePct: PORT_PAID_SEIZURE,
+    resultingSeizurePct: cfg.PORT_PAID_SEIZURE,
     baseSeizurePct: state.corruption.paidPorts.some((p) => p.portId === portId)
-      ? PORT_PAID_SEIZURE
-      : 0.3,
+      ? cfg.PORT_PAID_SEIZURE
+      : cfg.PORT_BASE_SEIZURE,
   };
 }
 
@@ -225,17 +208,18 @@ export function haggle(
   portId: string,
   shipmentValue: number,
 ): HaggleResult {
+  const cfg = state.config.corruption;
   const quote = quoteBribe(state, portId, shipmentValue);
   const rng = restoreRng(state.rngState);
   const rolledValue = rng.next();
-  const refused = rolledValue < HAGGLE_REFUSE_CHANCE;
+  const refused = rolledValue < cfg.HAGGLE_REFUSE_CHANCE;
   const advanced: GameState = { ...state, rngState: rng.getState() };
   return {
     state: advanced,
-    refuseChance: HAGGLE_REFUSE_CHANCE,
+    refuseChance: cfg.HAGGLE_REFUSE_CHANCE,
     rolledValue,
     refused,
-    ask: refused ? quote.ask : Math.round(quote.ask * (1 - HAGGLE_DISCOUNT)),
+    ask: refused ? quote.ask : Math.round(quote.ask * (1 - cfg.HAGGLE_DISCOUNT)),
     resultingSeizurePct: quote.resultingSeizurePct,
   };
 }
@@ -284,9 +268,9 @@ export function payBribe(
 
   const paidPort: PaidPort = {
     portId,
-    seizurePct: PORT_PAID_SEIZURE,
+    seizurePct: state.config.corruption.PORT_PAID_SEIZURE,
     paidAtHours: state.clock.hours,
-    paidUntilHours: state.clock.hours + PORT_PAID_DURATION_HOURS,
+    paidUntilHours: state.clock.hours + state.config.corruption.PORT_PAID_DURATION_HOURS,
   };
   const next: GameState = {
     ...state,
@@ -412,7 +396,7 @@ export function hire(
   if (cfg.benefit === 'port-seizure-floor' && opts.portId !== undefined) {
     const standing: PaidPort = {
       portId: opts.portId,
-      seizurePct: PORT_PAID_SEIZURE,
+      seizurePct: state.config.corruption.PORT_PAID_SEIZURE,
       paidAtHours: state.clock.hours,
       // No `paidUntilHours` — standing while the customs chief is on payroll.
     };
@@ -429,7 +413,7 @@ export function hire(
       ...next,
       reputation: {
         ...next.reputation,
-        political: next.reputation.political + POLITICIAN_REP_BONUS,
+        political: next.reputation.political + state.config.corruption.POLITICIAN_REP_BONUS,
       },
     };
   }
@@ -486,7 +470,7 @@ function applyOfficialLoyalty(
 
 /** Business level 0..1 from Business reputation — the growth term of the raise ask. */
 function businessLevel(state: GameState): number {
-  return clamp(state.reputation.business / BUSINESS_LEVEL_SCALE, 0, 1);
+  return clamp(state.reputation.business / state.config.corruption.BUSINESS_LEVEL_SCALE, 0, 1);
 }
 
 /**
@@ -530,7 +514,7 @@ export function requestRaise(state: GameState, officialId: string): RaiseResult 
   if (tie.pendingRaise) return { state, official: tie };
 
   const newRetainer = computeRaiseAsk(state, tie);
-  if (newRetainer < tie.retainerPerWeek * (1 + RAISE_MIN_MARGIN)) {
+  if (newRetainer < tie.retainerPerWeek * (1 + state.config.corruption.RAISE_MIN_MARGIN)) {
     return { state, official: tie }; // not worth asking — stays quiet
   }
 
@@ -564,7 +548,7 @@ export function respondToRaise(
     next = applyOfficialLoyalty(
       next,
       officialId,
-      RAISE_ACCEPT_LOYALTY,
+      state.config.corruption.RAISE_ACCEPT_LOYALTY,
       'raise-accepted',
       `You met ${tie.name}'s number without a fuss.`,
     );
@@ -577,7 +561,7 @@ export function respondToRaise(
   next = applyOfficialLoyalty(
     next,
     officialId,
-    RETAINER_UNDERPAY_LOYALTY,
+    state.config.corruption.RETAINER_UNDERPAY_LOYALTY,
     'underpaid',
     `You turned down ${tie.name}'s ask for more.`,
   );
@@ -630,7 +614,7 @@ export function chargeRetainers(state: GameState): ChargeResult {
         next = applyOfficialLoyalty(
           next,
           id,
-          RETAINER_UNDERPAY_LOYALTY,
+          state.config.corruption.RETAINER_UNDERPAY_LOYALTY,
           'underpaid',
           `You kept paying ${name} the old rate and ignored their ask.`,
         );
@@ -638,7 +622,7 @@ export function chargeRetainers(state: GameState): ChargeResult {
         next = applyOfficialLoyalty(
           next,
           id,
-          RETAINER_PAID_LOYALTY * weeks,
+          state.config.corruption.RETAINER_PAID_LOYALTY * weeks,
           'paid',
           `You kept ${name} paid and happy.`,
         );
@@ -651,7 +635,7 @@ export function chargeRetainers(state: GameState): ChargeResult {
       next = applyOfficialLoyalty(
         next,
         id,
-        RETAINER_MISSED_LOYALTY,
+        state.config.corruption.RETAINER_MISSED_LOYALTY,
         'missed',
         `You came up short on ${name}'s retainer.`,
       );
@@ -697,12 +681,13 @@ export function officialFlipTarget(
   official: OfficialTie,
 ): BetrayalStage | 'none' {
   if (official.isWire) return 'flipped';
+  const crew = state.config.crew;
   const heatOverComfort = state.heat > official.comfortHeat;
   if (!officialHasGrievance(official) && !heatOverComfort) return 'none';
   const L = official.loyalty;
-  if (L < BETRAYAL_FLIP_LOYALTY) return 'flipped';
-  if (L < BETRAYAL_PONR_LOYALTY) return 'point-of-no-return';
-  if (L < BETRAYAL_WARNING_LOYALTY) return 'warning';
+  if (L < crew.BETRAYAL_FLIP_LOYALTY) return 'flipped';
+  if (L < crew.BETRAYAL_PONR_LOYALTY) return 'point-of-no-return';
+  if (L < crew.BETRAYAL_WARNING_LOYALTY) return 'warning';
   // Nervous-but-loyal (heat over comfort, loyalty still high): a warning at most.
   return heatOverComfort ? 'warning' : 'none';
 }
@@ -782,7 +767,10 @@ export function advanceOfficialFlipArcs(state: GameState): GameState {
 
 /** Passive heat/hr from every flipped official acting as an embedded wire. */
 export function officialWireHeatPerHour(state: GameState): number {
-  return state.corruption.officials.filter((o) => o.isWire).length * WIRE_HEAT_PER_HOUR;
+  return (
+    state.corruption.officials.filter((o) => o.isWire).length *
+    state.config.crew.WIRE_HEAT_PER_HOUR
+  );
 }
 
 /**
@@ -824,7 +812,10 @@ export function corruptionStep(state: GameState, dtHours: number): GameState {
  */
 export function judgeCanDismiss(state: GameState): boolean {
   return state.corruption.officials.some(
-    (o) => o.officialId === 'judge' && !o.isWire && o.loyalty >= BETRAYAL_WARNING_LOYALTY,
+    (o) =>
+      o.officialId === 'judge' &&
+      !o.isWire &&
+      o.loyalty >= state.config.crew.BETRAYAL_WARNING_LOYALTY,
   );
 }
 
@@ -833,20 +824,29 @@ export function judgeCanDismiss(state: GameState): boolean {
 /** Whether a beat cop on payroll (not flipped) is tipping you off on local raids. */
 export function hasRaidTipoff(state: GameState): boolean {
   return state.corruption.officials.some(
-    (o) => o.officialId === 'beat-cop' && !o.isWire && o.loyalty >= BETRAYAL_PONR_LOYALTY,
+    (o) =>
+      o.officialId === 'beat-cop' &&
+      !o.isWire &&
+      o.loyalty >= state.config.crew.BETRAYAL_PONR_LOYALTY,
   );
 }
 
 /** Whether a DEA insider on payroll (not flipped) is warning you off task forces. */
 export function hasTaskforceWarning(state: GameState): boolean {
   return state.corruption.officials.some(
-    (o) => o.officialId === 'detective' && !o.isWire && o.loyalty >= BETRAYAL_PONR_LOYALTY,
+    (o) =>
+      o.officialId === 'detective' &&
+      !o.isWire &&
+      o.loyalty >= state.config.crew.BETRAYAL_PONR_LOYALTY,
   );
 }
 
 /** Whether a politician on payroll (not flipped) is providing standing protection. */
 export function hasPoliticalProtection(state: GameState): boolean {
   return state.corruption.officials.some(
-    (o) => o.officialId === 'politician' && !o.isWire && o.loyalty >= BETRAYAL_PONR_LOYALTY,
+    (o) =>
+      o.officialId === 'politician' &&
+      !o.isWire &&
+      o.loyalty >= state.config.crew.BETRAYAL_PONR_LOYALTY,
   );
 }

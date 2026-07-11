@@ -71,21 +71,20 @@ export interface FiredBeat {
   readonly triggerType: BeatTriggerType;
 }
 
-// --- Thresholds (v1 hypotheses; Prompt 26 centralizes) -----------------------
+// --- Thresholds (v1 hypotheses; Prompt 26 centralized into config/events.ts) --
+// Live values are read from `state.config.events`; the defaults are re-exported
+// here for the existing engine surface.
 
-/** Clean cash at which "you're on the map now" — the DEA opens a file (design/05 §2). */
-export const ON_THE_MAP_CLEAN_CASH = 1_000_000;
-
-/** Peak net worth at which the crown-weighs-heavy beat fires (design/05 §2). */
-export const CROWN_PEAK_NET_WORTH = 10_000_000;
+export {
+  ON_THE_MAP_CLEAN_CASH,
+  CROWN_PEAK_NET_WORTH,
+  MAJOR_BEATS_PER_TICK,
+} from './config/events';
 
 /** Flags other systems set that beats key off (kept as named constants, not literals). */
 export const ARMS_UNLOCK_FLAG = 'arms-unlocked';
 export const INTERNATIONAL_ROUTES_FLAG = 'international-routes';
 export const JUDGE_COMEBACK_FLAG = 'judge-comeback';
-
-/** At most one act-defining beat fires per tick — plateau spacing (design/05 §3). */
-export const MAJOR_BEATS_PER_TICK = 1;
 
 // --- The trigger table (design/05 §2 + design/09 & design/10 rows) -----------
 
@@ -170,7 +169,7 @@ export const BEAT_TRIGGERS: readonly BeatTrigger[] = [
     major: true,
     negative: false,
     summary: "A million clean. You're on the map now — and a DEA analyst just opened a file with your name on it.",
-    when: (s) => s.cleanCash >= ON_THE_MAP_CLEAN_CASH,
+    when: (s) => s.cleanCash >= s.config.events.ON_THE_MAP_CLEAN_CASH,
   },
   {
     beatId: 'beat.arms-unlock',
@@ -200,7 +199,7 @@ export const BEAT_TRIGGERS: readonly BeatTrigger[] = [
     major: true,
     negative: false,
     summary: 'Heat crosses the line. The task force hunting you gets a name and a face — this is personal now.',
-    when: (s) => tierForHeat(s.heat) === 'cia',
+    when: (s) => tierForHeat(s.heat, s.config.heat.HEAT_TIERS) === 'cia',
   },
   {
     beatId: 'beat.official-flip',
@@ -220,7 +219,7 @@ export const BEAT_TRIGGERS: readonly BeatTrigger[] = [
     major: true,
     negative: false,
     summary: 'At the peak, the crown weighs heavy. Family, vice, the cost of it all — it surfaces now.',
-    when: (s) => s.highScore.peakNetWorth >= CROWN_PEAK_NET_WORTH,
+    when: (s) => s.highScore.peakNetWorth >= s.config.events.CROWN_PEAK_NET_WORTH,
   },
   // --- Act IV: the fall ----------------------------------------------------
   {
@@ -307,7 +306,7 @@ export function checkBeats(state: GameState): FiredBeat[] {
     if (t.negative && !hasBankedWin(state)) continue;
     if (!t.when(state)) continue;
     if (t.major) {
-      if (majorCount >= MAJOR_BEATS_PER_TICK) continue; // spaced to a later tick
+      if (majorCount >= state.config.events.MAJOR_BEATS_PER_TICK) continue; // spaced out
       majorCount++;
     }
     fired.push({ beatId: t.beatId, triggerType: t.triggerType });

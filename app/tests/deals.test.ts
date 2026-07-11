@@ -248,7 +248,8 @@ describe('resolveDeal — sell (fairness law, GDD §8)', () => {
     expect(result.outcome).toBe(expectedOutcome);
   });
 
-  it('observed bust frequency ≈ displayed probability over 100k sells', () => {
+  // 100k full resolveDeal calls — a statistical check, so give it a real budget.
+  it('observed bust frequency ≈ displayed probability over 100k sells', { timeout: 30_000 }, () => {
     const base = seed(createInitialState('fair-mc'), {
       heat: 40,
       inventory: { weed: 500 },

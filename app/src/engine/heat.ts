@@ -23,17 +23,11 @@
 import type { Rng } from './rng';
 import { PRODUCT_IDS } from './config/countries';
 import {
-  BRIBE_HEAT_PER_DOLLAR,
-  EMPIRE_DECAY_SLOWDOWN,
-  HEAT_DECAY_RATE_PER_HOUR,
   HEAT_DOTS_TOTAL,
   HEAT_MAX,
   HEAT_MIN,
   HEAT_TIERS,
-  LIE_LOW_DECAY_MULTIPLIER,
-  QUICK_BRIBE_DOLLARS,
-  RAID_BASE_RATE_PER_HOUR,
-  RAID_EMPIRE_FACTOR,
+  type HeatTierConfig,
   type LeTier,
 } from './config/heat';
 import type { GameState, PendingChoice, Stash } from './state';
@@ -69,9 +63,10 @@ export function addHeat(state: GameState, amount: number, _source?: string): Gam
  */
 export function decayHeat(state: GameState, dtHours: number): GameState {
   if (dtHours <= 0 || state.heat <= HEAT_MIN) return state;
-  const lieLowMult = state.lyingLow ? LIE_LOW_DECAY_MULTIPLIER : 1;
-  const slowdown = 1 + empireSizeOf(state) * EMPIRE_DECAY_SLOWDOWN;
-  const rate = clamp((HEAT_DECAY_RATE_PER_HOUR * lieLowMult) / slowdown, 0, 1);
+  const cfg = state.config.heat;
+  const lieLowMult = state.lyingLow ? cfg.LIE_LOW_DECAY_MULTIPLIER : 1;
+  const slowdown = 1 + empireSizeOf(state) * cfg.EMPIRE_DECAY_SLOWDOWN;
+  const rate = clamp((cfg.HEAT_DECAY_RATE_PER_HOUR * lieLowMult) / slowdown, 0, 1);
   const heat = state.heat * Math.pow(1 - rate, dtHours);
   return { ...state, heat: clamp(heat, HEAT_MIN, HEAT_MAX) };
 }
@@ -83,7 +78,7 @@ export function decayHeat(state: GameState, dtHours: number): GameState {
  */
 export function reduceHeatByBribe(state: GameState, bribeDollars: number): GameState {
   if (bribeDollars <= 0) return state;
-  return addHeat(state, -bribeDollars * BRIBE_HEAT_PER_DOLLAR, 'bribe');
+  return addHeat(state, -bribeDollars * state.config.heat.BRIBE_HEAT_PER_DOLLAR, 'bribe');
 }
 
 /**
@@ -97,9 +92,10 @@ export interface BribeCoolQuote {
   readonly heatReduced: number;
 }
 
-export function bribeCoolQuote(state: GameState, dollars = QUICK_BRIBE_DOLLARS): BribeCoolQuote {
-  const cost = Math.max(0, Math.round(dollars));
-  const raw = cost * BRIBE_HEAT_PER_DOLLAR;
+export function bribeCoolQuote(state: GameState, dollars?: number): BribeCoolQuote {
+  const cfg = state.config.heat;
+  const cost = Math.max(0, Math.round(dollars ?? cfg.QUICK_BRIBE_DOLLARS));
+  const raw = cost * cfg.BRIBE_HEAT_PER_DOLLAR;
   const heatReduced = Math.min(raw, state.heat - HEAT_MIN);
   return { cost, heatReduced: Math.round(heatReduced * 10) / 10 };
 }
@@ -121,8 +117,8 @@ export interface BribeCoolResult {
  * invalid amount or insufficient funds. The full corruption negotiation & payroll
  * remain Prompt 09/20's domain; this is the quick, always-available option.
  */
-export function bribeToCoolHeat(state: GameState, dollars = QUICK_BRIBE_DOLLARS): BribeCoolResult {
-  const quote = bribeCoolQuote(state, dollars);
+export function bribeToCoolHeat(state: GameState, dollars?: number): BribeCoolResult {
+  const quote = bribeCoolQuote(state, dollars ?? state.config.heat.QUICK_BRIBE_DOLLARS);
   if (quote.cost <= 0) {
     return { state, ok: false, paid: 0, heatReduced: 0, rejected: 'invalid-amount' };
   }
@@ -137,20 +133,23 @@ export function bribeToCoolHeat(state: GameState, dollars = QUICK_BRIBE_DOLLARS)
 // --- Tiers -------------------------------------------------------------------
 
 /** Classify a raw heat value into its LE tier (boundary belongs to the higher tier). */
-export function tierForHeat(heat: number): LeTier {
-  for (const tier of HEAT_TIERS) {
+export function tierForHeat(
+  heat: number,
+  tiers: readonly HeatTierConfig[] = HEAT_TIERS,
+): LeTier {
+  for (const tier of tiers) {
     if (heat < tier.max) return tier.id;
   }
-  return HEAT_TIERS[HEAT_TIERS.length - 1]!.id;
+  return tiers[tiers.length - 1]!.id;
 }
 
-function tierIndex(id: LeTier): number {
-  return HEAT_TIERS.findIndex((t) => t.id === id);
+function tierIndex(id: LeTier, tiers: readonly HeatTierConfig[]): number {
+  return tiers.findIndex((t) => t.id === id);
 }
 
 /** The run's current LE tier from its heat meter (design/01 §4). */
 export function currentTier(state: GameState): LeTier {
-  return tierForHeat(state.heat);
+  return tierForHeat(state.heat, state.config.heat.HEAT_TIERS);
 }
 
 /** The Heat wireframe's dot meter: `filled` of `total`, filled ∝ heat (design/07 §5). */
@@ -181,9 +180,10 @@ export interface TierEscalation {
  * mutates; `applyHeatEscalation` owns advancing the acknowledgement.
  */
 export function checkTierEscalation(state: GameState): TierEscalation {
+  const tiers = state.config.heat.HEAT_TIERS;
   const newTier = currentTier(state);
-  const crossed = tierIndex(newTier) > tierIndex(state.leTierAck);
-  const beatKey = crossed ? HEAT_TIERS[tierIndex(newTier)]!.beatKey : undefined;
+  const crossed = tierIndex(newTier, tiers) > tierIndex(state.leTierAck, tiers);
+  const beatKey = crossed ? tiers[tierIndex(newTier, tiers)]!.beatKey : undefined;
   return beatKey === undefined ? { crossed, newTier } : { crossed, newTier, beatKey };
 }
 
@@ -195,12 +195,13 @@ export function checkTierEscalation(state: GameState): TierEscalation {
  * again ("exactly once per crossing"). Active-only (registered in clock.ts).
  */
 export function applyHeatEscalation(state: GameState): GameState {
+  const tiers = state.config.heat.HEAT_TIERS;
   const newTier = currentTier(state);
-  const curIdx = tierIndex(newTier);
-  const ackIdx = tierIndex(state.leTierAck);
+  const curIdx = tierIndex(newTier, tiers);
+  const ackIdx = tierIndex(state.leTierAck, tiers);
 
   if (curIdx > ackIdx) {
-    const tier = HEAT_TIERS[curIdx]!;
+    const tier = tiers[curIdx]!;
     const telegraph: PendingChoice = {
       id: `heat-escalation-${tier.id}-${state.clock.hours}`,
       kind: 'heat-escalation',
@@ -269,10 +270,11 @@ function stashValueAtRisk(stash: Stash): number {
  */
 export function raidChance(state: GameState, dtHours: number): number {
   if (dtHours <= 0) return 0;
+  const cfg = state.config.heat;
   const perHour =
-    RAID_BASE_RATE_PER_HOUR[tierForHeat(state.heat)] *
+    cfg.RAID_BASE_RATE_PER_HOUR[currentTier(state)] *
     (state.heat / HEAT_MAX) *
-    (1 + empireSizeOf(state) * RAID_EMPIRE_FACTOR);
+    (1 + empireSizeOf(state) * cfg.RAID_EMPIRE_FACTOR);
   return clamp(1 - Math.pow(1 - clamp(perHour, 0, 1), dtHours), 0, 1);
 }
 
@@ -289,7 +291,7 @@ export function rollRaid(state: GameState, rng: Rng, dtHours = 1): RaidEvent | n
   const target = rng.weighted(state.stashes.map((s) => [s, 1 + stashValueAtRisk(s)]));
   return {
     targetStashId: target.id,
-    tier: tierForHeat(state.heat),
+    tier: currentTier(state),
     heatAtRoll: state.heat,
   };
 }

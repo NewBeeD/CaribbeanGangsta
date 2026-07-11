@@ -20,6 +20,7 @@
 import { createRng, restoreRng, type Rng, type RngState } from './rng';
 import { generateWorld, type World } from './world';
 import { PRODUCT_IDS, type ProductId } from './config/countries';
+import { DEFAULT_GAME_CONFIG, type GameConfig } from './config';
 import {
   createInitialMarkets,
   resolveDeal,
@@ -60,8 +61,11 @@ import type {
  *     inventory, and `world` gains `exoticStrain` + supplier `demandFactor`.
  * v9: added `shipments` (in-flight cross-country cargo, travel engine, Prompt
  *     30) and the `courier` crew-assignment kind.
+ * v10: added `config` — the injected `GameConfig` tuning the run was started
+ *     under (Prompt 26). Saved with the run so a load resumes under the exact
+ *     numbers it was played with; old saves migrate to the v1 default.
  */
-export const SCHEMA_VERSION = 9 as const;
+export const SCHEMA_VERSION = 10 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -326,6 +330,13 @@ export interface GameState {
   readonly seed: string;
   /** Serialized RNG stream — restored on load so rolls resume byte-identically. */
   readonly rngState: RngState;
+  /**
+   * The balance tuning this run plays under (Prompt 26) — plain data, injected
+   * at `createInitialState` (default = the v1 `DEFAULT_GAME_CONFIG`) and read
+   * by every reducer/tick step, so alternate tunings need no code changes and a
+   * save round-trips with its exact numbers.
+   */
+  readonly config: GameConfig;
   readonly world: World;
   readonly clock: Clock;
   /** Live per-location price drift for the deal loop (Prompt 04). */
@@ -452,10 +463,17 @@ export function empireSize(state: GameState): number {
  * The run's RNG stream continues from where world generation left off, and its
  * snapshot is stored in `rngState` — so a save taken now and reloaded later
  * yields the exact same next deal roll (Prompt 03 acceptance).
+ *
+ * `config` injects the balance tuning (Prompt 26): the same seed under two
+ * different tunings yields two different runs; the same seed under the same
+ * tuning is byte-identical.
  */
-export function createInitialState(seed: number | string): GameState {
+export function createInitialState(
+  seed: number | string,
+  config: GameConfig = DEFAULT_GAME_CONFIG,
+): GameState {
   const rng = createRng(seed);
-  const world = generateWorld(rng);
+  const world = generateWorld(rng, config);
   const country = world.startingCountry;
 
   const homeStash: Stash = {
@@ -477,6 +495,7 @@ export function createInitialState(seed: number | string): GameState {
     schemaVersion: SCHEMA_VERSION,
     seed: world.seed,
     rngState: rng.getState(),
+    config,
     world,
     clock: { hours: 0, day: 1, week: 1 },
     markets: createInitialMarkets(),
@@ -486,7 +505,7 @@ export function createInitialState(seed: number | string): GameState {
     heat: country.heatBaseline,
     lyingLow: false,
     // Acknowledge the opening tier so the baseline never self-telegraphs on tick 1.
-    leTierAck: tierForHeat(country.heatBaseline),
+    leTierAck: tierForHeat(country.heatBaseline, config.heat.HEAT_TIERS),
     inventory: emptyInventory(),
     stashes: [homeStash],
     shipments: [],

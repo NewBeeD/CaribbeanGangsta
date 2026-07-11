@@ -29,7 +29,8 @@ import { PRODUCT_IDS, isTraded, requiresPlug, type ProductId } from '@/engine/co
 import { getStashType } from '@/engine/config/stashes';
 import { stashUnits } from '@/engine/storage';
 import { pesoExchange, buyFront } from '@/engine/laundering';
-import { FRONT_TYPES, type FrontType } from '@/engine/config/fronts';
+import type { FrontType } from '@/engine/config/fronts';
+import type { GameConfig } from '@/engine/config';
 import { setLieLow } from '@/engine/heat';
 import { HEAT_MAX } from '@/engine/config/heat';
 import { endRun, evaluateSpiral } from '@/engine/endgame';
@@ -58,6 +59,12 @@ export interface BatchSimOptions {
   readonly hoursPerStep?: number;
   /** Retirement horizon, in-game days — bounds every run (default 84). */
   readonly maxDays?: number;
+  /**
+   * The balance tuning to run under (Prompt 26) — default the v1 config. The
+   * whole point of the injection: the SAME seeds under an alternate tuning
+   * report different outcomes, with no code changes.
+   */
+  readonly config?: GameConfig;
 }
 
 /** Products the policy may buy at `countryId` right now (traded, plug held). */
@@ -83,8 +90,10 @@ export function hasFirstMove(state: GameState): boolean {
 }
 
 /** The cheapest front the policy saves toward (idle engine on = longer runs). */
-function cheapestFront(): { readonly type: FrontType; readonly buyIn: number } {
-  const best = FRONT_TYPES.reduce((a, b) => (b.buyIn < a.buyIn ? b : a));
+function cheapestFront(state: GameState): { readonly type: FrontType; readonly buyIn: number } {
+  const best = state.config.fronts.FRONT_TYPES.reduce((a, b) =>
+    b.buyIn < a.buyIn ? b : a,
+  );
   return { type: best.id, buyIn: best.buyIn };
 }
 
@@ -100,6 +109,8 @@ function policyStep(state: GameState): GameState {
   let next = state;
 
   // Heat management: duck under the worst of it (free, deterministic lever).
+  // The 0.7/0.3 hysteresis band is POLICY (what this scripted dealer does), not
+  // game balance — sim-policy knobs stay local to the harness.
   if (!next.lyingLow && next.heat > HEAT_MAX * 0.7) next = setLieLow(next, true);
   else if (next.lyingLow && next.heat < HEAT_MAX * 0.3) next = setLieLow(next, false);
 
@@ -115,14 +126,16 @@ function policyStep(state: GameState): GameState {
   if (home.dirtyCash > 20_000) {
     next = pesoExchange(next, Math.floor(home.dirtyCash / 2), home.id).state;
   }
-  const front = cheapestFront();
+  const front = cheapestFront(next);
   if (next.cleanCash >= front.buyIn * 1.5) {
     next = buyFront(next, front.type).state;
   }
 
   // Buy the best-margin affordable product at home.
   const homeNow = next.stashes[0]!;
-  const room = getStashType(homeNow.type).capacity - stashUnits(homeNow);
+  const room =
+    getStashType(homeNow.type, next.config.stashes.STASH_TYPES).capacity -
+    stashUnits(homeNow);
   let best: { product: ProductId; qty: number; margin: number } | null = null;
   for (const p of buyableProducts(next, homeNow.countryId)) {
     const price = getMarketPrice(next, p, homeNow.countryId);
@@ -152,7 +165,9 @@ export function simulateRun(
 ): SimRunReport {
   const hoursPerStep = options.hoursPerStep ?? 6;
   const maxDays = options.maxDays ?? 84;
-  let state = createInitialState(seed);
+  let state = options.config
+    ? createInitialState(seed, options.config)
+    : createInitialState(seed);
   const maxSteps = Math.ceil((maxDays * 24) / hoursPerStep);
 
   for (let step = 0; step < maxSteps; step++) {
@@ -194,7 +209,9 @@ export function runBatchSim(
   const deadOnArrival: string[] = [];
   const runs: SimRunReport[] = [];
   for (const seed of seeds) {
-    const opening = createInitialState(seed);
+    const opening = options.config
+      ? createInitialState(seed, options.config)
+      : createInitialState(seed);
     if (!hasFirstMove(opening)) {
       deadOnArrival.push(opening.seed);
       continue;

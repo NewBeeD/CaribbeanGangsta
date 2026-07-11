@@ -34,6 +34,48 @@ export type {
   SupplierGeography,
 } from './world';
 
+// The single typed balance surface + injection API (Prompt 26; design/01 §8).
+export {
+  DEFAULT_GAME_CONFIG,
+  tunedConfig,
+  TUNE_FIRST,
+  knobValue,
+} from './config';
+export type {
+  GameConfig,
+  GameConfigOverrides,
+  TuneFirstKnob,
+  WorldTuning,
+  ProductsTuning,
+  DealsTuning,
+  HeatTuning,
+  StashesTuning,
+  FrontsTuning,
+  CrewTuning,
+  CorruptionTuning,
+  LendersTuning,
+  EventsTuning,
+  PrestigeTuning,
+  TransportTuning,
+  ConversionsTuning,
+  PlugsTuning,
+  OnboardingTuning,
+} from './config';
+
+// Prestige-unlocked starting scenarios — data only, non-power (GDD §7; Prompt 26).
+export { STARTING_SCENARIOS, findScenario } from './config/scenarios';
+export type { StartingScenario } from './config/scenarios';
+
+// First-session onboarding budget (design/01 §6; Prompt 24 consumes).
+export {
+  SESSION_TARGET_MIN_MINUTES,
+  SESSION_TARGET_MAX_MINUTES,
+  MINUTE_BUDGET,
+  GUIDED_DEALS_AFTER_FIRST,
+  MAX_INSTRUCTION_WORDS,
+  SAFE_DEALS_BEFORE_RISK,
+} from './config/onboarding';
+
 // Economy / roster config (design/01 §0a, §2; design/11).
 export {
   COUNTRIES,

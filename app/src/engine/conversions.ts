@@ -69,8 +69,16 @@ function reject(state: GameState, rejected: ConvertRejectReason): ConvertResult 
  * `cleanCash` is the run's clean pool, spendable here like anywhere money is a
  * gate (a borrowed stake can fund the cook — design/10's come-up hook).
  */
-export function maxBatches(recipeId: RecipeId, stash: Stash, cleanCash = 0): number {
-  const recipe = getRecipe(recipeId);
+export function maxBatches(
+  recipeId: RecipeId,
+  stash: Stash,
+  cleanCash = 0,
+  tuning?: {
+    readonly recipes?: readonly ConversionRecipe[];
+    readonly stashTypes?: Parameters<typeof getStashType>[1];
+  },
+): number {
+  const recipe = getRecipe(recipeId, tuning?.recipes);
   const byUnits = Math.floor((stash.inventory[recipe.from] ?? 0) / recipe.fromQty);
   const byCash =
     recipe.costPerBatch > 0
@@ -80,7 +88,8 @@ export function maxBatches(recipeId: RecipeId, stash: Stash, cleanCash = 0): num
   const bySpace =
     netPerBatch > 0
       ? Math.floor(
-          (getStashType(stash.type).capacity - stashUnits(stash)) / netPerBatch,
+          (getStashType(stash.type, tuning?.stashTypes).capacity - stashUnits(stash)) /
+            netPerBatch,
         )
       : Number.MAX_SAFE_INTEGER;
   return Math.max(0, Math.min(byUnits, byCash, bySpace));
@@ -101,7 +110,10 @@ export function convert(state: GameState, intent: ConvertIntent): ConvertResult 
       : (state.stashes[0] ?? null);
   if (!stash) return reject(state, 'no-stash');
 
-  const recipe: ConversionRecipe = getRecipe(intent.recipe);
+  const recipe: ConversionRecipe = getRecipe(
+    intent.recipe,
+    state.config.conversions.CONVERSION_RECIPES,
+  );
   const consumed = recipe.fromQty * batches;
   const produced = recipe.toQty * batches;
   const cost = recipe.costPerBatch * batches;
@@ -116,7 +128,8 @@ export function convert(state: GameState, intent: ConvertIntent): ConvertResult 
   const netUnits = produced - consumed;
   if (
     netUnits > 0 &&
-    stashUnits(stash) + netUnits > getStashType(stash.type).capacity
+    stashUnits(stash) + netUnits >
+      getStashType(stash.type, state.config.stashes.STASH_TYPES).capacity
   ) {
     return reject(state, 'insufficient-capacity');
   }

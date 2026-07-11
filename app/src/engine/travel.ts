@@ -39,25 +39,7 @@ import {
 } from './config/countries';
 import { getProduct } from './config/products';
 import { getStashType } from './config/stashes';
-import {
-  CARGO_HEAT_FULL_RISK,
-  CARGO_HEAT_WEIGHT,
-  CONSIGNED_BUST_HEAT_FACTOR,
-  COURIER_CUT_PCT,
-  COURIER_SKIM_PCT,
-  DEST_RISK_WEIGHT,
-  DISTANCE_RISK_WEIGHT,
-  ESCORT_ODDS_REDUCTION,
-  INTERDICTION_BASE,
-  INTERDICTION_MAX,
-  INTERDICTION_MIN,
-  MIN_LEG_DISTANCE,
-  MODE_RISK_WEIGHT,
-  PAID_PORT_RELIEF,
-  PORT_PROTECTION_WEIGHT,
-  getTransport,
-  type TransportId,
-} from './config/transport';
+import { getTransport, type TransportId } from './config/transport';
 import { getMarketPrice } from './deals';
 import { addHeat } from './heat';
 import {
@@ -146,8 +128,8 @@ function stashUnits(stash: Stash): number {
 }
 
 /** The leg's REGION_DISTANCE, floored so cross-country hops are never free. */
-function legDistance(from: CountryConfig, to: CountryConfig): number {
-  return Math.max(REGION_DISTANCE[from.region][to.region], MIN_LEG_DISTANCE);
+function legDistance(from: CountryConfig, to: CountryConfig, minLeg: number): number {
+  return Math.max(REGION_DISTANCE[from.region][to.region], minLeg);
 }
 
 /** Whether a country's port is currently paid (design/09 A.3; corruption.ts). */
@@ -185,24 +167,26 @@ export function interdictionChance(state: GameState, intent: ShipIntent): number
   const toCountry = findCountry(to.countryId);
   if (!fromCountry || !toCountry) return 0;
 
-  const mode = getTransport(intent.mode);
-  const dist = legDistance(fromCountry, toCountry);
-  const cargoHeat = getProduct(intent.product).heatPerUnit * intent.qty;
-  const cargoHeatN = clamp(cargoHeat / CARGO_HEAT_FULL_RISK, 0, 1);
+  const T = state.config.transport;
+  const mode = getTransport(intent.mode, T.TRANSPORTS);
+  const dist = legDistance(fromCountry, toCountry, T.MIN_LEG_DISTANCE);
+  const cargoHeat =
+    getProduct(intent.product, state.config.products.PRODUCTS).heatPerUnit * intent.qty;
+  const cargoHeatN = clamp(cargoHeat / T.CARGO_HEAT_FULL_RISK, 0, 1);
   const paid = isPortPaid(state, to.countryId) || isPortPaid(state, from.countryId);
 
   const raw =
-    INTERDICTION_BASE +
-    mode.baseRisk * MODE_RISK_WEIGHT +
-    dist * DISTANCE_RISK_WEIGHT +
-    cargoHeatN * CARGO_HEAT_WEIGHT +
-    toCountry.risk * DEST_RISK_WEIGHT -
-    toCountry.portProtectionBaseline * PORT_PROTECTION_WEIGHT -
-    (paid ? PAID_PORT_RELIEF : 0);
+    T.INTERDICTION_BASE +
+    mode.baseRisk * T.MODE_RISK_WEIGHT +
+    dist * T.DISTANCE_RISK_WEIGHT +
+    cargoHeatN * T.CARGO_HEAT_WEIGHT +
+    toCountry.risk * T.DEST_RISK_WEIGHT -
+    toCountry.portProtectionBaseline * T.PORT_PROTECTION_WEIGHT -
+    (paid ? T.PAID_PORT_RELIEF : 0);
 
-  const clamped = clamp(raw, INTERDICTION_MIN, INTERDICTION_MAX);
+  const clamped = clamp(raw, T.INTERDICTION_MIN, T.INTERDICTION_MAX);
   const escorts = Math.max(0, (intent.courierIds?.length ?? 0) - 1);
-  return clamped * Math.pow(1 - ESCORT_ODDS_REDUCTION, escorts);
+  return clamped * Math.pow(1 - T.ESCORT_ODDS_REDUCTION, escorts);
 }
 
 // --- The quote (everything disclosed before commit) ---------------------------
@@ -242,7 +226,9 @@ function validate(state: GameState, intent: ShipIntent): ShipRejectReason | null
     return 'no-stash';
   }
   if (from.countryId === to.countryId) return 'same-country';
-  if (intent.qty > getTransport(intent.mode).cargoCap) return 'over-cargo-cap';
+  if (intent.qty > getTransport(intent.mode, state.config.transport.TRANSPORTS).cargoCap) {
+    return 'over-cargo-cap';
+  }
   if ((from.inventory[intent.product] ?? 0) < intent.qty) return 'insufficient-inventory';
 
   const ids = intent.courierIds ?? [];
@@ -288,14 +274,15 @@ export function quoteShipment(state: GameState, intent: ShipIntent): ShipmentQuo
     };
   }
 
-  const mode = getTransport(intent.mode);
-  const dist = legDistance(fromCountry, toCountry);
+  const T = state.config.transport;
+  const mode = getTransport(intent.mode, T.TRANSPORTS);
+  const dist = legDistance(fromCountry, toCountry, T.MIN_LEG_DISTANCE);
   const cargoValue = getMarketPrice(state, intent.product, toCountry.id).sell * intent.qty;
   const transportCost = Math.round(mode.costPerDistance * dist);
   const ownerCut = Math.round(cargoValue * (mode.ownerCutPct ?? 0));
-  const courierCut = Math.round(cargoValue * COURIER_CUT_PCT) * couriers.length;
+  const courierCut = Math.round(cargoValue * T.COURIER_CUT_PCT) * couriers.length;
   const warned = couriers.filter((c) => c.activeArc !== undefined);
-  const skimPerCourier = Math.floor(intent.qty * COURIER_SKIM_PCT);
+  const skimPerCourier = Math.floor(intent.qty * T.COURIER_SKIM_PCT);
   const skimUnits = Math.min(intent.qty, warned.length * skimPerCourier);
 
   // Affordability is part of the quote: cross-country without the funds is a
@@ -418,8 +405,11 @@ function deliverShipment(state: GameState, shipment: Shipment): GameState {
   const to = findStash(state, shipment.toStashId);
   const destName = to ? findCountry(to.countryId)?.name : undefined;
   const delivered = shipment.qty - shipment.skimUnits;
+  const capacity = to
+    ? getStashType(to.type, state.config.stashes.STASH_TYPES).capacity
+    : 0;
 
-  if (!to || stashUnits(to) + delivered > getStashType(to.type).capacity) {
+  if (!to || stashUnits(to) + delivered > capacity) {
     if (shipment.cleared) return state; // already waiting — nothing to update
     return {
       ...state,
@@ -452,8 +442,9 @@ function resolveShipment(
   shipment: Shipment,
   roll: number,
 ): GameState {
-  const product = getProduct(shipment.product);
-  const modeName = getTransport(shipment.mode).name.toLowerCase();
+  const product = getProduct(shipment.product, state.config.products.PRODUCTS);
+  const modeName = getTransport(shipment.mode, state.config.transport.TRANSPORTS)
+    .name.toLowerCase();
   const destName = findCountry(
     findStash(state, shipment.toStashId)?.countryId ?? '',
   )?.name;
@@ -467,7 +458,7 @@ function resolveShipment(
       product.heatPerUnit *
       shipment.qty *
       product.bustHeatMultiplier *
-      (solo ? 1 : CONSIGNED_BUST_HEAT_FACTOR);
+      (solo ? 1 : state.config.transport.CONSIGNED_BUST_HEAT_FACTOR);
     let next: GameState = {
       ...state,
       shipments: state.shipments.filter((s) => s.id !== shipment.id),

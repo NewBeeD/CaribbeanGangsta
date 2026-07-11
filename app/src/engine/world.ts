@@ -33,18 +33,22 @@ import {
   START_COUNTRIES,
   getCountry,
   requiresPlug,
-  type Band,
   type CountryConfig,
   type ProductId,
 } from './config/countries';
-import { EXOTIC_STRAINS, getProduct } from './config/products';
 import {
-  RIVAL_ARCHETYPES,
-  RIVAL_COUNT,
-  RIVAL_NAMES,
-} from './config/rivals';
+  EXOTIC_STRAINS,
+  PRODUCTS,
+  getProduct,
+  type ProductConfig,
+} from './config/products';
+import { RIVAL_ARCHETYPES, RIVAL_NAMES } from './config/rivals';
+import { VOLATILITY_RANGE } from './config/world';
+import { DEFAULT_GAME_CONFIG, type GameConfig, type WorldTuning } from './config';
 
-export const VOLATILITY_RANGE: Band = { min: 0.2, max: 0.5 } as const;
+// The volatility band moved to `config/world.ts` (Prompt 26); re-exported for
+// the existing engine surface.
+export { VOLATILITY_RANGE } from './config/world';
 
 export interface ResolvedPrice {
   readonly product: ProductId;
@@ -117,17 +121,18 @@ function resolveCountry(rng: Rng, config: CountryConfig): StartingCountry {
   };
 }
 
-function resolvePriceBoards(rng: Rng): readonly ResolvedPrice[] {
-  return PRODUCT_PRICE_BANDS.map((product) => ({
+function resolvePriceBoards(rng: Rng, config: GameConfig): readonly ResolvedPrice[] {
+  const volatility = config.world.VOLATILITY_RANGE;
+  return config.products.PRODUCTS.map((product) => ({
     product: product.id,
     buy: rng.float(product.buy.min, product.buy.max),
     sell: rng.float(product.sell.min, product.sell.max),
-    volatility: rng.float(VOLATILITY_RANGE.min, VOLATILITY_RANGE.max),
+    volatility: rng.float(volatility.min, volatility.max),
   }));
 }
 
-function resolveRivals(rng: Rng): readonly Rival[] {
-  const count = rng.int(RIVAL_COUNT.min, RIVAL_COUNT.max);
+function resolveRivals(rng: Rng, world: WorldTuning): readonly Rival[] {
+  const count = rng.int(world.RIVAL_COUNT.min, world.RIVAL_COUNT.max);
   const namePool = [...RIVAL_NAMES];
   const rivals: Rival[] = [];
   for (let i = 0; i < count; i++) {
@@ -162,32 +167,37 @@ export function neutralSupplier(countryId: string): SupplierMarket {
   };
 }
 
-function resolveSupplierGeography(rng: Rng): SupplierGeography {
+function resolveSupplierGeography(rng: Rng, world: WorldTuning): SupplierGeography {
+  const heatRange = world.SUPPLIER_HEAT_FACTOR_RANGE;
   return COUNTRIES.map((country) => {
     const costFactor = rng.float(country.costBias.min, country.costBias.max);
     const demandFactor = rng.float(country.demandBias.min, country.demandBias.max);
-    const heatFactor = rng.float(0.8, 1.5);
+    const heatFactor = rng.float(heatRange.min, heatRange.max);
     return {
       countryId: country.id,
       costFactor,
       demandFactor,
       heatFactor,
-      cheap: costFactor < 0.95,
-      hot: heatFactor > 1.2,
+      cheap: costFactor < world.CHEAP_SUPPLIER_THRESHOLD,
+      hot: heatFactor > world.HOT_SUPPLIER_THRESHOLD,
     };
   });
 }
 
-/** Generate a full per-run world from a seeded RNG (design/01 §0a; design/11). */
-export function generateWorld(rng: Rng): World {
+/**
+ * Generate a full per-run world from a seeded RNG (design/01 §0a; design/11).
+ * `config` injects the tuning (variety bounds, price bands) — default v1
+ * (Prompt 26); the same seed under the same config yields a deep-equal world.
+ */
+export function generateWorld(rng: Rng, config: GameConfig = DEFAULT_GAME_CONFIG): World {
   // Only the Caribbean home islands are start-eligible (design/11 §1); the wider
   // world is reachable through footholds and plugs, never as a spawn.
   const country = rng.fork('country').pick(START_COUNTRIES);
   const startingCountry = resolveCountry(rng.fork('country-resolve'), country);
-  const priceBoards = resolvePriceBoards(rng.fork('prices'));
-  const rivals = resolveRivals(rng.fork('rivals'));
+  const priceBoards = resolvePriceBoards(rng.fork('prices'), config);
+  const rivals = resolveRivals(rng.fork('rivals'), config.world);
   const eventSeed = rng.fork('events').int(0, 2_147_483_647);
-  const supplierGeography = resolveSupplierGeography(rng.fork('suppliers'));
+  const supplierGeography = resolveSupplierGeography(rng.fork('suppliers'), config.world);
   const exoticStrain = rng.fork('strain').pick(EXOTIC_STRAINS);
 
   return {
@@ -245,6 +255,9 @@ export function hydrateLegacyWorld(legacy: LegacyWorld): World {
       rng.float(country.demandBias.min, country.demandBias.max);
     if (existing) return { ...existing, demandFactor };
     const costFactor = rng.float(country.costBias.min, country.costBias.max);
+    // Migration literals, deliberately FROZEN at the v8 values (not read from
+    // config): retuning `config/world.ts` must never change what an old save
+    // deterministically migrates into.
     const heatFactor = rng.float(0.8, 1.5);
     return {
       countryId: country.id,
@@ -306,8 +319,9 @@ export function basePriceAt(
   world: World,
   product: ProductId,
   countryId: string,
+  products: readonly ProductConfig[] = PRODUCTS,
 ): BasePrice {
-  const cfg = getProduct(product);
+  const cfg = getProduct(product, products);
   const country = getCountry(countryId);
   const board = boardFor(world, product);
   const supplier = supplierFor(world, countryId);
