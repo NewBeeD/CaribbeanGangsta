@@ -14,14 +14,18 @@
  * serialized `state.rngState` (restored via `./rng`, snapshot written back), so
  * a save/load round-trip reproduces every roll. No `Math.random`, no wall clock.
  *
- * Market model (design/11 §1): every COUNTRY is a market. A deal executes at the
- * target stash's country — your foothold is your presence there (Prompt 16's
- * territory model; the travel/shipment layer is Prompt 30). The local price is
- * `world.basePriceAt` (geography: region distance from the product's source ×
- * the country's per-run cost/demand character) times this country's live drift
- * factor. Prices for every country are always computable (the world market
- * board, Ideas2 §3); *execution* is bounded by the country's `traded` culture
- * (Ideas2 §5) and, at a true source, by the plug (Ideas2 §2 — `plugs.ts`).
+ * Market model (design/11 §1; design/12 Items 3+10): every COUNTRY is a market
+ * with ONE price per product — buys and sells both execute at
+ * `world.basePriceAt` (geography: compound region-distance stretch from the
+ * product's source × the country's per-run demand character) times this
+ * country's live drift factor. Margin comes from MOVING product, never from
+ * flipping in place. A deal executes at the target stash's country — your
+ * foothold is your presence there (Prompt 16's territory model; the travel/
+ * shipment layer is Prompt 30). Prices for every country are always computable
+ * (the world market board, Ideas2 §3); *execution* is bounded by the country's
+ * `traded` culture (Ideas2 §5), at a true source by the plug (Ideas2 §2 —
+ * `plugs.ts`), and by the market's finite STOCK pool (design/12 Item 10 —
+ * shown on the board, depleted by buys, restocked by active play).
  *
  * Storage note: buys/sells target a stash (`stashId`, default the home stash). A
  * bust seizes the staked cash + product at THAT stash only (design/07 §1).
@@ -40,6 +44,7 @@ import {
 import { getProduct } from './config/products';
 import { HEAT_MAX } from './config/heat';
 import { getStashType } from './config/stashes';
+import { DEFAULT_GAME_CONFIG, type MarketsTuning } from './config';
 import { basePriceAt } from './world';
 import { addHeat } from './heat';
 import { splitCharge, type GameState, type Inventory, type Stash } from './state';
@@ -47,13 +52,16 @@ import { splitCharge, type GameState, type Inventory, type Stash } from './state
 // --- Live market state (drifts each active tick) -----------------------------
 
 /**
- * A market's live price multiplier around its base. `factor` is the current
- * multiplier (live price = base × factor); `prevFactor` is last cycle's, so a
- * trend arrow can be derived without storing history (design/07 §1).
+ * A market's live state: `factor` is the current price multiplier around its
+ * base (live price = base × factor); `prevFactor` is last cycle's, so a trend
+ * arrow can be derived without storing history (design/07 §1); `stock` is the
+ * units available on the street (design/12 Item 10 — finite supply; fractional
+ * internally, floored wherever it's shown or enforced).
  */
 export interface MarketState {
   readonly factor: number;
   readonly prevFactor: number;
+  readonly stock: number;
 }
 
 /** Live prices for every country × product. Always fully populated. */
@@ -61,13 +69,50 @@ export type Markets = Readonly<
   Record<string, Readonly<Record<ProductId, MarketState>>>
 >;
 
-/** Fresh markets: every price at its base (factor 1, flat trend). */
-export function createInitialMarkets(): Markets {
+/** The country-size scale on a market's stock: its demand-bias midpoint —
+ * big sinks run deep books (design/12 Item 10). */
+function stockScale(countryId: string): number {
+  const country = getCountry(countryId);
+  return (country.demandBias.min + country.demandBias.max) / 2;
+}
+
+/**
+ * The stock CEILING for one market: the seed band's max under the country's
+ * size scale, times the source multiplier at a plug source (a source IS a deep
+ * book). Restocking never fills past this; recomputable, so it is never stored.
+ */
+export function stockCapFor(
+  countryId: string,
+  product: ProductId,
+  tuning: MarketsTuning = DEFAULT_GAME_CONFIG.markets,
+): number {
+  const plugDepth = requiresPlug(countryId, product) ? tuning.PLUG_STOCK_MULTIPLIER : 1;
+  return Math.round(tuning.STOCK_SEED_BAND.max * stockScale(countryId) * plugDepth);
+}
+
+/**
+ * Fresh markets: every price at its base (factor 1, flat trend), every stock
+ * pool seeded from the config band × country size, plug sources running
+ * `PLUG_STOCK_MULTIPLIER` deep (design/12 Item 10). Consumes `rng` — callers
+ * seeding a run pass a dedicated fork so the draw can't desync other streams.
+ */
+export function createInitialMarkets(
+  rng: Rng,
+  tuning: MarketsTuning = DEFAULT_GAME_CONFIG.markets,
+): Markets {
   const markets = {} as Record<string, Record<ProductId, MarketState>>;
   for (const countryId of COUNTRY_IDS) {
     const perProduct = {} as Record<ProductId, MarketState>;
     for (const product of PRODUCT_IDS) {
-      perProduct[product] = { factor: 1, prevFactor: 1 };
+      const plugDepth = requiresPlug(countryId, product)
+        ? tuning.PLUG_STOCK_MULTIPLIER
+        : 1;
+      const stock = Math.round(
+        rng.float(tuning.STOCK_SEED_BAND.min, tuning.STOCK_SEED_BAND.max) *
+          stockScale(countryId) *
+          plugDepth,
+      );
+      perProduct[product] = { factor: 1, prevFactor: 1, stock };
     }
     markets[countryId] = perProduct;
   }
@@ -88,12 +133,14 @@ export const DEAL_WIN_FLAG = 'dealWinBanked';
 export type PriceTrend = 'up' | 'down' | 'flat';
 
 export interface MarketPrice {
-  readonly buy: number;
-  readonly sell: number;
+  /** THE price — buys and sells both execute at this number (design/12 Item 3). */
+  readonly price: number;
   readonly trend: PriceTrend;
   readonly volatility: number;
-  /** True when the buy side is a plug's fixed contract price (drift-free). */
+  /** True when this is a plug's fixed contract price (drift-free). */
   readonly plugPriced: boolean;
+  /** Whole units available on the street right now (design/12 Item 10). */
+  readonly stock: number;
 }
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -113,11 +160,12 @@ function marketStateFor(
 }
 
 /**
- * The current LIVE buy/sell price for `product` at `countryId`: the geographic
- * base (`world.basePriceAt`) times this country's live drift factor. The trend
- * arrow is derived from the last drift cycle. This is exactly the price a deal
- * executes at. A plug's buy price does NOT drift — the contract price is fixed
- * and readable (Ideas2 §2); its sell side drifts like any market.
+ * The current LIVE price for `product` at `countryId` — the ONE number both a
+ * buy and a sell execute at (design/12 Item 3): the geographic base
+ * (`world.basePriceAt`) times this country's live drift factor. The trend
+ * arrow is derived from the last drift cycle. A plug's contract price does NOT
+ * drift — fixed and readable (Ideas2 §2). `stock` is the street pool the board
+ * shows and buys are bounded by (design/12 Item 10 — never a hidden cap).
  */
 export function getMarketPrice(
   state: GameState,
@@ -135,18 +183,21 @@ export function getMarketPrice(
         : 'flat';
 
   return {
-    buy: Math.round(base.plugPriced ? base.buy : base.buy * market.factor),
-    sell: Math.round(base.sell * market.factor),
+    price: Math.round(base.plugPriced ? base.price : base.price * market.factor),
     trend,
     volatility: base.volatility,
     plugPriced: base.plugPriced,
+    stock: Math.floor(market.stock),
   };
 }
 
 /**
  * Advance every market by one drift step of `dtHours`: a bounded random walk of
  * the price factor within `[1 − volatility, 1 + volatility]`, so the live price
- * never leaves its documented `base × (1 ± volatility)` band (design/01 §2). The
+ * never leaves its documented `base × (1 ± volatility)` band (design/01 §2). A
+ * drained stock pool biases the walk UP (scarcity pricing, design/12 Item 10) —
+ * a drift pressure, deliberately not an instant repricing, so buying can never
+ * pump the number you immediately sell back at; the clamp still rules. The
  * previous factor is retained for the trend arrow. Consumes `rng` and writes its
  * advanced snapshot back into the returned state (the run's single stream).
  *
@@ -156,6 +207,7 @@ export function getMarketPrice(
 export function driftPrices(state: GameState, rng: Rng, dtHours: number): GameState {
   if (dtHours <= 0) return state;
   const dtScale = Math.min(dtHours, 24) / 24; // one full step per in-game day
+  const scarcityWeight = state.config.markets.SCARCITY_PRICE_WEIGHT;
 
   const markets = {} as Record<string, Record<ProductId, MarketState>>;
   for (const countryId of COUNTRY_IDS) {
@@ -168,14 +220,61 @@ export function driftPrices(state: GameState, rng: Rng, dtHours: number): GameSt
         state.config.products.PRODUCTS,
       ).volatility;
       const current = marketStateFor(state, countryId, product);
-      const delta = rng.float(-vol, vol) * dtScale;
+      const cap = stockCapFor(countryId, product, state.config.markets);
+      const drained = cap > 0 ? clamp(1 - current.stock / cap, 0, 1) : 0;
+      const delta = (rng.float(-vol, vol) + scarcityWeight * drained) * dtScale;
       const factor = clamp(current.factor + delta, 1 - vol, 1 + vol);
-      perProduct[product] = { factor, prevFactor: current.factor };
+      perProduct[product] = { ...current, factor, prevFactor: current.factor };
     }
     markets[countryId] = perProduct;
   }
 
   return { ...state, markets, rngState: rng.getState() };
+}
+
+/**
+ * Refill every market's stock pool by `RESTOCK_PER_DAY × days played`, capped
+ * at its seed ceiling (design/12 Item 10). Deterministic — no randomness.
+ * Registered as an ACTIVE-only tick step right after `price-drift` (clock.ts):
+ * the street re-ups over play time, never while the world is frozen offline.
+ */
+export function restockMarkets(state: GameState, dtHours: number): GameState {
+  if (dtHours <= 0) return state;
+  const tuning = state.config.markets;
+  const refill = tuning.RESTOCK_PER_DAY * (dtHours / 24);
+  if (refill <= 0) return state;
+
+  const markets = {} as Record<string, Record<ProductId, MarketState>>;
+  for (const countryId of COUNTRY_IDS) {
+    const perProduct = {} as Record<ProductId, MarketState>;
+    for (const product of PRODUCT_IDS) {
+      const current = marketStateFor(state, countryId, product);
+      const cap = stockCapFor(countryId, product, tuning);
+      perProduct[product] = { ...current, stock: Math.min(cap, current.stock + refill) };
+    }
+    markets[countryId] = perProduct;
+  }
+  return { ...state, markets };
+}
+
+/** Replace one market's stock pool (immutably), leaving its factors alone. */
+function withMarketStock(
+  state: GameState,
+  countryId: string,
+  product: ProductId,
+  stock: number,
+): GameState {
+  const atCountry = state.markets[countryId];
+  if (!atCountry) return state;
+  const market = atCountry[product];
+  if (!market) return state;
+  return {
+    ...state,
+    markets: {
+      ...state.markets,
+      [countryId]: { ...atCountry, [product]: { ...market, stock } },
+    },
+  };
 }
 
 // --- Bust probability (the fairness contract) --------------------------------
@@ -238,7 +337,10 @@ export type RejectReason =
   /** The product has no market at the stash's country (Ideas2 §5). */
   | 'not-traded'
   /** Buying at a TRUE SOURCE requires the plug intro (Ideas2 §2; plugs.ts). */
-  | 'no-plug';
+  | 'no-plug'
+  /** The street can't supply that many units right now (design/12 Item 10 —
+   * the pool is shown on the board, so the clamp is never a surprise). */
+  | 'no-supply';
 
 /**
  * The result of resolving a deal. `outcome` extends the prompt's
@@ -350,7 +452,10 @@ function resolveBuy(state: GameState, intent: BuyIntent): DealResult {
   }
 
   const price = getMarketPrice(state, product, countryId);
-  const cost = price.buy * qty;
+  // Finite supply (design/12 Item 10): the street can only sell what it holds.
+  // The pool is on the board ("~N on the street"), so this is never a surprise.
+  if (qty > price.stock) return reject(state, 'no-supply');
+  const cost = price.price * qty;
   // Buys draw on the stash's dirty cash first, then CLEAN cash covers the
   // shortfall — borrowed capital (which lands clean, design/10) must be able to
   // buy the shipment it was taken out for, not just fronts (the come-up hook).
@@ -369,6 +474,9 @@ function resolveBuy(state: GameState, intent: BuyIntent): DealResult {
   const cfg = getProduct(product, state.config.products.PRODUCTS);
   let next = withStash(state, nextStash);
   next = { ...next, cleanCash: next.cleanCash - charge.fromClean };
+  // The units came OFF the street (design/12 Item 10).
+  const pool = marketStateFor(state, countryId, product).stock;
+  next = withMarketStock(next, countryId, product, Math.max(0, pool - qty));
   next = addHeat(next, cfg.heatPerUnit * qty * state.config.deals.BUY_HEAT_FACTOR, 'deal.buy');
   next = bankPeaks(next);
 
@@ -426,13 +534,22 @@ function resolveSell(state: GameState, intent: SellIntent): DealResult {
     };
   }
 
-  const proceeds = price.sell * qty;
+  const proceeds = price.price * qty;
   const soldStash: Stash = {
     ...stash,
     dirtyCash: stash.dirtyCash + proceeds,
     inventory: adjustInventory(stash.inventory, product, -qty),
   };
   let next = withStash(rolled, soldStash);
+  // A fraction of what you moved re-enters the street's pool (design/12 Item 10).
+  const pool = marketStateFor(state, countryId, product).stock;
+  const cap = stockCapFor(countryId, product, state.config.markets);
+  next = withMarketStock(
+    next,
+    countryId,
+    product,
+    Math.min(cap, pool + qty * state.config.markets.SELL_RESTOCK_FRACTION),
+  );
   next = addHeat(next, cfg.heatPerUnit * qty, 'deal.sell');
   next = { ...next, flags: { ...next.flags, [DEAL_WIN_FLAG]: true } };
   next = bankPeaks(next);

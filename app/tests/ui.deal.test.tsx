@@ -109,7 +109,8 @@ describe('DealScreen — market is legible', () => {
         ...base.markets,
         [homeId]: {
           ...base.markets[homeId]!,
-          weed: { factor: 1.2, prevFactor: 1.0 }, // rising this cycle
+          // Rising this cycle; the street pool rides along untouched.
+          weed: { ...base.markets[homeId]!.weed, factor: 1.2, prevFactor: 1.0 },
         },
       },
     };

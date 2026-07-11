@@ -124,8 +124,12 @@ describe('migrateEnvelope — schema version + migration hook', () => {
     expect(migrated?.stashes[0]?.inventory.crack).toBe(0);
     expect(migrated?.stashes[0]?.inventory.weed).toBe(3);
     expect(migrated?.inventory.cocaine).toBe(2);
-    // Markets re-keyed by country, fresh at base.
-    expect(migrated?.markets['san-cristo']?.weed).toEqual({ factor: 1, prevFactor: 1 });
+    // Markets re-keyed by country, fresh at base, stock pool seeded (v11).
+    expect(migrated?.markets['san-cristo']?.weed).toMatchObject({
+      factor: 1,
+      prevFactor: 1,
+    });
+    expect(migrated?.markets['san-cristo']?.weed.stock).toBeGreaterThan(0);
     expect(migrated?.markets.source).toBeUndefined();
     // The world grew boards for the new roster + strain + full supplier coverage.
     expect(migrated?.world.priceBoards.map((b) => b.product)).toContain('crack');

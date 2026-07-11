@@ -93,7 +93,7 @@ describe('chaos — bounded, estimable effects (GDD §5.4)', () => {
     // A price actually moved up somewhere.
     const before = getMarketPrice(base, PRODUCT_IDS[0]!, COUNTRY_IDS[0]!);
     const now = getMarketPrice(after, PRODUCT_IDS[0]!, COUNTRY_IDS[0]!);
-    expect(now.sell).toBeGreaterThanOrEqual(before.sell);
+    expect(now.price).toBeGreaterThanOrEqual(before.price);
   });
 
   it('a supply glut pushes prices DOWN but never past the volatility band', () => {

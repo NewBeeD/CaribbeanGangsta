@@ -32,9 +32,11 @@ import {
 export interface BoardRow {
   readonly countryId: string;
   readonly countryName: string;
-  /** Live buy/sell — `getMarketPrice` verbatim (always computable, design/11 §1). */
-  readonly buy: number;
-  readonly sell: number;
+  /** THE live price — `getMarketPrice` verbatim (always computable; buys and
+   * sells both execute at it — design/12 Item 3). */
+  readonly price: number;
+  /** Whole units the street here can supply right now (design/12 Item 10). */
+  readonly stock: number;
   readonly trend: PriceTrend;
   /** Whether the product TRADES here — an un-traded row is inert ("no market"). */
   readonly traded: boolean;
@@ -69,8 +71,8 @@ export function boardRows(state: GameState, product: ProductId): readonly BoardR
     return {
       countryId: c.id,
       countryName: c.name,
-      buy: price.buy,
-      sell: price.sell,
+      price: price.price,
+      stock: price.stock,
       trend: price.trend,
       traded: isTraded(c.id, product),
       plugGated: gatedProduct && !hasPlug(state, c.id),
@@ -135,9 +137,11 @@ export function plugSceneFor(sceneKey: string): PlugScene {
 
 /**
  * The widest cross-country spread on the board right now: the best "buy here,
- * sell there" pair among TRADED markets (buys exclude plug-gated sources you
- * haven't unlocked — the board never suggests a move you can't execute).
- * The session-end hook's "one more day" signal (GDD §11).
+ * sell there" pair among TRADED markets — under the one-price economy
+ * (design/12 Item 3) this is the price gap between two countries, the whole
+ * margin engine. Buys exclude plug-gated sources you haven't unlocked (the
+ * board never suggests a move you can't execute). The session-end hook's
+ * "one more day" signal (GDD §11).
  */
 export interface MarketSpread {
   readonly product: ProductId;
@@ -146,6 +150,7 @@ export interface MarketSpread {
   readonly buyCountryName: string;
   readonly sellCountry: string;
   readonly sellCountryName: string;
+  /** The price at the buy end / the sell end (one number per country). */
   readonly buy: number;
   readonly sell: number;
   /** Sell/buy multiple (2 = doubles your money before costs). */
@@ -159,11 +164,13 @@ export function widestSpread(state: GameState): MarketSpread | null {
     let dearest: BoardRow | null = null;
     for (const row of boardRows(state, p.id)) {
       if (!row.traded) continue;
-      if (!row.plugGated && (cheapest === null || row.buy < cheapest.buy)) cheapest = row;
-      if (dearest === null || row.sell > dearest.sell) dearest = row;
+      if (!row.plugGated && (cheapest === null || row.price < cheapest.price)) {
+        cheapest = row;
+      }
+      if (dearest === null || row.price > dearest.price) dearest = row;
     }
-    if (!cheapest || !dearest || cheapest.buy <= 0) continue;
-    const multiple = dearest.sell / cheapest.buy;
+    if (!cheapest || !dearest || cheapest.price <= 0) continue;
+    const multiple = dearest.price / cheapest.price;
     if (best === null || multiple > best.multiple) {
       best = {
         product: p.id,
@@ -172,8 +179,8 @@ export function widestSpread(state: GameState): MarketSpread | null {
         buyCountryName: cheapest.countryName,
         sellCountry: dearest.countryId,
         sellCountryName: dearest.countryName,
-        buy: cheapest.buy,
-        sell: dearest.sell,
+        buy: cheapest.price,
+        sell: dearest.price,
         multiple,
       };
     }

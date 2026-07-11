@@ -22,10 +22,14 @@
  *    moving product toward Miami/Europe reads as a paradigm shift (design/01 §2).
  *
  * Prices are real dollars per kg (per unit for arms), compiled from the design
- * economy table (design/01 §2) and extended for the Ideas2 roster. A product's
- * `buy`/`sell` band is the run's spawn range for the global source board; where a
- * market lands around that board is the country's `costBias`/`demandBias`
- * (resolved per run into the supplier geography) and fixed `productBias` flavor.
+ * economy table (design/01 §2) and retuned for the ONE-PRICE economy (design/12
+ * Item 3; Prompt 32). A product's `price` band is the run's spawn range for the
+ * global source board — its price AT ITS SOURCE REGION. A country displays and
+ * executes ONE number per product: the board stretched by region distance
+ * (compound per-product elasticity, config/products.ts), scaled by the
+ * country's per-run `demandBias` character and fixed `productBias` flavor.
+ * Buying and selling both execute at that number — margin comes from moving
+ * product, never from flipping in place.
  */
 
 export type ProductId =
@@ -106,21 +110,24 @@ export const REGION_DISTANCE: Readonly<
 export interface ProductPriceBand {
   readonly id: ProductId;
   readonly name: string;
-  /** Source buy price band, $/unit. */
-  readonly buy: Band;
-  /** Wholesale sell price band at the source region, $/unit. */
-  readonly sell: Band;
+  /**
+   * The product's spawn price band AT ITS SOURCE REGION, $/unit (design/12
+   * Item 3 — one price per drug per market). A country's local price is this
+   * board stretched by region distance (config/products.ts elasticity) and the
+   * country's demand character; buys AND sells execute at that one number.
+   */
+  readonly price: Band;
   /** Heat generated per unit moved (design/01 §2). */
   readonly heatPerUnit: number;
 }
 
-/** Canonical real-dollar price bands (design/01 §2; design/11 — single source of truth). */
+/** Canonical real-dollar source-price bands (design/01 §2; design/12 Item 3 —
+ * single source of truth, retuned for the one-price economy). */
 export const PRODUCT_PRICE_BANDS: readonly ProductPriceBand[] = [
   {
     id: 'weed',
     name: 'Weed',
-    buy: { min: 700, max: 1500 },
-    sell: { min: 1200, max: 2500 },
+    price: { min: 700, max: 1500 },
     heatPerUnit: 0.1,
   },
   {
@@ -128,8 +135,7 @@ export const PRODUCT_PRICE_BANDS: readonly ProductPriceBand[] = [
     // draw (world.exoticStrain) so the market reads fresh every run.
     id: 'exotic',
     name: 'Exotic',
-    buy: { min: 2500, max: 6000 },
-    sell: { min: 6000, max: 14000 },
+    price: { min: 2500, max: 6000 },
     heatPerUnit: 0.15,
   },
   {
@@ -137,68 +143,62 @@ export const PRODUCT_PRICE_BANDS: readonly ProductPriceBand[] = [
     // Golden Crescent source (Ideas2 §4).
     id: 'hash',
     name: 'Hash',
-    buy: { min: 800, max: 2000 },
-    sell: { min: 6000, max: 14000 },
+    price: { min: 800, max: 1800 },
     heatPerUnit: 0.15,
   },
   {
     id: 'synthetics',
     name: 'Synthetics',
-    buy: { min: 2000, max: 5000 },
-    sell: { min: 10000, max: 30000 },
+    price: { min: 2000, max: 5000 },
     heatPerUnit: 0.4,
   },
   {
+    // The anchor of the retune (design/12 Item 3): Colombia w/ plug ~$1.2–1.8k,
+    // the islands ~$4–7k, Miami ~$11–17k, Rotterdam ~$40k+ — the run to Europe
+    // is the widest margin in the game, and the water is the work.
     id: 'cocaine',
     name: 'Cocaine',
-    buy: { min: 1500, max: 3000 },
-    sell: { min: 20000, max: 60000 },
+    price: { min: 2000, max: 3000 },
     heatPerUnit: 1.0,
   },
   {
-    // Cooked from cocaine (config/conversions.ts; Ideas2 §4). A unit is a
-    // quarter of a coke unit (1 coke cooks into 4 crack), so the bands sit at
-    // roughly a quarter of coke's — the cook's value-add shows in the yield,
-    // and the cooked key draws more total heat than the raw one.
+    // Cooked from cocaine (config/conversions.ts; Ideas2 §4). Priced at
+    // roughly half of coke per unit wherever both trade (real-band flavored —
+    // design/12 Item 5 lands the full recipe retune in Prompt 34); the cooked
+    // key draws more total heat than the raw one.
     id: 'crack',
     name: 'Crack',
-    buy: { min: 600, max: 1200 },
-    sell: { min: 8000, max: 22500 },
+    price: { min: 1000, max: 1600 },
     heatPerUnit: 0.35,
   },
   {
     id: 'meth',
     name: 'Meth',
-    buy: { min: 800, max: 2000 },
-    sell: { min: 8000, max: 25000 },
+    price: { min: 900, max: 2000 },
     heatPerUnit: 0.8,
   },
   {
     id: 'heroin',
     name: 'Heroin',
-    buy: { min: 2500, max: 6000 },
-    sell: { min: 25000, max: 70000 },
+    price: { min: 2800, max: 6000 },
     heatPerUnit: 1.2,
   },
   {
     id: 'fentanyl',
     name: 'Fentanyl',
-    buy: { min: 3000, max: 8000 },
-    sell: { min: 40000, max: 120000 },
+    price: { min: 3500, max: 8000 },
     heatPerUnit: 2.0,
   },
   {
     id: 'pills',
     name: 'Pills',
-    buy: { min: 1500, max: 4000 },
-    sell: { min: 8000, max: 20000 },
+    price: { min: 1600, max: 4000 },
     heatPerUnit: 0.5,
   },
   {
     id: 'arms',
     name: 'Arms',
-    buy: { min: 500, max: 2000 },
-    sell: { min: 750, max: 4000 },
+    price: { min: 600, max: 2000 },
     heatPerUnit: 2.5,
   },
 ] as const;
@@ -229,12 +229,14 @@ export interface CountryConfig {
    * elsewhere are still visible; deals only execute where the product trades.
    */
   readonly traded: readonly ProductId[];
-  /** Per-run buy-side bias band (resolved into supplierGeography.costFactor). */
+  /** Per-run sourcing-character band (resolved into supplierGeography.costFactor;
+   * kept for world flavor — the one-price model prices off `demandBias` only). */
   readonly costBias: Band;
-  /** Per-run sell-side bias band (resolved into supplierGeography.demandFactor). */
+  /** Per-run price-character band (resolved into supplierGeography.demandFactor
+   * — THE per-run multiplier on this country's single displayed price). */
   readonly demandBias: Band;
-  /** Fixed per-product flavor multiplier on BOTH sides (e.g. weed cheap in the
-   * green hills). Absent products are neutral (×1). */
+  /** Fixed per-product flavor multiplier on the local price (e.g. weed cheap in
+   * the green hills). Absent products are neutral (×1). */
   readonly productBias?: Partial<Readonly<Record<ProductId, number>>>;
   /** Products this country is the TRUE SOURCE of (Ideas2 §2). Buying them here
    * requires the plug; with it, they trade at the cheapest standing price. */

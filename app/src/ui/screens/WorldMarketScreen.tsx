@@ -134,13 +134,13 @@ export function WorldMarketScreen() {
                 {r.traded ? (
                   r.plugGated ? (
                     <>
-                      🔌 Contract buy {money(r.buy)} — intro {money(r.plugCost)} · Sell{' '}
-                      {money(r.sell)}
+                      🔌 Contract {money(r.price)} — intro {money(r.plugCost)} · ~
+                      {r.stock} on the street
                     </>
                   ) : (
                     <>
-                      Buy {money(r.buy)}
-                      {r.plugPriced ? ' (contract)' : ''} · Sell {money(r.sell)}
+                      {money(r.price)}
+                      {r.plugPriced ? ' (contract)' : ''} · ~{r.stock} on the street
                     </>
                   )
                 ) : (

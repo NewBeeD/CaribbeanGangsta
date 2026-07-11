@@ -1,24 +1,28 @@
 /**
- * The product table for the deal loop (design/01 §2, §2a; design/11; GDD §3
- * Loop 1).
+ * The product table for the deal loop (design/01 §2, §2a; design/11; design/12
+ * Item 3; GDD §3 Loop 1).
  *
- * The canonical real-dollar price *bands* live in `config/countries.ts`
+ * The canonical real-dollar source-price *bands* live in `config/countries.ts`
  * (`PRODUCT_PRICE_BANDS`, the single source of truth referenced across docs
- * 09–10). This module augments each product with the deal-loop behavior the
- * bands alone don't carry: its risk tier, its SOURCE REGION, and how its margin
- * responds to geographic distance from that source — all v1 tuning HYPOTHESES
- * held as config (prompts/README.md "Config, not literals"; Prompt 26
- * centralizes).
+ * 09–12). This module augments each product with the deal-loop behavior the
+ * bands alone don't carry: its risk tier, its SOURCE REGION, and how its ONE
+ * price stretches with geographic distance from that source — all v1 tuning
+ * HYPOTHESES held as config (prompts/README.md "Config, not literals"; Prompt
+ * 26 centralizes).
  *
  * Design structure encoded here (design/01 §2; Ideas.md — Drug Lord 2 open
- * access; Ideas2 — regional markets):
+ * access; design/12 Item 3 — the one-price economy):
+ *  - **One price per drug per market.** A country's local base is
+ *    `source price × (1 + distanceElasticity)^REGION_DISTANCE` — compound, so
+ *    the stretch curve is convex: the islands pay a step over the source, the
+ *    continental sinks pay multiples. Buying and selling both execute at that
+ *    number; GEOGRAPHY IS THE WHOLE MARGIN ENGINE (no in-place flip exists).
  *  - **Every product is dealable from minute one** wherever it trades. There is
- *    no progression gate — the buy price, the plug intro, and the heat are the
+ *    no progression gate — the price, the plug intro, and the heat are the
  *    gates. Weed is where a broke player starts because it's what he can
  *    afford, not because the rest is hidden.
- *  - **Cocaine is the margin engine**: a high `sellDistanceElasticity` makes its
- *    sell price widen sharply from Colombia → the islands → Miami/Europe.
- *  - **Arms are the high-heat premium tier**: top `tierRisk` and bust-heat spike.
+ *  - **Cocaine is the margin engine**: the top elasticity makes its price widen
+ *    hard from Colombia → the islands → Miami → Europe.
  *  - **Margins scale with risk & heat** — higher tiers pay more precisely because
  *    they carry more seizure risk. That trade-off *is* the deal loop.
  */
@@ -33,10 +37,8 @@ import {
 export interface ProductConfig {
   readonly id: ProductId;
   readonly name: string;
-  /** Source buy-price band, $/unit (from `PRODUCT_PRICE_BANDS`). */
-  readonly buy: Band;
-  /** Wholesale sell-price band, $/unit (from `PRODUCT_PRICE_BANDS`). */
-  readonly sell: Band;
+  /** Source-region price band, $/unit (from `PRODUCT_PRICE_BANDS`). */
+  readonly price: Band;
   /** Heat generated per unit moved on a deal (design/01 §2). */
   readonly heatPerUnit: number;
   /** Product-tier contribution to bust probability, 0..1 (design/01 §2). */
@@ -44,13 +46,12 @@ export interface ProductConfig {
   /** The region this product sources from (design/11 §1 — geography). */
   readonly sourceRegion: Region;
   /**
-   * How much the sell price grows per unit of region distance from the source:
-   * at distance `d` the sell base is `sourceSell × (1 + d × sellDistanceElasticity)`.
-   * Cocaine is high (the margin engine); weed is low (design/01 §2).
+   * How the ONE price grows with region distance from the source — compound:
+   * at distance `d` the local base is `source price × (1 + this)^d`
+   * (design/12 Item 3 — geography is the whole margin engine). Cocaine is the
+   * steepest curve in the game; crack is flat (cooked near its buyers).
    */
-  readonly sellDistanceElasticity: number;
-  /** How much sourcing far from the source raises the buy base (smaller). */
-  readonly buyDistanceElasticity: number;
+  readonly distanceElasticity: number;
   /** Heat spike multiplier applied to `heatPerUnit × qty` on a bust. */
   readonly bustHeatMultiplier: number;
 }
@@ -61,91 +62,76 @@ const PRODUCT_META: Readonly<
     ProductId,
     Pick<
       ProductConfig,
-      | 'tierRisk'
-      | 'sourceRegion'
-      | 'sellDistanceElasticity'
-      | 'buyDistanceElasticity'
-      | 'bustHeatMultiplier'
+      'tierRisk' | 'sourceRegion' | 'distanceElasticity' | 'bustHeatMultiplier'
     >
   >
 > = {
   weed: {
     tierRisk: 0.1,
     sourceRegion: 'caribbean',
-    sellDistanceElasticity: 0.3,
-    buyDistanceElasticity: 0.1,
+    distanceElasticity: 1.5,
     bustHeatMultiplier: 3,
   },
   exotic: {
     tierRisk: 0.15,
     sourceRegion: 'caribbean',
-    sellDistanceElasticity: 0.4,
-    buyDistanceElasticity: 0.1,
+    distanceElasticity: 1.8,
     bustHeatMultiplier: 3,
   },
   hash: {
     tierRisk: 0.15,
     sourceRegion: 'asia',
-    sellDistanceElasticity: 0.5,
-    buyDistanceElasticity: 0.1,
+    distanceElasticity: 6,
     bustHeatMultiplier: 3,
   },
   synthetics: {
     tierRisk: 0.4,
     sourceRegion: 'europe',
-    sellDistanceElasticity: 0.8,
-    buyDistanceElasticity: 0.15,
+    distanceElasticity: 5,
     bustHeatMultiplier: 3,
   },
   cocaine: {
     tierRisk: 0.7,
     sourceRegion: 'latin-america',
-    sellDistanceElasticity: 2.0, // the margin engine — widens hard with distance
-    buyDistanceElasticity: 0.2,
+    distanceElasticity: 25, // the margin engine — widens hard with distance
     bustHeatMultiplier: 4,
   },
   crack: {
-    // Cooked near its buyers, so distance matters little — the cook itself is
-    // the value-add (config/conversions.ts).
+    // Tracks roughly half of coke's price wherever both trade — cooked near
+    // its buyers, the cook itself is the value-add (config/conversions.ts).
     tierRisk: 0.8,
     sourceRegion: 'latin-america',
-    sellDistanceElasticity: 0.3,
-    buyDistanceElasticity: 0.15,
+    distanceElasticity: 12,
     bustHeatMultiplier: 4,
   },
   meth: {
     tierRisk: 0.5,
     sourceRegion: 'latin-america',
-    sellDistanceElasticity: 1.0,
-    buyDistanceElasticity: 0.15,
+    distanceElasticity: 16,
     bustHeatMultiplier: 4,
   },
   heroin: {
     tierRisk: 0.75,
     sourceRegion: 'asia',
-    sellDistanceElasticity: 1.2,
-    buyDistanceElasticity: 0.2,
+    distanceElasticity: 8,
     bustHeatMultiplier: 4,
   },
   fentanyl: {
     tierRisk: 0.95,
     sourceRegion: 'latin-america',
-    sellDistanceElasticity: 1.5,
-    buyDistanceElasticity: 0.2,
+    distanceElasticity: 22,
     bustHeatMultiplier: 5,
   },
   pills: {
     tierRisk: 0.4,
     sourceRegion: 'north-america',
-    sellDistanceElasticity: 0.6,
-    buyDistanceElasticity: 0.1,
+    distanceElasticity: 4,
     bustHeatMultiplier: 3,
   },
   arms: {
     tierRisk: 1.0, // high-heat premium tier
     sourceRegion: 'north-america',
-    sellDistanceElasticity: 0.5,
-    buyDistanceElasticity: 0.15,
+    distanceElasticity: 2.5,
     bustHeatMultiplier: 5,
   },
 };
@@ -154,8 +140,7 @@ export const PRODUCTS: readonly ProductConfig[] = PRODUCT_PRICE_BANDS.map(
   (band) => ({
     id: band.id,
     name: band.name,
-    buy: band.buy,
-    sell: band.sell,
+    price: band.price,
     heatPerUnit: band.heatPerUnit,
     ...PRODUCT_META[band.id],
   }),

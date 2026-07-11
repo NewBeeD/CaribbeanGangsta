@@ -85,7 +85,7 @@ export function hasFirstMove(state: GameState): boolean {
   if (!home) return false;
   return buyableProducts(state, home.countryId).some((p) => {
     const price = getMarketPrice(state, p, home.countryId);
-    return splitCharge(state, home, price.buy) !== null;
+    return price.stock >= 1 && splitCharge(state, home, price.price) !== null;
   });
 }
 
@@ -98,10 +98,12 @@ function cheapestFront(state: GameState): { readonly type: FrontType; readonly b
 }
 
 /**
- * One policy step: a simple, deterministic street dealer. Sell what's held,
- * else buy the best-margin affordable product; launder surplus dirty cash; open
- * fronts when clean cash allows; lie low when hot. No cleverness — the policy
- * exists to exercise the sim, not to win.
+ * One policy step: a simple, deterministic street dealer. The one-price
+ * economy (Prompt 32) has no in-place margin, so the policy trades the DRIFT:
+ * buy when the local price sits below its base (factor < 1), sell the holding
+ * once it's back at/above base; launder surplus dirty cash; open fronts when
+ * clean cash allows; lie low when hot. No cleverness — the policy exists to
+ * exercise the sim, not to win.
  */
 function policyStep(state: GameState): GameState {
   const home = state.stashes[0];
@@ -114,37 +116,47 @@ function policyStep(state: GameState): GameState {
   if (!next.lyingLow && next.heat > HEAT_MAX * 0.7) next = setLieLow(next, true);
   else if (next.lyingLow && next.heat < HEAT_MAX * 0.3) next = setLieLow(next, false);
 
-  // Sell anything held at home, a slab at a time.
+  // Sell the holding once the local price is back at/above its base, a slab at
+  // a time; below base, hold for the bounce.
   const held = PRODUCT_IDS.find((p) => (home.inventory[p] ?? 0) > 0);
   if (held) {
-    const qty = Math.min(home.inventory[held] ?? 0, 10);
-    const intent: DealIntent = { type: 'sell', product: held, qty, stashId: home.id };
-    return resolveDeal(next, intent).state;
+    const factor = next.markets[home.countryId]?.[held]?.factor ?? 1;
+    if (factor >= 1) {
+      const qty = Math.min(home.inventory[held] ?? 0, 10);
+      const intent: DealIntent = { type: 'sell', product: held, qty, stashId: home.id };
+      return resolveDeal(next, intent).state;
+    }
   }
 
-  // Launder a surplus into clean cash, then put clean cash to work in a front.
-  if (home.dirtyCash > 20_000) {
-    next = pesoExchange(next, Math.floor(home.dirtyCash / 2), home.id).state;
+  // Keep a CLEAN reserve roughly tracking the street bankroll — the exchange
+  // haircut buys bust insurance (a seizure takes the stash's dirty cash, never
+  // the clean pool), so one bad roll can't flatline the whole run. Then put
+  // surplus clean cash to work in a front.
+  if (home.dirtyCash > 2_000 && next.cleanCash < home.dirtyCash) {
+    next = pesoExchange(next, Math.floor(home.dirtyCash / 3), home.id).state;
   }
   const front = cheapestFront(next);
   if (next.cleanCash >= front.buyIn * 1.5) {
     next = buyFront(next, front.type).state;
   }
 
-  // Buy the best-margin affordable product at home.
+  // Not holding: buy the deepest dip — the affordable product priced furthest
+  // below its base (factor < 1), bounded by the street's stock.
+  if (held) return next;
   const homeNow = next.stashes[0]!;
   const room =
     getStashType(homeNow.type, next.config.stashes.STASH_TYPES).capacity -
     stashUnits(homeNow);
-  let best: { product: ProductId; qty: number; margin: number } | null = null;
+  let best: { product: ProductId; qty: number; factor: number } | null = null;
   for (const p of buyableProducts(next, homeNow.countryId)) {
+    const factor = next.markets[homeNow.countryId]?.[p]?.factor ?? 1;
+    if (factor >= 1) continue;
     const price = getMarketPrice(next, p, homeNow.countryId);
-    if (price.buy <= 0) continue;
-    const affordable = Math.floor((homeNow.dirtyCash + next.cleanCash) / price.buy);
-    const qty = Math.min(affordable, 20, room);
+    if (price.price <= 0) continue;
+    const affordable = Math.floor((homeNow.dirtyCash + next.cleanCash) / price.price);
+    const qty = Math.min(affordable, 20, room, price.stock);
     if (qty < 1) continue;
-    const margin = (price.sell - price.buy) / price.buy;
-    if (!best || margin > best.margin) best = { product: p, qty, margin };
+    if (!best || factor < best.factor) best = { product: p, qty, factor };
   }
   if (best) {
     const intent: DealIntent = {

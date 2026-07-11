@@ -55,12 +55,13 @@ function portStashes(state: GameState): readonly Stash[] {
  * so the shown ask matches what `payBribe` charges.
  */
 export function shipmentValueAt(state: GameState, countryId: string): number {
-  // Units are valued at THIS country's live sell price; a product with no local
-  // market (Ideas2 §5 regional cultures) is valued at its global source board.
+  // Units are valued at THIS country's live price (the one number, design/12
+  // Item 3); a product with no local market (Ideas2 §5 regional cultures) is
+  // valued at its global source board.
   const sellPrice = (s: Stash, id: ProductId): number =>
     isTraded(s.countryId, id)
-      ? getMarketPrice(state, id, s.countryId).sell
-      : Math.round(boardFor(state.world, id).sell);
+      ? getMarketPrice(state, id, s.countryId).price
+      : Math.round(boardFor(state.world, id).price);
   return portStashes(state)
     .filter((s) => s.countryId === countryId)
     .reduce((sum, s) => {

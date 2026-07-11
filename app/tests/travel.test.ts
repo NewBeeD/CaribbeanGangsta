@@ -111,8 +111,8 @@ describe('quoteShipment — every number disclosed, charged exactly as quoted', 
     const quote = quoteShipment(state, intent);
     expect(quote.ok).toBe(true);
     expect(quote.transportCost).toBeGreaterThan(0);
-    // Go-fast: the owner's cut is the configured % of the cargo's sell value.
-    const cargoValue = getMarketPrice(state, 'cocaine', 'miami').sell * intent.qty;
+    // Go-fast: the owner's cut is the configured % of the cargo's destination value.
+    const cargoValue = getMarketPrice(state, 'cocaine', 'miami').price * intent.qty;
     expect(quote.cargoValue).toBe(cargoValue);
     expect(quote.ownerCut).toBe(Math.round(cargoValue * getTransport('go-fast').ownerCutPct!));
     expect(quote.courierCut).toBe(0); // solo run — no couriers, no cuts

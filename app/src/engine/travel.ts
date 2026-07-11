@@ -277,7 +277,7 @@ export function quoteShipment(state: GameState, intent: ShipIntent): ShipmentQuo
   const T = state.config.transport;
   const mode = getTransport(intent.mode, T.TRANSPORTS);
   const dist = legDistance(fromCountry, toCountry, T.MIN_LEG_DISTANCE);
-  const cargoValue = getMarketPrice(state, intent.product, toCountry.id).sell * intent.qty;
+  const cargoValue = getMarketPrice(state, intent.product, toCountry.id).price * intent.qty;
   const transportCost = Math.round(mode.costPerDistance * dist);
   const ownerCut = Math.round(cargoValue * (mode.ownerCutPct ?? 0));
   const courierCut = Math.round(cargoValue * T.COURIER_CUT_PCT) * couriers.length;

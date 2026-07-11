@@ -29,8 +29,14 @@ import {
   type RunStatus,
   type Stash,
 } from '@/engine/state';
+import { createRng } from '@/engine/rng';
 import { createInitialMarkets, type Markets } from '@/engine/deals';
-import { hydrateLegacyWorld, type LegacyWorld } from '@/engine/world';
+import {
+  hydrateLegacyWorld,
+  hydrateWorldV11,
+  type LegacyWorld,
+  type WorldWithLegacyBoards,
+} from '@/engine/world';
 import { tierForHeat, type LeTier } from '@/engine/heat';
 import { STARTING_STASH_TYPE } from '@/engine/config/stashes';
 import { hydrateLegacyCrew } from '@/engine/crew';
@@ -77,12 +83,18 @@ export type Migration = (env: SaveEnvelope) => SaveEnvelope;
 
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   // 1 → 2: seed live markets on saves written before the deal loop (Prompt 04).
+  // (Seeded deterministically from the save's own seed; the 10→11 step below
+  // re-seeds every pre-v11 save's markets again anyway.)
   1: (env) => {
     const legacy = env.state as GameState & { markets?: Markets };
     return {
       ...env,
       schemaVersion: 2,
-      state: { ...legacy, markets: legacy.markets ?? createInitialMarkets() },
+      state: {
+        ...legacy,
+        markets:
+          legacy.markets ?? createInitialMarkets(createRng(`${legacy.seed}::migrate-markets`)),
+      },
     };
   },
   // 2 → 3: default the heat engine's fields on pre-Prompt-05 saves. Lie-low is
@@ -192,7 +204,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
       state: {
         ...legacy,
         world: hydrateLegacyWorld(legacy.world as unknown as LegacyWorld),
-        markets: createInitialMarkets(),
+        markets: createInitialMarkets(createRng(`${legacy.seed}::migrate-markets`)),
         plugs: legacy.plugs ?? [],
         inventory: fill(legacy.inventory),
         stashes: legacy.stashes.map((s) => ({ ...s, inventory: fill(s.inventory) })),
@@ -219,6 +231,37 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
       ...env,
       schemaVersion: 10,
       state: { ...legacy, config: legacy.config ?? DEFAULT_GAME_CONFIG },
+    };
+  },
+  // 10 → 11: the ONE-PRICE economy + finite stock (design/12 Items 3/10; Prompt
+  // 32). World price boards are re-resolved to the single-price shape and every
+  // market re-seeded with a stock pool — both deterministically from the save's
+  // own seed (migrating twice yields the same state). Boards/market factors are
+  // transient WORLD data; holdings, cash, plugs, and the RNG stream are never
+  // touched. The saved config's `products` table swaps to the v11 single-band
+  // shape and gains the new `markets` group (any other saved tuning survives).
+  10: (env) => {
+    const legacy = env.state as GameState & {
+      world: WorldWithLegacyBoards;
+      config: GameConfig;
+    };
+    const config: GameConfig = {
+      ...legacy.config,
+      products: DEFAULT_GAME_CONFIG.products,
+      markets: DEFAULT_GAME_CONFIG.markets,
+    };
+    return {
+      ...env,
+      schemaVersion: 11,
+      state: {
+        ...legacy,
+        world: hydrateWorldV11(legacy.world),
+        markets: createInitialMarkets(
+          createRng(`${legacy.seed}::migrate-v11-stock`),
+          config.markets,
+        ),
+        config,
+      },
     };
   },
 };

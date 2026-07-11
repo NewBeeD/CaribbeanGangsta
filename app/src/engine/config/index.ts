@@ -181,6 +181,13 @@ import {
   type TransportConfig,
 } from './transport';
 import { CONVERSION_RECIPES, type ConversionRecipe } from './conversions';
+import {
+  STOCK_SEED_BAND,
+  PLUG_STOCK_MULTIPLIER,
+  RESTOCK_PER_DAY,
+  SELL_RESTOCK_FRACTION,
+  SCARCITY_PRICE_WEIGHT,
+} from './markets';
 import { PLUG_MEETING_HEAT } from './plugs';
 import {
   SESSION_TARGET_MIN_MINUTES,
@@ -370,6 +377,15 @@ export interface ConversionsTuning {
   readonly CONVERSION_RECIPES: readonly ConversionRecipe[];
 }
 
+/** Market stock pools & scarcity pricing (design/12 Item 10; Prompt 32). */
+export interface MarketsTuning {
+  readonly STOCK_SEED_BAND: Band;
+  readonly PLUG_STOCK_MULTIPLIER: number;
+  readonly RESTOCK_PER_DAY: number;
+  readonly SELL_RESTOCK_FRACTION: number;
+  readonly SCARCITY_PRICE_WEIGHT: number;
+}
+
 /** Plug scalars (Ideas2 §2) — per-source costs live on the country roster. */
 export interface PlugsTuning {
   readonly PLUG_MEETING_HEAT: number;
@@ -401,6 +417,7 @@ export interface GameConfig {
   readonly prestige: PrestigeTuning;
   readonly transport: TransportTuning;
   readonly conversions: ConversionsTuning;
+  readonly markets: MarketsTuning;
   readonly plugs: PlugsTuning;
   readonly onboarding: OnboardingTuning;
 }
@@ -556,6 +573,13 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     CONSIGNED_BUST_HEAT_FACTOR,
   },
   conversions: { CONVERSION_RECIPES },
+  markets: {
+    STOCK_SEED_BAND,
+    PLUG_STOCK_MULTIPLIER,
+    RESTOCK_PER_DAY,
+    SELL_RESTOCK_FRACTION,
+    SCARCITY_PRICE_WEIGHT,
+  },
   plugs: { PLUG_MEETING_HEAT },
   onboarding: {
     SESSION_TARGET_MIN_MINUTES,

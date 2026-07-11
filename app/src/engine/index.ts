@@ -21,6 +21,7 @@ export {
   boardFor,
   neutralSupplier,
   productDisplayName,
+  hydrateWorldV11,
   VOLATILITY_RANGE,
 } from './world';
 export type {
@@ -47,6 +48,7 @@ export type {
   TuneFirstKnob,
   WorldTuning,
   ProductsTuning,
+  MarketsTuning,
   DealsTuning,
   HeatTuning,
   StashesTuning,
@@ -150,10 +152,12 @@ export type {
 export { tick, TICK_STEPS } from './clock';
 export type { TickMode, TickStep } from './clock';
 
-// Deal loop — Loop 1 (Prompt 04).
+// Deal loop — Loop 1 (Prompt 04; one-price + finite stock, Prompt 32).
 export {
   getMarketPrice,
   driftPrices,
+  restockMarkets,
+  stockCapFor,
   computeBustProbability,
   resolveDeal,
   hasBankedWin,
@@ -163,6 +167,14 @@ export {
   DEFAULT_STASH_CAPACITY,
   DEAL_WIN_FLAG,
 } from './deals';
+// Market stock tuning (design/12 Item 10; Prompt 32).
+export {
+  STOCK_SEED_BAND,
+  PLUG_STOCK_MULTIPLIER,
+  RESTOCK_PER_DAY,
+  SELL_RESTOCK_FRACTION,
+  SCARCITY_PRICE_WEIGHT,
+} from './config/markets';
 export type {
   MarketState,
   Markets,

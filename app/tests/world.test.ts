@@ -38,10 +38,8 @@ describe('generateWorld — bounds', () => {
       expect(world.priceBoards).toHaveLength(PRODUCT_PRICE_BANDS.length);
       for (const price of world.priceBoards) {
         const band = bandById.get(price.product)!;
-        expect(price.buy).toBeGreaterThanOrEqual(band.buy.min);
-        expect(price.buy).toBeLessThanOrEqual(band.buy.max);
-        expect(price.sell).toBeGreaterThanOrEqual(band.sell.min);
-        expect(price.sell).toBeLessThanOrEqual(band.sell.max);
+        expect(price.price).toBeGreaterThanOrEqual(band.price.min);
+        expect(price.price).toBeLessThanOrEqual(band.price.max);
         expect(price.volatility).toBeGreaterThanOrEqual(VOLATILITY_RANGE.min);
         expect(price.volatility).toBeLessThanOrEqual(VOLATILITY_RANGE.max);
       }
@@ -109,12 +107,22 @@ describe('generateWorld — no dead-on-arrival seeds (design/01 §8.7)', () => {
       // Positive starting cash.
       expect(cash).toBeGreaterThan(0);
 
-      // At least one affordable product to buy into.
-      const affordable = world.priceBoards.filter((p) => p.buy <= cash);
+      // At least one affordable LOCALLY TRADED product to buy into.
+      const home = getCountry(world.startingCountry.id);
+      const affordable = home.traded.filter(
+        (id) => basePriceAt(world, id, home.id).price <= cash,
+      );
       expect(affordable.length).toBeGreaterThan(0);
 
-      // A reachable first sale: some affordable product sells above its buy.
-      const profitable = affordable.some((p) => p.sell > p.buy);
+      // A reachable first margin: under the one-price economy (design/12 Item
+      // 3) profit means SOMEWHERE pays more than home for something affordable.
+      const profitable = affordable.some((id) =>
+        COUNTRIES.some(
+          (c) =>
+            c.id !== home.id &&
+            basePriceAt(world, id, c.id).price > basePriceAt(world, id, home.id).price,
+        ),
+      );
       expect(profitable).toBe(true);
     }
   });
@@ -138,9 +146,12 @@ describe('describeStartingHand — fairness (GDD §5.4, no hidden traps)', () =>
     const hand = describeStartingHand(world);
     const home = getCountry(world.startingCountry.id);
     const trueMin = home.traded
-      .map((id: ProductId) => ({ product: id, buy: basePriceAt(world, id, home.id).buy }))
-      .reduce((lo, p) => (p.buy < lo.buy ? p : lo));
+      .map((id: ProductId) => ({
+        product: id,
+        price: basePriceAt(world, id, home.id).price,
+      }))
+      .reduce((lo, p) => (p.price < lo.price ? p : lo));
     expect(hand.cheapestProduct.product).toBe(trueMin.product);
-    expect(hand.cheapestProduct.buy).toBe(trueMin.buy);
+    expect(hand.cheapestProduct.price).toBe(trueMin.price);
   });
 });

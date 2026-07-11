@@ -17,7 +17,7 @@
 
 import type { GameState } from './state';
 import { restoreRng } from './rng';
-import { driftPrices } from './deals';
+import { driftPrices, restockMarkets } from './deals';
 import { applyHeatEscalation, decayHeat } from './heat';
 import { raidStep } from './storage';
 import { travelStep } from './travel';
@@ -62,6 +62,11 @@ export const TICK_STEPS: readonly TickStep[] = [
     modes: ['active'],
     run: (s, dt) => driftPrices(s, restoreRng(s.rngState), dt),
   },
+  // Market stock pools refill over PLAY time (design/12 Item 10; Prompt 32).
+  // Active-only: the street never re-ups while the world is frozen offline
+  // (GDD §6). Deterministic — no randomness, so it sits after the drift walk
+  // without touching the RNG stream.
+  { id: 'market-restock', modes: ['active'], run: (s, dt) => restockMarkets(s, dt) },
   // Heat decays over online time (design/01 §4). Prompt 05. Active-only: offline
   // is frozen, so heat neither rises nor falls while away.
   { id: 'heat-decay', modes: ['active'], run: (s, dt) => decayHeat(s, dt) },

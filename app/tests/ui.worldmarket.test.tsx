@@ -60,8 +60,8 @@ describe('worldMarket.model — the board IS getMarketPrice (fairness spot-check
       expect(rows.map((r) => r.countryId)).toEqual(COUNTRIES.map((c) => c.id));
       for (const row of rows) {
         const price = getMarketPrice(state, p.id, row.countryId);
-        expect(row.buy).toBe(price.buy);
-        expect(row.sell).toBe(price.sell);
+        expect(row.price).toBe(price.price);
+        expect(row.stock).toBe(price.stock);
         expect(row.trend).toBe(price.trend);
         expect(row.traded).toBe(isTraded(row.countryId, p.id));
       }
@@ -76,7 +76,7 @@ describe('WorldMarketScreen — every price, every island, from minute one', () 
 
     // Default product is cocaine: Colombia is a gated true source…
     const colombia = view.container.querySelector('[data-testid="board-colombia"]')!;
-    expect(colombia.textContent).toContain('🔌 Contract buy');
+    expect(colombia.textContent).toContain('🔌 Contract');
     expect(colombia.textContent).toContain('$220,000'); // the intro cost, up front
 
     // …and the Golden Crescent has no cocaine market at all (Ideas2 §5).

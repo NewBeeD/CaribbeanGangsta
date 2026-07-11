@@ -1,8 +1,8 @@
 /**
- * The Deal screen's view-model (Prompt 15; design/11). PURE read selectors that
- * turn the `GameState` into the numbers the screen renders — prices, margins,
- * holdings, clamped quantities, and the fairness bust % — by calling engine
- * functions.
+ * The Deal screen's view-model (Prompt 15; design/11; design/12 Items 3/10/11).
+ * PURE read selectors that turn the `GameState` into the numbers the screen
+ * renders — the ONE price per product, street stock, holdings, clamped
+ * quantities, and the fairness bust % — by calling engine functions.
  *
  * The screen composes these; it authors NO economic math itself (prompt guardrail
  * "no economic logic in the component"). Everything here is a thin wrapper over an
@@ -81,20 +81,17 @@ export function marketName(stash: Stash): string {
   return getCountry(stash.countryId).name;
 }
 
-/** Sell/buy margin as a whole percent of the buy price (0 when buy is free). */
-export function marginPct(buy: number, sell: number): number {
-  if (buy <= 0) return 0;
-  return Math.round(((sell - buy) / buy) * 100);
-}
-
-/** One product's row for the deal board: live prices, trend, margin, holdings. */
+/** One product's row for the deal board: THE live price (buys and sells both
+ * execute at it — design/12 Item 3; no margin % exists, Item 11), trend,
+ * street stock, holdings. */
 export interface ProductRow {
   readonly id: ProductId;
   readonly name: string;
-  readonly buy: number;
-  readonly sell: number;
-  readonly marginPct: number;
+  /** The one number a deal here executes at, either direction. */
+  readonly price: number;
   readonly trend: PriceTrend;
+  /** Whole units the street can supply right now (design/12 Item 10). */
+  readonly stock: number;
   /** Units of this product currently held in the target stash. */
   readonly held: number;
   /**
@@ -114,10 +111,9 @@ function productRow(state: GameState, product: ProductId, stash: Stash): Product
   return {
     id: product,
     name: productDisplayName(state.world, product),
-    buy: price.buy,
-    sell: price.sell,
-    marginPct: marginPct(price.buy, price.sell),
+    price: price.price,
     trend: price.trend,
+    stock: price.stock,
     held: stash.inventory[product] ?? 0,
     plugGated,
     plugCost: plugGated ? (plugQuote(state, countryId)?.cost ?? 0) : 0,
@@ -146,15 +142,18 @@ export function productRows(state: GameState, stash: Stash): readonly ProductRow
 }
 
 /**
- * Most units of `product` the stash can BUY here: affordable AND capacity-
- * bounded. Affordability spans the stash's dirty cash PLUS the run's clean
- * cash (`spendableAt`) — a borrowed stake spends anywhere (design/10).
+ * Most units of `product` the stash can BUY here: affordable, capacity-bounded
+ * AND supply-bounded (design/12 Item 10 — the street's pool is on the board,
+ * so the clamp is never a surprise). Affordability spans the stash's dirty
+ * cash PLUS the run's clean cash (`spendableAt`) — a borrowed stake spends
+ * anywhere (design/10).
  */
 export function maxBuyQty(state: GameState, product: ProductId, stash: Stash): number {
   const price = getMarketPrice(state, product, marketCountryId(stash));
-  const affordable = price.buy > 0 ? Math.floor(spendableAt(state, stash) / price.buy) : 0;
+  const affordable =
+    price.price > 0 ? Math.floor(spendableAt(state, stash) / price.price) : 0;
   const capacityLeft = getStashType(stash.type).capacity - stashUnits(stash);
-  return Math.max(0, Math.min(affordable, capacityLeft));
+  return Math.max(0, Math.min(affordable, capacityLeft, price.stock));
 }
 
 /** Most units of `product` the stash can SELL: exactly what it holds. */

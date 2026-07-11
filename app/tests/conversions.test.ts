@@ -91,9 +91,9 @@ describe('convert — deterministic transformation, never a roll', () => {
     for (let s = 0; s < 40; s++) {
       const state = createInitialState(`value-${s}`);
       const homeId = home(state).countryId;
-      cokeTotal += getMarketPrice(state, 'cocaine', homeId).sell * recipe.fromQty;
+      cokeTotal += getMarketPrice(state, 'cocaine', homeId).price * recipe.fromQty;
       crackTotal +=
-        getMarketPrice(state, 'crack', homeId).sell * recipe.toQty -
+        getMarketPrice(state, 'crack', homeId).price * recipe.toQty -
         recipe.costPerBatch;
     }
     expect(crackTotal).toBeGreaterThan(cokeTotal);

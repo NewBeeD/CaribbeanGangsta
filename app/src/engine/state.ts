@@ -64,8 +64,14 @@ import type {
  * v10: added `config` — the injected `GameConfig` tuning the run was started
  *     under (Prompt 26). Saved with the run so a load resumes under the exact
  *     numbers it was played with; old saves migrate to the v1 default.
+ * v11: the ONE-PRICE economy + finite stock (design/12 Items 3/10; Prompt 32) —
+ *     `world.priceBoards` carry a single `price` (no buy/sell pair), every
+ *     `MarketState` gains a `stock` pool, and `config` gains the `markets`
+ *     group (its `products` table swaps to the single-band shape). Migration
+ *     rebuilds boards/markets deterministically from the save's own seed;
+ *     holdings, cash, plugs, and the RNG stream are untouched.
  */
-export const SCHEMA_VERSION = 10 as const;
+export const SCHEMA_VERSION = 11 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -498,7 +504,9 @@ export function createInitialState(
     config,
     world,
     clock: { hours: 0, day: 1, week: 1 },
-    markets: createInitialMarkets(),
+    // Stock seeds draw from a dedicated fork — forking never consumes the main
+    // stream, so pre-v11 saves' RNG snapshots stay byte-identical.
+    markets: createInitialMarkets(rng.fork('market-stock'), config.markets),
     cleanCash: 0,
     plugs: [],
     reputation: { street: 0, business: 0, political: 0 },

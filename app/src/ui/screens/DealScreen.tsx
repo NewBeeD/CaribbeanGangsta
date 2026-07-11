@@ -241,9 +241,8 @@ export function DealScreen() {
                   <TrendArrow direction={r.trend} />
                 </div>
                 <div className="cg-label" style={{ marginTop: 4 }}>
-                  {r.plugGated ? '🔌 ' : ''}Buy {money(r.buy)} · Sell {money(r.sell)} (
-                  {r.marginPct >= 0 ? '+' : ''}
-                  {r.marginPct}%) · You hold {r.held}
+                  {r.plugGated ? '🔌 ' : ''}
+                  {money(r.price)} · ~{r.stock} on the street · You hold {r.held}
                 </div>
               </button>
             );
@@ -323,12 +322,14 @@ export function DealScreen() {
           {primaryLabel}
           <small>
             {mode === 'sell'
-              ? `${money(row.sell)} / unit`
+              ? `${money(row.price)} / unit`
               : plugBlocked
                 ? 'Needs the plug'
                 : canAct
-                  ? `${money(row.buy)} / unit`
-                  : 'No room / no cash'}
+                  ? `${money(row.price)} / unit`
+                  : row.stock <= 0
+                    ? 'The street is dry'
+                    : 'No room / no cash'}
           </small>
         </Button>
       </Card>

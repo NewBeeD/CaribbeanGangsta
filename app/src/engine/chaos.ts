@@ -113,7 +113,8 @@ function shockFactor(
   const edge = direction === 'up' ? 1 + volatility : 1 - volatility;
   const shocked = market.factor + (edge - market.factor) * clamp(magnitude, 0, 1);
   const factor = clamp(shocked, 1 - volatility, 1 + volatility);
-  return { factor, prevFactor: market.factor };
+  // Stock is preserved — chaos shocks price only (stock shocks are Prompt 33).
+  return { ...market, factor, prevFactor: market.factor };
 }
 
 function volatilityFor(state: GameState, product: ProductId): number {

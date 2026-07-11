@@ -8,12 +8,14 @@
  * the player's SKILL (reading the board) is what transfers — the world is what
  * varies (design/01 §0.1).
  *
- * Pricing model (design/11 §1): one GLOBAL source board per product (resolved
- * within its documented band) + geography. A country's local base price is the
- * board stretched by the region distance from the product's source region
+ * Pricing model (design/11 §1; design/12 Item 3 — the ONE-PRICE economy): one
+ * GLOBAL source board per product (resolved within its documented band) +
+ * geography. A country shows ONE price per product — the board stretched
+ * compound by the region distance from the product's source region
  * (per-product elasticity — cocaine widens hard) and scaled by the country's
- * per-run cost/demand factors and fixed product flavor. `basePriceAt` is that
- * projection; the live drift factor on top of it is owned by `deals.ts`.
+ * per-run demand character and fixed product flavor. Buying and selling both
+ * execute at that number; `basePriceAt` is that projection, and the live drift
+ * factor on top of it is owned by `deals.ts`.
  *
  * Determinism: every draw comes from independent `rng.fork()` sub-streams, so
  * one facet's rolls can never desync another's, and the same seed always yields
@@ -52,10 +54,9 @@ export { VOLATILITY_RANGE } from './config/world';
 
 export interface ResolvedPrice {
   readonly product: ProductId;
-  /** Resolved global source buy base, $/unit — always within the product's buy band. */
-  readonly buy: number;
-  /** Resolved global source sell base, $/unit — within the product's sell band. */
-  readonly sell: number;
+  /** Resolved global source price, $/unit — always within the product's band
+   * (its price AT the source region; design/12 Item 3). */
+  readonly price: number;
   /** Per-product price swing ∈ [0.20, 0.50]; live price = base × (1 ± volatility). */
   readonly volatility: number;
 }
@@ -125,8 +126,7 @@ function resolvePriceBoards(rng: Rng, config: GameConfig): readonly ResolvedPric
   const volatility = config.world.VOLATILITY_RANGE;
   return config.products.PRODUCTS.map((product) => ({
     product: product.id,
-    buy: rng.float(product.buy.min, product.buy.max),
-    sell: rng.float(product.sell.min, product.sell.max),
+    price: rng.float(product.price.min, product.price.max),
     volatility: rng.float(volatility.min, volatility.max),
   }));
 }
@@ -212,12 +212,25 @@ export function generateWorld(rng: Rng, config: GameConfig = DEFAULT_GAME_CONFIG
 }
 
 /**
+ * A price-board entry as stored by ANY past schema: pre-v11 saves carry a
+ * `buy`/`sell` pair; v11+ carry the single `price` (design/12 Item 3).
+ */
+export interface LegacyResolvedPrice {
+  readonly product: ProductId;
+  readonly volatility: number;
+  readonly buy?: number;
+  readonly sell?: number;
+  readonly price?: number;
+}
+
+/**
  * A pre-v8 world as stored in old saves: only the original four products on the
- * board, suppliers without `demandFactor`, and no `exoticStrain`. Used by the
- * v7→v8 persistence migration.
+ * board (buy/sell pairs), suppliers without `demandFactor`, and no
+ * `exoticStrain`. Used by the v7→v8 persistence migration.
  */
 export interface LegacyWorld
-  extends Omit<World, 'supplierGeography' | 'exoticStrain'> {
+  extends Omit<World, 'priceBoards' | 'supplierGeography' | 'exoticStrain'> {
+  readonly priceBoards: readonly LegacyResolvedPrice[];
   readonly supplierGeography: readonly (Omit<SupplierMarket, 'demandFactor'> & {
     readonly demandFactor?: number;
   })[];
@@ -230,18 +243,27 @@ export interface LegacyWorld
  * geography to the full roster with per-country demand factors, and draw the
  * run's exotic strain. Deterministic from the save's own seed (a dedicated
  * `::migrate-v8` stream), so migrating the same save twice yields the same
- * world. Everything the old save already resolved is preserved verbatim.
+ * world. Everything the old save already resolved is carried forward; final
+ * single-price normalization happens in the 10→11 step (`hydrateWorldV11`),
+ * which every pre-v11 save passes through next.
  */
 export function hydrateLegacyWorld(legacy: LegacyWorld): World {
   const rng = createRng(`${legacy.seed}::migrate-v8`);
 
   const priceBoards: ResolvedPrice[] = PRODUCT_PRICE_BANDS.map((band) => {
     const existing = legacy.priceBoards.find((b) => b.product === band.id);
-    if (existing) return existing;
+    if (existing) {
+      // Carry the legacy pair forward under a placeholder single price; the
+      // v11 step re-resolves every board from the save's own seed.
+      return {
+        product: band.id,
+        price: existing.price ?? existing.buy ?? band.price.min,
+        volatility: existing.volatility,
+      };
+    }
     return {
       product: band.id,
-      buy: rng.float(band.buy.min, band.buy.max),
-      sell: rng.float(band.sell.min, band.sell.max),
+      price: rng.float(band.price.min, band.price.max),
       volatility: rng.float(VOLATILITY_RANGE.min, VOLATILITY_RANGE.max),
     };
   });
@@ -277,7 +299,34 @@ export function hydrateLegacyWorld(legacy: LegacyWorld): World {
   };
 }
 
-// --- Price projection (design/11 §1) -----------------------------------------
+/** A world as stored by any pre-v11 save: boards may still be buy/sell pairs. */
+export interface WorldWithLegacyBoards extends Omit<World, 'priceBoards'> {
+  readonly priceBoards: readonly LegacyResolvedPrice[];
+}
+
+/**
+ * Upgrade a world to the ONE-PRICE shape (design/12 Item 3; the v10→v11
+ * migration): re-resolve every product's single source price from the retuned
+ * bands, deterministically from the save's own seed (a dedicated
+ * `::migrate-v11` stream) — migrating the same save twice yields the same
+ * world. Each board's resolved `volatility` is preserved verbatim; nothing
+ * player-owned is touched (boards are world data, never holdings).
+ */
+export function hydrateWorldV11(legacy: WorldWithLegacyBoards): World {
+  const rng = createRng(`${legacy.seed}::migrate-v11`);
+  const priceBoards: ResolvedPrice[] = PRODUCT_PRICE_BANDS.map((band) => {
+    const existing = legacy.priceBoards.find((b) => b.product === band.id);
+    return {
+      product: band.id,
+      price: rng.float(band.price.min, band.price.max),
+      volatility:
+        existing?.volatility ?? rng.float(VOLATILITY_RANGE.min, VOLATILITY_RANGE.max),
+    };
+  });
+  return { ...legacy, priceBoards };
+}
+
+// --- Price projection (design/11 §1; design/12 Item 3) ------------------------
 
 /** The run's resolved global source board for `product` (throws if absent). */
 export function boardFor(world: World, product: ProductId): ResolvedPrice {
@@ -294,22 +343,22 @@ function supplierFor(world: World, countryId: string): SupplierMarket {
 }
 
 export interface BasePrice {
-  /** Local base buy price, $/unit (before live drift). */
-  readonly buy: number;
-  /** Local base sell price, $/unit (before live drift). */
-  readonly sell: number;
+  /** THE local base price, $/unit (before live drift) — buys and sells both
+   * execute at this one number (design/12 Item 3). */
+  readonly price: number;
   readonly volatility: number;
-  /** True when the buy side is the plug's fixed contract price (Ideas2 §2). */
+  /** True when this is a plug's fixed contract price (drift-free; Ideas2 §2). */
   readonly plugPriced: boolean;
 }
 
 /**
- * The BASE local price of `product` at `countryId` (design/11 §1): the global
- * source board stretched by region distance from the product's source region
- * (per-product elasticity), scaled by the country's per-run cost/demand factors
- * and fixed product flavor. At a TRUE SOURCE (`plugFor`), the buy side is the
- * plug's fixed contract price — `board.buy × plugPriceFactor`, the cheapest
- * standing price in the game, drift-free and readable (Ideas2 §2).
+ * The ONE base local price of `product` at `countryId` (design/12 Item 3): the
+ * global source board stretched COMPOUND by region distance from the product's
+ * source region (`(1 + elasticity)^distance` — geography is the whole margin
+ * engine), scaled by the country's per-run demand character and fixed product
+ * flavor. At a TRUE SOURCE (`plugFor`), the plug REPLACES the price:
+ * `board.price × plugPriceFactor` — visibly the lowest price in the world,
+ * drift-free and readable (Ideas2 §2).
  *
  * Live prices are this base × the country's drift factor (`deals.getMarketPrice`);
  * prices are computable for EVERY country — visibility is never gated, only
@@ -329,16 +378,14 @@ export function basePriceAt(
   const dist = REGION_DISTANCE[country.region][cfg.sourceRegion];
 
   const plugPriced = requiresPlug(countryId, product);
-  const buy = plugPriced
-    ? board.buy * (country.plugPriceFactor ?? 1)
-    : board.buy * (1 + dist * cfg.buyDistanceElasticity) * supplier.costFactor * bias;
-  const sell =
-    board.sell *
-    (1 + dist * cfg.sellDistanceElasticity) *
-    supplier.demandFactor *
-    bias;
+  const price = plugPriced
+    ? board.price * (country.plugPriceFactor ?? 1)
+    : board.price *
+      Math.pow(1 + cfg.distanceElasticity, dist) *
+      supplier.demandFactor *
+      bias;
 
-  return { buy, sell, volatility: board.volatility, plugPriced };
+  return { price, volatility: board.volatility, plugPriced };
 }
 
 /** The shelf name a product renders under — the run's strain for `exotic`. */
@@ -354,7 +401,7 @@ export interface StartingHand {
   readonly portProtection: number;
   readonly openingHooks: readonly string[];
   /** The cheapest LOCALLY TRADED product to buy into — the obvious first move. */
-  readonly cheapestProduct: { readonly product: ProductId; readonly buy: number };
+  readonly cheapestProduct: { readonly product: ProductId; readonly price: number };
   readonly prices: readonly ResolvedPrice[];
   readonly rivals: readonly {
     readonly name: string;
@@ -370,8 +417,8 @@ export interface StartingHand {
 export function describeStartingHand(world: World): StartingHand {
   const home = getCountry(world.startingCountry.id);
   const cheapest = home.traded
-    .map((id) => ({ product: id, buy: basePriceAt(world, id, home.id).buy }))
-    .reduce((lo, p) => (p.buy < lo.buy ? p : lo));
+    .map((id) => ({ product: id, price: basePriceAt(world, id, home.id).price }))
+    .reduce((lo, p) => (p.price < lo.price ? p : lo));
   return {
     country: world.startingCountry.name,
     startingCash: world.startingCountry.startingCash,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createInitialState,
   applyIntent,
+  basePriceAt,
   emptyInventory,
   getMarketPrice,
   computeBustProbability,
@@ -64,30 +65,28 @@ function withStashIn(
 
 const homeId = (state: GameState): string => (state.stashes[0] as Stash).countryId;
 
-describe('getMarketPrice — geography is the margin engine (design/11 §1)', () => {
-  it('cocaine sell price widens from the source → the islands → Miami', () => {
+describe('getMarketPrice — geography is the margin engine (design/11 §1; design/12 Item 3)', () => {
+  it('cocaine’s ONE price widens from the source → the islands → Miami', () => {
     const state = createInitialState('route');
     const source = getMarketPrice(state, 'cocaine', 'colombia');
     const local = getMarketPrice(state, 'cocaine', homeId(state));
     const miami = getMarketPrice(state, 'cocaine', 'miami');
 
-    expect(source.sell).toBeLessThan(local.sell);
-    expect(local.sell).toBeLessThan(miami.sell);
-    // Margin (sell − buy) also widens down the route for the margin engine.
-    expect(miami.sell - miami.buy).toBeGreaterThan(source.sell - source.buy);
+    expect(source.price).toBeLessThan(local.price);
+    expect(local.price).toBeLessThan(miami.price);
   });
 
-  it('the plug contract price is the cheapest standing buy in the game (Ideas2 §2)', () => {
+  it('the plug contract price is the cheapest standing price in the game (Ideas2 §2)', () => {
     for (const s of ['plug-a', 'plug-b', 'plug-c']) {
       const state = createInitialState(s);
-      const buys = COUNTRY_IDS.map((c) => ({
+      const prices = COUNTRY_IDS.map((c) => ({
         country: c,
         plug: requiresPlug(c, 'cocaine'),
-        buy: getMarketPrice(state, 'cocaine', c).buy,
+        price: getMarketPrice(state, 'cocaine', c).price,
       }));
-      const cheapest = buys.reduce((lo, b) => (b.buy < lo.buy ? b : lo));
+      const cheapest = prices.reduce((lo, b) => (b.price < lo.price ? b : lo));
       expect(cheapest.plug).toBe(true);
-      // The plug buy is flagged and drift-free at base.
+      // The plug price is flagged and drift-free at base.
       expect(getMarketPrice(state, 'cocaine', 'colombia').plugPriced).toBe(true);
     }
   });
@@ -102,13 +101,13 @@ describe('getMarketPrice — geography is the margin engine (design/11 §1)', ()
     }
   });
 
-  it('prices are visible for EVERY country — visibility is never gated', () => {
+  it('prices and stock are visible for EVERY country — visibility is never gated', () => {
     const state = createInitialState('visible');
     for (const country of COUNTRY_IDS) {
       for (const product of PRODUCT_IDS) {
         const price = getMarketPrice(state, product, country);
-        expect(price.buy).toBeGreaterThan(0);
-        expect(price.sell).toBeGreaterThan(0);
+        expect(price.price).toBeGreaterThan(0);
+        expect(price.stock).toBeGreaterThan(0);
       }
     }
   });
@@ -151,10 +150,14 @@ describe('resolveDeal — buy', () => {
     const result = resolveDeal(state, { type: 'buy', product: 'weed', qty: 10 });
 
     expect(result.outcome).toBe('success');
-    expect(result.cashDelta).toBe(-price.buy * 10);
+    expect(result.cashDelta).toBe(-price.price * 10);
     const home = result.state.stashes[0] as Stash;
     expect(home.inventory.weed).toBe(10);
-    expect(home.dirtyCash).toBe(100_000 - price.buy * 10);
+    expect(home.dirtyCash).toBe(100_000 - price.price * 10);
+    // The units came off the street (design/12 Item 10).
+    expect(getMarketPrice(result.state, 'weed', homeId(state)).stock).toBe(
+      price.stock - 10,
+    );
   });
 
   it('rejects invalid qty, insufficient funds, and over-capacity without mutating', () => {
@@ -180,7 +183,7 @@ describe('resolveDeal — buy', () => {
   it('clean (borrowed) cash covers a buy shortfall — dirty cash drains first (design/10)', () => {
     const base = seed(createInitialState('loan-buy'), { cash: 0 });
     const price = getMarketPrice(base, 'weed', homeId(base));
-    const cost = price.buy * 10;
+    const cost = price.price * 10;
 
     // Dirty cash covers half the ticket; clean cash (a borrowed stake) the rest.
     const half = Math.floor(cost / 2);
@@ -230,7 +233,7 @@ describe('resolveDeal — buy', () => {
       stashId: 'stash-colombia',
     });
     expect(bought.outcome).toBe('success');
-    expect(bought.cashDelta).toBe(-price.buy * 10);
+    expect(bought.cashDelta).toBe(-price.price * 10);
     const stash = bought.state.stashes.find((s) => s.id === 'stash-colombia')!;
     expect(stash.inventory.cocaine).toBe(10);
   });
@@ -286,8 +289,8 @@ describe('resolveDeal — sell (fairness law, GDD §8)', () => {
     if (result.outcome === 'success') {
       const home = result.state.stashes[0] as Stash;
       expect(home.inventory.weed).toBe(0);
-      expect(home.dirtyCash).toBe(1000 + price.sell * 5);
-      expect(result.cashDelta).toBe(price.sell * 5);
+      expect(home.dirtyCash).toBe(1000 + price.price * 5);
+      expect(result.cashDelta).toBe(price.price * 5);
       expect(hasBankedWin(result.state)).toBe(true);
     }
   });
@@ -341,22 +344,23 @@ describe('driftPrices — bounded live walk (design/01 §2)', () => {
 
     for (const country of COUNTRY_IDS) {
       for (const product of PRODUCT_IDS) {
-        const base = getMarketPrice(createInitialState('drift'), product, country);
+        // Compare against the UNROUNDED base so rounding can't fake a breach.
+        const raw = basePriceAt(state.world, product, country).price;
         const live = getMarketPrice(state, product, country);
         const vol = live.volatility;
-        // buy/sell stay within the volatility band around their (flat) base.
-        expect(live.buy).toBeGreaterThanOrEqual(Math.floor(base.buy * (1 - vol)));
-        expect(live.buy).toBeLessThanOrEqual(Math.ceil(base.buy * (1 + vol)));
+        // The one price stays within the volatility band around its (flat) base.
+        expect(live.price).toBeGreaterThanOrEqual(Math.floor(raw * (1 - vol)));
+        expect(live.price).toBeLessThanOrEqual(Math.ceil(raw * (1 + vol)));
         expect(['up', 'down', 'flat']).toContain(live.trend);
       }
     }
   });
 
-  it('a plug contract buy price never drifts (Ideas2 §2 — fixed and readable)', () => {
+  it('a plug contract price never drifts (Ideas2 §2 — fixed and readable)', () => {
     let state = createInitialState('plug-drift');
-    const contract = getMarketPrice(state, 'cocaine', 'colombia').buy;
+    const contract = getMarketPrice(state, 'cocaine', 'colombia').price;
     for (let i = 0; i < 30; i++) state = tick(state, 24);
-    expect(getMarketPrice(state, 'cocaine', 'colombia').buy).toBe(contract);
+    expect(getMarketPrice(state, 'cocaine', 'colombia').price).toBe(contract);
   });
 
   it('does not advance the clock or run offline (frozen while away)', () => {
