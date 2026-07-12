@@ -18,6 +18,7 @@
 import type { GameState } from './state';
 import { restoreRng } from './rng';
 import { driftPrices, restockMarkets } from './deals';
+import { armsMarketStep } from './arms';
 import { applyHeatEscalation, decayHeat } from './heat';
 import { raidStep } from './storage';
 import { travelStep } from './travel';
@@ -69,6 +70,10 @@ export const TICK_STEPS: readonly TickStep[] = [
   // (GDD §6). Deterministic — no randomness, so it sits after the drift walk
   // without touching the RNG stream.
   { id: 'market-restock', modes: ['active'], run: (s, dt) => restockMarkets(s, dt) },
+  // Arms markets drift + restock (design/12 Item 1; Prompt 35). Active-only: arms
+  // are frozen while away (GDD §6). Draws from an INDEPENDENT run-seeded stream
+  // (like chaos / market events), so it never perturbs the main deal/raid RNG.
+  { id: 'arms-markets', modes: ['active'], run: (s, dt) => armsMarketStep(s, dt) },
   // Heat decays over online time (design/01 §4). Prompt 05. Active-only: offline
   // is frozen, so heat neither rises nor falls while away.
   { id: 'heat-decay', modes: ['active'], run: (s, dt) => decayHeat(s, dt) },

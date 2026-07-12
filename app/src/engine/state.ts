@@ -33,6 +33,16 @@ import {
   type Markets,
   type SellIntent,
 } from './deals';
+import {
+  createInitialArmsMarkets,
+  resolveArmsDeal,
+  unlockArmsBroker,
+  type ArmsIntent,
+  type ArmsMarkets,
+  type Armory,
+  type UnlockArmsBrokerIntent,
+} from './arms';
+import { WEAPON_TIER_IDS, type WeaponTierId } from './config/arms';
 import { setLieLow, tierForHeat, type LeTier, type LieLowIntent } from './heat';
 import { convert, type ConvertIntent } from './conversions';
 import { buyPlug, type BuyPlugIntent } from './plugs';
@@ -79,9 +89,12 @@ import type {
  *     v11 is EXTENDED IN PLACE by prompts 33–35 (design/12 workstreams B–D — no
  *     further schema bump): Prompt 33 adds `marketEvents` + `rumors` (world price
  *     events & the rumor ticker); Prompt 34 adds `streetStock` (crack cooked to
- *     the crew's corner queue — design/12 Item 5). Missing on an older v11 save
- *     they default to empty (`normalizeState` in store/persistence.ts) —
- *     transient world/crew data, never player cash or holdings.
+ *     the crew's corner queue — design/12 Item 5); Prompt 35 adds `armsBroker`
+ *     (the paid arms intro), `armsMarkets` (per-country weapon-tier price/stock),
+ *     and `armory` (units held per weapon tier — design/12 Item 1). Missing on an
+ *     older v11 save they default to empty/false (`normalizeState` in
+ *     store/persistence.ts) — transient world data + a fresh-empty arsenal, never
+ *     player cash or drug holdings.
  */
 export const SCHEMA_VERSION = 11 as const;
 
@@ -429,6 +442,15 @@ export interface GameState {
   readonly rumors: readonly Rumor[];
   /** Crack the crew is holding to move on the corners (design/12 Item 5; Prompt 34). */
   readonly streetStock: StreetStock;
+  /**
+   * Whether the arms broker intro has been paid — the arms trade's ONE gate, and
+   * a pure money gate (design/12 Item 1; Prompt 35). `false` until bought.
+   */
+  readonly armsBroker: boolean;
+  /** Live weapon-tier price/stock per arms-trading country (design/12 Item 1). */
+  readonly armsMarkets: ArmsMarkets;
+  /** Units held per weapon tier — the off-book arsenal (design/12 Item 1). */
+  readonly armory: Armory;
   /** Safe, launderable money (design/01 §1). Dirty cash lives in `stashes`. */
   readonly cleanCash: number;
   /**
@@ -485,6 +507,13 @@ export function emptyInventory(): Inventory {
 /** No rocks on the corners — the run's starting (and fully-sold-through) street pool. */
 export function emptyStreetStock(): StreetStock {
   return { units: 0, bookedUnitPrice: 0 };
+}
+
+/** An empty arsenal — the run's starting (and fully-sold-through) armory. */
+export function emptyArmory(): Armory {
+  const armory = {} as Record<WeaponTierId, number>;
+  for (const id of WEAPON_TIER_IDS) armory[id] = 0;
+  return armory;
 }
 
 /** A ledger with no active loan — the run's starting (and post-repayment) debt. */
@@ -597,6 +626,11 @@ export function createInitialState(
     marketEvents: [],
     rumors: [],
     streetStock: emptyStreetStock(),
+    armsBroker: false,
+    // Arms stock seeds draw from a dedicated fork — forking never consumes the
+    // main stream, so pre-Prompt-35 saves' RNG snapshots stay byte-identical.
+    armsMarkets: createInitialArmsMarkets(rng.fork('arms-markets'), config.arms),
+    armory: emptyArmory(),
     cleanCash: 0,
     plugs: [],
     reputation: { street: 0, business: 0, political: 0 },
@@ -653,7 +687,9 @@ export type Intent =
   | ConvertIntent
   | BuyPlugIntent
   | ShipIntent
-  | LieLowIntent;
+  | LieLowIntent
+  | ArmsIntent
+  | UnlockArmsBrokerIntent;
 
 /**
  * Pure reducer entry point: intent in -> new immutable state out. Never mutates
@@ -676,5 +712,10 @@ export function applyIntent(state: GameState, intent: Intent): GameState {
       return ship(state, intent).state;
     case 'lieLow':
       return setLieLow(state, intent.enabled);
+    case 'buyArms':
+    case 'sellArms':
+      return resolveArmsDeal(state, intent).state;
+    case 'unlockArmsBroker':
+      return unlockArmsBroker(state).state;
   }
 }

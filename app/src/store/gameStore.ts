@@ -21,6 +21,13 @@ import {
 } from '@/engine/state';
 import { resolveDeal, type DealIntent, type DealResult } from '@/engine/deals';
 import {
+  resolveArmsDeal,
+  unlockArmsBroker as unlockArmsBrokerEngine,
+  type ArmsIntent,
+  type ArmsDealResult,
+  type ArmsBrokerResult,
+} from '@/engine/arms';
+import {
   addStash,
   moveProduct as moveProductEngine,
   storeCash as storeCashEngine,
@@ -346,6 +353,24 @@ export interface GameStore {
    * the launch lands; returns the full `ShipResult` or `null`.
    */
   shipCargo(intent: ShipIntent): ShipResult | null;
+  /**
+   * Arms trade (Prompt 35; design/12 Item 1) — each wraps the pure `arms.ts`
+   * engine, commits only when the operation lands, and autosaves. The UI authors
+   * no price/heat/odds math; it shows the disclosed numbers and dispatches.
+   */
+  /**
+   * Pay the arms-broker intro from CLEAN cash (a pure money gate). Cost + meeting
+   * heat are disclosed by `armsBrokerQuote` before commit; commits + autosaves
+   * only when it lands. Returns the full `ArmsBrokerResult` or `null`.
+   */
+  unlockArmsBroker(): ArmsBrokerResult | null;
+  /**
+   * Resolve an arms buy/sell with a SINGLE bust roll (sells), apply the new
+   * state, and return the full `ArmsDealResult` (scene key + fairness numbers) so
+   * the UI renders the outcome scene. Mirrors `commitDeal`. Returns `null` when
+   * no run is loaded.
+   */
+  commitArmsDeal(intent: ArmsIntent): ArmsDealResult | null;
   /**
    * Run-end (Prompt 23; design/01 §7): end the run through the engine's `endRun`,
    * bank the peak score into meta (survives permadeath), submit the line to the
@@ -785,6 +810,30 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (result.ok) {
       set({ state: result.state });
       trackShipmentLaunched(result);
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  unlockArmsBroker() {
+    const { state } = get();
+    if (!state) return null;
+    const result = unlockArmsBrokerEngine(state);
+    // Only commit + autosave when the intro landed (funds sufficed, not a repeat).
+    if (result.ok) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  commitArmsDeal(intent) {
+    const { state } = get();
+    if (!state) return null;
+    const result = resolveArmsDeal(state, intent);
+    // Commit on success/bust (a sell's roll was consumed); a rejection is a no-op.
+    if (result.outcome !== 'rejected') {
+      set({ state: result.state });
       void get().persist(AUTOSAVE_SLOT).catch(() => {});
     }
     return result;

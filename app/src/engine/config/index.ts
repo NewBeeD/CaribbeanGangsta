@@ -207,6 +207,32 @@ import {
 } from './street';
 import { PLUG_MEETING_HEAT } from './plugs';
 import {
+  WEAPON_TIERS,
+  ARMS_BROKER_COST,
+  ARMS_BROKER_HEAT,
+  ARMS_SOURCE_REGION,
+  ARMS_DISTANCE_ELASTICITY,
+  ARMS_VOLATILITY,
+  ARMS_STOCK_SEED_BAND,
+  ARMS_RESTOCK_PER_DAY,
+  ARMS_SELL_RESTOCK_FRACTION,
+  ARMS_SCARCITY_PRICE_WEIGHT,
+  ARMS_BUY_HEAT_FACTOR,
+  ARMS_CONFLICT_HEAT_MULT,
+  ARMS_BUST_BASE,
+  ARMS_BUST_HEAT_WEIGHT,
+  ARMS_BUST_LOCATION_WEIGHT,
+  ARMS_BUST_TIER_WEIGHT,
+  ARMS_BUST_QTY_WEIGHT,
+  ARMS_BUST_QTY_FULL_RISK,
+  ARMS_BUST_MIN,
+  ARMS_BUST_MAX,
+  ARMS_BUST_HEAT_MULT,
+  ARMS_CUSTOMS_SEIZURE_RELIEF,
+  type WeaponTierConfig,
+} from './arms';
+import type { Region } from './countries';
+import {
   SESSION_TARGET_MIN_MINUTES,
   SESSION_TARGET_MAX_MINUTES,
   MINUTE_BUDGET,
@@ -427,6 +453,34 @@ export interface PlugsTuning {
   readonly PLUG_MEETING_HEAT: number;
 }
 
+/** Arms trade — weapon tiers, the broker intro, conflict-driven demand
+ * (design/12 Item 1; Prompt 35). Tunes TOGETHER with the one-price economy and
+ * corruption retainers (the design/12 balancing note). */
+export interface ArmsTuning {
+  readonly WEAPON_TIERS: readonly WeaponTierConfig[];
+  readonly ARMS_BROKER_COST: number;
+  readonly ARMS_BROKER_HEAT: number;
+  readonly ARMS_SOURCE_REGION: Region;
+  readonly ARMS_DISTANCE_ELASTICITY: number;
+  readonly ARMS_VOLATILITY: number;
+  readonly ARMS_STOCK_SEED_BAND: Band;
+  readonly ARMS_RESTOCK_PER_DAY: number;
+  readonly ARMS_SELL_RESTOCK_FRACTION: number;
+  readonly ARMS_SCARCITY_PRICE_WEIGHT: number;
+  readonly ARMS_BUY_HEAT_FACTOR: number;
+  readonly ARMS_CONFLICT_HEAT_MULT: number;
+  readonly ARMS_BUST_BASE: number;
+  readonly ARMS_BUST_HEAT_WEIGHT: number;
+  readonly ARMS_BUST_LOCATION_WEIGHT: number;
+  readonly ARMS_BUST_TIER_WEIGHT: number;
+  readonly ARMS_BUST_QTY_WEIGHT: number;
+  readonly ARMS_BUST_QTY_FULL_RISK: number;
+  readonly ARMS_BUST_MIN: number;
+  readonly ARMS_BUST_MAX: number;
+  readonly ARMS_BUST_HEAT_MULT: number;
+  readonly ARMS_CUSTOMS_SEIZURE_RELIEF: number;
+}
+
 /** First-session onboarding budget (design/01 §6; GDD §9 — data for Prompt 24). */
 export interface OnboardingTuning {
   readonly SESSION_TARGET_MIN_MINUTES: number;
@@ -456,6 +510,7 @@ export interface GameConfig {
   readonly markets: MarketsTuning;
   readonly street: StreetTuning;
   readonly plugs: PlugsTuning;
+  readonly arms: ArmsTuning;
   readonly onboarding: OnboardingTuning;
 }
 
@@ -634,6 +689,30 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     STREET_HEAT_PER_UNIT,
   },
   plugs: { PLUG_MEETING_HEAT },
+  arms: {
+    WEAPON_TIERS,
+    ARMS_BROKER_COST,
+    ARMS_BROKER_HEAT,
+    ARMS_SOURCE_REGION,
+    ARMS_DISTANCE_ELASTICITY,
+    ARMS_VOLATILITY,
+    ARMS_STOCK_SEED_BAND,
+    ARMS_RESTOCK_PER_DAY,
+    ARMS_SELL_RESTOCK_FRACTION,
+    ARMS_SCARCITY_PRICE_WEIGHT,
+    ARMS_BUY_HEAT_FACTOR,
+    ARMS_CONFLICT_HEAT_MULT,
+    ARMS_BUST_BASE,
+    ARMS_BUST_HEAT_WEIGHT,
+    ARMS_BUST_LOCATION_WEIGHT,
+    ARMS_BUST_TIER_WEIGHT,
+    ARMS_BUST_QTY_WEIGHT,
+    ARMS_BUST_QTY_FULL_RISK,
+    ARMS_BUST_MIN,
+    ARMS_BUST_MAX,
+    ARMS_BUST_HEAT_MULT,
+    ARMS_CUSTOMS_SEIZURE_RELIEF,
+  },
   onboarding: {
     SESSION_TARGET_MIN_MINUTES,
     SESSION_TARGET_MAX_MINUTES,

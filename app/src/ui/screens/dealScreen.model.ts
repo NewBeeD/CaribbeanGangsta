@@ -84,6 +84,12 @@ export function marketName(stash: Stash): string {
   return getCountry(stash.countryId).name;
 }
 
+/**
+ * Arms are OFF the drug board (design/12 Item 1): they trade only on the Arms
+ * page (a broker market with its own tiers/heat). They stay a `ProductId` (state
+ * & shipments reuse everything), so the board filters them by id.
+ */
+
 /** One product's row for the deal board: THE live price (buys and sells both
  * execute at it — design/12 Item 3; no margin % exists, Item 11), trend,
  * street stock, holdings. */
@@ -139,9 +145,9 @@ export function plugGateProse(row: ProductRow, countryName: string): string {
  * access): the buy price is the gate, not a progression flag.
  */
 export function productRows(state: GameState, stash: Stash): readonly ProductRow[] {
-  return PRODUCTS.filter((p) => isTraded(stash.countryId, p.id)).map((p) =>
-    productRow(state, p.id, stash),
-  );
+  return PRODUCTS.filter(
+    (p) => p.id !== 'arms' && isTraded(stash.countryId, p.id),
+  ).map((p) => productRow(state, p.id, stash));
 }
 
 /**
@@ -200,7 +206,9 @@ export function sellBustProbability(
 export function defaultProduct(state: GameState | null): ProductId {
   if (!state) return PRODUCTS[0]!.id;
   const stash = homeStash(state);
-  const traded = PRODUCTS.filter((p) => isTraded(stash.countryId, p.id));
+  const traded = PRODUCTS.filter(
+    (p) => p.id !== 'arms' && isTraded(stash.countryId, p.id),
+  );
   const held = traded.find((p) => (stash.inventory[p.id] ?? 0) > 0);
   return (held ?? traded[0] ?? PRODUCTS[0]!).id;
 }

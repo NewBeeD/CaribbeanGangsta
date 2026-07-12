@@ -94,6 +94,38 @@ function scopeLabel(scope: MarketEventScope, scopeId: string | undefined): strin
   return getCountry(scopeId!).name;
 }
 
+/**
+ * Arms events are CONFLICT events (design/12 Item 1): an up-swing is a war /
+ * coup / embargo spiking demand, a down-swing is a ceasefire flooding the market
+ * with surplus. Distinct prose so the ticker reads like the arms trade, not a
+ * drug shortage.
+ */
+function armsHeadlineTemplates(
+  direction: MarketEventDirection,
+  magnitude: MarketEventMagnitude,
+): readonly ((product: string, where: string) => string)[] {
+  if (direction === 'up') {
+    return magnitude === 'sharp'
+      ? [
+          (_p, w) => `War just broke out across ${w} — every faction's buying iron, prices going vertical.`,
+          (_p, w) => `A coup lit up ${w}. Embargo's coming; whoever's holding hardware right now is about to get rich.`,
+        ]
+      : [
+          (_p, w) => `Tensions rising across ${w} — the militias are re-arming, prices ticking up.`,
+          (_p, w) => `Word is a crackdown squeezed the pipeline into ${w}. Guns getting scarce, dear.`,
+        ];
+  }
+  return magnitude === 'sharp'
+    ? [
+        (_p, w) => `Ceasefire signed across ${w} — the whole arsenal's hitting the market at once. Floor's dropping out.`,
+        (_p, w) => `A peacekeeping surge flooded ${w} with confiscated hardware. Arms about to crater.`,
+      ]
+    : [
+        (_p, w) => `Things are cooling across ${w} — surplus iron loosening up, prices softening.`,
+        (_p, w) => `Chatter says a stockpile leaked into ${w}. A buyer's window on hardware, maybe.`,
+      ];
+}
+
 /** Direction × magnitude → a small pool of ticker lines; one is picked per rumor. */
 function headlineTemplates(
   direction: MarketEventDirection,
@@ -123,12 +155,17 @@ function headlineTemplates(
 
 function buildHeadline(
   rng: Rng,
+  product: ProductId,
   productName: string,
   direction: MarketEventDirection,
   magnitude: MarketEventMagnitude,
   where: string,
 ): string {
-  const template = rng.pick(headlineTemplates(direction, magnitude));
+  const templates =
+    product === 'arms'
+      ? armsHeadlineTemplates(direction, magnitude)
+      : headlineTemplates(direction, magnitude);
+  const template = rng.pick(templates);
   return template(productName.toLowerCase(), where);
 }
 
@@ -161,6 +198,7 @@ export function rollRumor(state: GameState, rng: Rng, dtHours: number): Rumor | 
   const landsAtHours = hours + lead;
   const headline = buildHeadline(
     rng,
+    product,
     productDisplayName(state.world, product),
     direction,
     magnitude,

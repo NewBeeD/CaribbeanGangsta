@@ -62,6 +62,7 @@ export type {
   ConversionsTuning,
   StreetTuning,
   PlugsTuning,
+  ArmsTuning,
   OnboardingTuning,
 } from './config';
 
@@ -116,6 +117,7 @@ export {
   emptyInventory,
   emptyDebt,
   emptyStreetStock,
+  emptyArmory,
   debtOwed,
   totalDirtyCash,
   spendableAt,
@@ -218,6 +220,48 @@ export {
   bookStreetStock,
   streetStep,
 } from './street';
+
+// Arms trade — broker unlock, weapon tiers, conflict demand (design/12 Item 1) — Prompt 35.
+export {
+  WEAPON_TIERS,
+  WEAPON_TIER_IDS,
+  getWeaponTier,
+  ARMS_BROKER_COST,
+  ARMS_BROKER_HEAT,
+} from './config/arms';
+export type { WeaponTierId, WeaponTierConfig } from './config/arms';
+export {
+  createInitialArmsMarkets,
+  armsTraded,
+  ARMS_COUNTRY_IDS,
+  armsStockCap,
+  armsTierBasePrice,
+  armsConflictActive,
+  getArmsPrice,
+  armsBrokerQuote,
+  unlockArmsBroker,
+  armsBustProbability,
+  resolveArmsDeal,
+  armsMarketStep,
+  ARMS_UNLOCKED_FLAG,
+} from './arms';
+export type {
+  ArmsMarketState,
+  ArmsMarkets,
+  Armory,
+  ArmsPrice,
+  ArmsPriceTrend,
+  ArmsBrokerQuote,
+  ArmsBrokerResult,
+  ArmsBrokerRejectReason,
+  ArmsDealResult,
+  ArmsDealOutcome,
+  ArmsRejectReason,
+  ArmsIntent,
+  BuyArmsIntent,
+  SellArmsIntent,
+  UnlockArmsBrokerIntent,
+} from './arms';
 
 // Travel, transports & couriers (design/11 §3; Ideas2 §1/§3) — Prompt 30.
 export {
@@ -508,6 +552,7 @@ export {
   hasRaidTipoff,
   hasTaskforceWarning,
   hasPoliticalProtection,
+  hasCustomsProtection,
 } from './corruption';
 export type {
   BribeQuote,

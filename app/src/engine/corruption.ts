@@ -850,3 +850,19 @@ export function hasPoliticalProtection(state: GameState): boolean {
       o.loyalty >= state.config.crew.BETRAYAL_PONR_LOYALTY,
   );
 }
+
+/**
+ * Whether a Customs Chief on payroll (not flipped) is running the EUC paperwork
+ * that cuts arms-shipment seizure odds (design/12 Item 1 — paper is the product;
+ * `arms.ts` reads this for `ARMS_CUSTOMS_SEIZURE_RELIEF`). The same
+ * standing-benefit shape as the queries above: hired, not turned, still loyal
+ * enough to stick their neck out.
+ */
+export function hasCustomsProtection(state: GameState): boolean {
+  return state.corruption.officials.some(
+    (o) =>
+      o.officialId === 'customs-chief' &&
+      !o.isWire &&
+      o.loyalty >= state.config.crew.BETRAYAL_PONR_LOYALTY,
+  );
+}

@@ -18,6 +18,7 @@
 
 import {
   SCHEMA_VERSION,
+  emptyArmory,
   emptyDebt,
   emptyInventory,
   emptyStreetStock,
@@ -32,6 +33,7 @@ import {
 } from '@/engine/state';
 import { createRng } from '@/engine/rng';
 import { createInitialMarkets, type Markets } from '@/engine/deals';
+import { createInitialArmsMarkets, type ArmsMarkets, type Armory } from '@/engine/arms';
 import {
   hydrateLegacyWorld,
   hydrateWorldV11,
@@ -275,19 +277,49 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
  * here so nothing lands on `undefined`. Never touches player holdings.
  *  - Prompt 33: `marketEvents`, `rumors` (world price events & the rumor ticker).
  *  - Prompt 34: `streetStock` (crack the crew is holding for the corners).
+ *  - Prompt 35: `armsBroker`, `armsMarkets`, `armory` (the arms trade — Item 1).
+ *    Arms markets re-seed deterministically from the save's own seed (transient
+ *    world data); the broker stays locked and the arsenal empty (never money).
  */
 function normalizeState(state: GameState): GameState {
   const s = state as GameState & {
     marketEvents?: GameState['marketEvents'];
     rumors?: GameState['rumors'];
     streetStock?: GameState['streetStock'];
+    armsBroker?: boolean;
+    armsMarkets?: ArmsMarkets;
+    armory?: Armory;
   };
-  if (s.marketEvents && s.rumors && s.streetStock) return state; // already current-shaped
+  // A v11 save written before Prompt 35 carries a `config` without the `arms`
+  // group; the arms engine reads `config.arms`, so patch it in from the default
+  // (any other saved tuning survives). A prior build with the group is untouched.
+  const config: GameConfig =
+    (s.config as GameConfig & { arms?: unknown }).arms === undefined
+      ? { ...s.config, arms: DEFAULT_GAME_CONFIG.arms }
+      : s.config;
+
+  if (
+    s.marketEvents &&
+    s.rumors &&
+    s.streetStock &&
+    s.armsMarkets &&
+    s.armory &&
+    s.armsBroker !== undefined &&
+    config === s.config
+  ) {
+    return state; // already current-shaped
+  }
   return {
     ...state,
+    config,
     marketEvents: s.marketEvents ?? [],
     rumors: s.rumors ?? [],
     streetStock: s.streetStock ?? emptyStreetStock(),
+    armsBroker: s.armsBroker ?? false,
+    armsMarkets:
+      s.armsMarkets ??
+      createInitialArmsMarkets(createRng(`${state.seed}::backfill-arms`), config.arms),
+    armory: s.armory ?? emptyArmory(),
   };
 }
 
