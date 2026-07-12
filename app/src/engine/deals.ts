@@ -47,7 +47,7 @@ import { getStashType } from './config/stashes';
 import { DEFAULT_GAME_CONFIG, type MarketsTuning } from './config';
 import { basePriceAt } from './world';
 import { addHeat } from './heat';
-import { splitCharge, type GameState, type Inventory, type Stash } from './state';
+import { splitCharge, type GameState, type Inventory, type MarketEvent, type Stash } from './state';
 
 // --- Live market state (drifts each active tick) -----------------------------
 
@@ -147,6 +147,46 @@ function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
+/** Whether a live event covers this country (world = all; region/country match). */
+function eventCovers(event: MarketEvent, countryId: string): boolean {
+  switch (event.scope) {
+    case 'world':
+      return true;
+    case 'region':
+      return event.scopeId === getCountry(countryId).region;
+    case 'country':
+      return event.scopeId === countryId;
+  }
+}
+
+/**
+ * The live price multiplier from active world events (design/12 Item 6; Prompt
+ * 33) overlaying `product` at `countryId`. Each covering event contributes its
+ * peak multiplier decayed linearly toward 1 across its window; the total is the
+ * product of them all (1 when none — the neutral board). Deliberately layered
+ * OUTSIDE the drift band: a shortage/glut is meant to move the price further than
+ * ordinary drift, but never past the documented sharp multiplier (config bound).
+ */
+export function marketEventMultiplier(
+  state: GameState,
+  product: ProductId,
+  countryId: string,
+): number {
+  const events = state.marketEvents;
+  if (!events || events.length === 0) return 1;
+  const hours = state.clock.hours;
+  let mult = 1;
+  for (const ev of events) {
+    if (ev.product !== product) continue;
+    if (hours < ev.startHours || hours >= ev.endHours) continue;
+    if (!eventCovers(ev, countryId)) continue;
+    const span = ev.endHours - ev.startHours;
+    const frac = span > 0 ? clamp((hours - ev.startHours) / span, 0, 1) : 1;
+    mult *= 1 + (ev.peakMultiplier - 1) * (1 - frac);
+  }
+  return mult;
+}
+
 function marketStateFor(
   state: GameState,
   countryId: string,
@@ -182,8 +222,10 @@ export function getMarketPrice(
         ? 'down'
         : 'flat';
 
+  // A plug's contract price ignores the open market's swings (drift AND events).
+  const eventMult = base.plugPriced ? 1 : marketEventMultiplier(state, product, countryId);
   return {
-    price: Math.round(base.plugPriced ? base.price : base.price * market.factor),
+    price: Math.round(base.plugPriced ? base.price : base.price * market.factor * eventMult),
     trend,
     volatility: base.volatility,
     plugPriced: base.plugPriced,

@@ -24,6 +24,7 @@ import {
   plugSceneFor,
   productName,
 } from './worldMarket.model';
+import { NewsTicker } from './NewsTicker';
 
 const money = (n: number): string => `$${Math.round(n).toLocaleString('en-US')}`;
 
@@ -79,6 +80,8 @@ export function WorldMarketScreen() {
         <span className="cg-kicker">World Market</span>
         <span className="cg-label">Every price, every island, always</span>
       </header>
+
+      <NewsTicker />
 
       <Card heading="The board">
         {/* Product picker — the whole roster, this run's shelf names. */}

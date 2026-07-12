@@ -146,6 +146,8 @@ export type {
   RivalState,
   PendingChoice,
   HighScore,
+  MarketEvent,
+  Rumor,
 } from './state';
 
 // Injected-time clock + per-tick pipeline (Prompt 03).
@@ -155,6 +157,7 @@ export type { TickMode, TickStep } from './clock';
 // Deal loop — Loop 1 (Prompt 04; one-price + finite stock, Prompt 32).
 export {
   getMarketPrice,
+  marketEventMultiplier,
   driftPrices,
   restockMarkets,
   stockCapFor,
@@ -603,6 +606,34 @@ export {
   chaosStep,
 } from './chaos';
 export type { ChaosEvent } from './chaos';
+
+// World price events & the rumor ticker (design/12 Item 6) — Prompt 33.
+export {
+  MARKET_EVENT_RATE_PER_HOUR,
+  RUMOR_TRUTH_RATE,
+  RUMOR_LEAD_DAYS,
+  RUMOR_TTL_DAYS,
+  MARKET_EVENT_DURATION_DAYS,
+  MARKET_EVENT_MODERATE_MULT,
+  MARKET_EVENT_SHARP_MULT,
+  MARKET_EVENT_SHARP_CHANCE,
+  MARKET_EVENT_STOCK_SHOCK,
+  MARKET_EVENT_MAX_ACTIVE,
+  MARKET_EVENT_SCOPE_WEIGHTS,
+} from './config/events';
+export type {
+  MarketEventScope,
+  MarketEventMagnitude,
+  MarketEventDirection,
+} from './config/events';
+export {
+  marketEventStep,
+  rollRumor,
+  rumorChance,
+  eventFromRumor,
+  shockStockForEvent,
+  eventCoversCountry,
+} from './marketEvents';
 
 // Narrative-beat engine — state → beats (design/05) — Prompt 12.
 export {

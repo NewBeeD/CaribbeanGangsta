@@ -26,6 +26,7 @@ import { crewStep } from './crew';
 import { corruptionStep } from './corruption';
 import { debtStep } from './debt';
 import { chaosStep } from './chaos';
+import { marketEventStep } from './marketEvents';
 import { beatStep } from './beats';
 import { bankPeaks } from './endgame';
 
@@ -108,6 +109,12 @@ export const TICK_STEPS: readonly TickStep[] = [
   // never perturbs the main deal/raid RNG. Runs after the economic systems so a
   // shock lands on this tick's settled prices/heat.
   { id: 'chaos-roll', modes: ['active'], run: (s, dt) => chaosStep(s, dt) },
+  // World price events & the rumor ticker (design/12 Item 6; Prompt 33). ACTIVE-
+  // only: the world is frozen offline, so no rumor posts, lands, or decays while
+  // away (GDD §6). Draws from an INDEPENDENT run-seeded stream (like chaos), so
+  // it never perturbs the main deal/raid RNG. Runs beside chaos so all the
+  // world-event systems settle together before beats read the board.
+  { id: 'market-events', modes: ['active'], run: (s, dt) => marketEventStep(s, dt) },
   // Narrative-beat checks — state → beats, not a script (design/05 §0). Prompt 12
   // (Prompt 13 renders them). Active-only (offline never fires a beat, GDD §6),
   // and AFTER chaos so beats can key off the flags a fired event just stamped.

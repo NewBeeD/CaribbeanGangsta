@@ -18,7 +18,7 @@
  * (prompts/README.md "Config, not literals"; Prompt 26 centralizes tuning).
  */
 
-import type { ProductId } from './countries';
+import type { Band, ProductId } from './countries';
 
 /** The chaos events (design/05 §2 table). */
 export type ChaosEventId =
@@ -195,3 +195,77 @@ export const CROWN_PEAK_NET_WORTH = 10_000_000;
 
 /** At most this many act-defining beats fire per tick — plateau spacing (design/05 §3). */
 export const MAJOR_BEATS_PER_TICK = 1;
+
+// --- World price events & rumors (design/12 Item 6; Prompt 33) ----------------
+//
+// A MarketEvent is a TEMPORARY multiplier laid over the drift board: a shortage
+// (up) or a glut (down) that lands, peaks, and decays back to baseline across a
+// few in-game days — the Drug-Lord-2 "prices rise/fall moderately or sharply"
+// texture. Every event is heralded by a RUMOR on the news ticker, and a rumor is
+// only true `RUMOR_TRUTH_RATE` of the time: fake intel points at an event that
+// never lands (the legit/fake-news gamble the player asked for). Events also
+// shock the finite stock pool (design/12 Item 10) — a bust drains supply, a glut
+// fills it — so it is one system driving two levers. All bounded and estimable
+// (GDD §5.4): the multiplier can never exceed the documented sharp band.
+//
+// v1 balance HYPOTHESES held as config (prompts/README.md "Config, not literals").
+
+/** A market event's reach across the world board. */
+export type MarketEventScope = 'world' | 'region' | 'country';
+
+/** How hard an event moves the price — the two Drug-Lord-2 severities. */
+export type MarketEventMagnitude = 'moderate' | 'sharp';
+
+/** Which way an event moves a market: `up` = shortage/bust, `down` = glut. */
+export type MarketEventDirection = 'up' | 'down';
+
+/**
+ * Per-hour probability a fresh RUMOR is posted — the rumor, not the event, is
+ * the scheduled thing (a true one becomes an event after its lead time). ~1 per
+ * in-game week, so the ticker breathes rather than floods (design/05 §3). Rolled
+ * on an INDEPENDENT run-seeded stream (like chaos), compounded over the tick.
+ */
+export const MARKET_EVENT_RATE_PER_HOUR = 0.008;
+
+/** Chance a posted rumor is TRUE (its event actually lands). The rest are fake
+ * intel pointing at nothing — the legit/fake-news read (design/12 Item 6). */
+export const RUMOR_TRUTH_RATE = 0.65;
+
+/** Lead time, in in-game DAYS, between a (true) rumor posting and its event
+ * landing — the news always precedes the move, so acting on it is a skill. */
+export const RUMOR_LEAD_DAYS: Band = { min: 0.5, max: 2 };
+
+/** How long a posted news line stays on the ticker, in in-game DAYS (a rumor
+ * outlives its landing so the player can see it come true — or never). */
+export const RUMOR_TTL_DAYS = 3;
+
+/** How long a landed event's multiplier takes to decay back to baseline, DAYS. */
+export const MARKET_EVENT_DURATION_DAYS: Band = { min: 2, max: 5 };
+
+/** The peak price multiplier band for a MODERATE up-event (a crash is its
+ * inverse — ×1/mult — so a moderate glut is a symmetric dip). */
+export const MARKET_EVENT_MODERATE_MULT: Band = { min: 1.3, max: 1.6 };
+
+/** The peak price multiplier band for a SHARP up-event — the documented outer
+ * bound on how far ANY event can move a price (a crash is its inverse). */
+export const MARKET_EVENT_SHARP_MULT: Band = { min: 2.0, max: 3.0 };
+
+/** Fraction of rolled events that are SHARP rather than moderate (sharp is the
+ * rarer, headline swing). */
+export const MARKET_EVENT_SHARP_CHANCE = 0.3;
+
+/** Fraction of a market's stock CEILING an event moves on landing: an up-event
+ * (bust) drains this much, a down-event (glut) adds it (design/12 Item 10). */
+export const MARKET_EVENT_STOCK_SHOCK = 0.5;
+
+/** At most this many events overlay the board at once — a readable world (one
+ * or two live swings, not a storm). Extra rolls are dropped, not queued. */
+export const MARKET_EVENT_MAX_ACTIVE = 3;
+
+/** Relative likelihoods of each scope when a rumor rolls — most events are
+ * local, a few regional, world-wide is rare (the big one). */
+export const MARKET_EVENT_SCOPE_WEIGHTS: Readonly<Record<MarketEventScope, number>> = {
+  country: 5,
+  region: 3,
+  world: 1,
+};

@@ -154,6 +154,18 @@ import {
   ON_THE_MAP_CLEAN_CASH,
   CROWN_PEAK_NET_WORTH,
   MAJOR_BEATS_PER_TICK,
+  MARKET_EVENT_RATE_PER_HOUR,
+  RUMOR_TRUTH_RATE,
+  RUMOR_LEAD_DAYS,
+  RUMOR_TTL_DAYS,
+  MARKET_EVENT_DURATION_DAYS,
+  MARKET_EVENT_MODERATE_MULT,
+  MARKET_EVENT_SHARP_MULT,
+  MARKET_EVENT_SHARP_CHANCE,
+  MARKET_EVENT_STOCK_SHOCK,
+  MARKET_EVENT_MAX_ACTIVE,
+  MARKET_EVENT_SCOPE_WEIGHTS,
+  type MarketEventScope,
 } from './events';
 import {
   EMPIRE_WEIGHTS,
@@ -335,13 +347,25 @@ export interface LendersTuning {
   readonly DEBT_ONTIME_REP_BONUS: number;
 }
 
-/** Chaos rate + narrative-beat thresholds (design/05 §2–§3; design/01 §4.7). */
+/** Chaos rate + narrative-beat thresholds (design/05 §2–§3; design/01 §4.7) and
+ * world price events & rumors (design/12 Item 6; Prompt 33). */
 export interface EventsTuning {
   readonly CHAOS_BASE_RATE_PER_HOUR: number;
   readonly CHAOS_MAX_PER_TICK: number;
   readonly ON_THE_MAP_CLEAN_CASH: number;
   readonly CROWN_PEAK_NET_WORTH: number;
   readonly MAJOR_BEATS_PER_TICK: number;
+  readonly MARKET_EVENT_RATE_PER_HOUR: number;
+  readonly RUMOR_TRUTH_RATE: number;
+  readonly RUMOR_LEAD_DAYS: Band;
+  readonly RUMOR_TTL_DAYS: number;
+  readonly MARKET_EVENT_DURATION_DAYS: Band;
+  readonly MARKET_EVENT_MODERATE_MULT: Band;
+  readonly MARKET_EVENT_SHARP_MULT: Band;
+  readonly MARKET_EVENT_SHARP_CHANCE: number;
+  readonly MARKET_EVENT_STOCK_SHOCK: number;
+  readonly MARKET_EVENT_MAX_ACTIVE: number;
+  readonly MARKET_EVENT_SCOPE_WEIGHTS: Readonly<Record<MarketEventScope, number>>;
 }
 
 /** Score composite + death-spiral thresholds (design/01 §4a, §7 — spiral is tune-first §8.5). */
@@ -547,6 +571,17 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     ON_THE_MAP_CLEAN_CASH,
     CROWN_PEAK_NET_WORTH,
     MAJOR_BEATS_PER_TICK,
+    MARKET_EVENT_RATE_PER_HOUR,
+    RUMOR_TRUTH_RATE,
+    RUMOR_LEAD_DAYS,
+    RUMOR_TTL_DAYS,
+    MARKET_EVENT_DURATION_DAYS,
+    MARKET_EVENT_MODERATE_MULT,
+    MARKET_EVENT_SHARP_MULT,
+    MARKET_EVENT_SHARP_CHANCE,
+    MARKET_EVENT_STOCK_SHOCK,
+    MARKET_EVENT_MAX_ACTIVE,
+    MARKET_EVENT_SCOPE_WEIGHTS,
   },
   prestige: {
     EMPIRE_WEIGHTS,

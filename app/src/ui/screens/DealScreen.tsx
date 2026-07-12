@@ -32,6 +32,7 @@ import {
   type ConversionRow,
   type DealMode,
 } from './dealScreen.model';
+import { NewsTicker } from './NewsTicker';
 
 const money = (n: number): string => `$${Math.round(n).toLocaleString('en-US')}`;
 const signedMoney = (n: number): string =>
@@ -200,6 +201,8 @@ export function DealScreen() {
         )}
         <HeatDots value={heat.filled} max={heat.total} tier={currentTier(state)} />
       </header>
+
+      <NewsTicker />
 
       <Card heading="The board">
         <div style={{ marginBottom: 12 }}>

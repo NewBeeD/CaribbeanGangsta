@@ -267,6 +267,23 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 };
 
 /**
+ * Fill fields ADDED to v11 IN PLACE after Prompt 32 (design/12 workstreams B–D
+ * extend the v11 shape without bumping the schema — state.ts SCHEMA_VERSION note).
+ * A save written at v11 by an earlier build lacks them, so a same-version load
+ * skips the migration chain entirely; default the transient world data to empty
+ * here so nothing lands on `undefined`. Never touches player holdings.
+ *  - Prompt 33: `marketEvents`, `rumors` (world price events & the rumor ticker).
+ */
+function normalizeState(state: GameState): GameState {
+  const s = state as GameState & {
+    marketEvents?: GameState['marketEvents'];
+    rumors?: GameState['rumors'];
+  };
+  if (s.marketEvents && s.rumors) return state; // already current-shaped
+  return { ...state, marketEvents: s.marketEvents ?? [], rumors: s.rumors ?? [] };
+}
+
+/**
  * Bring a stored envelope up to the current schema, or return `null` if it
  * can't be (unknown future version, or a missing migration step).
  */
@@ -282,7 +299,8 @@ export function migrateEnvelope(env: SaveEnvelope): GameState | null {
     }
     current = next;
   }
-  return current.state;
+  // Backfill any fields added to the CURRENT schema in place (no version bump).
+  return normalizeState(current.state);
 }
 
 // --- IndexedDB LocalSaveStore ------------------------------------------------

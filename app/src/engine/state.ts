@@ -20,6 +20,11 @@
 import { createRng, restoreRng, type Rng, type RngState } from './rng';
 import { generateWorld, type World } from './world';
 import { PRODUCT_IDS, type ProductId } from './config/countries';
+import type {
+  MarketEventScope,
+  MarketEventMagnitude,
+  MarketEventDirection,
+} from './config/events';
 import { DEFAULT_GAME_CONFIG, type GameConfig } from './config';
 import {
   createInitialMarkets,
@@ -70,6 +75,12 @@ import type {
  *     group (its `products` table swaps to the single-band shape). Migration
  *     rebuilds boards/markets deterministically from the save's own seed;
  *     holdings, cash, plugs, and the RNG stream are untouched.
+ *
+ *     v11 is EXTENDED IN PLACE by prompts 33–35 (design/12 workstreams B–D — no
+ *     further schema bump): Prompt 33 adds `marketEvents` + `rumors` (world price
+ *     events & the rumor ticker). Missing on a pre-33 v11 save they default to
+ *     empty arrays (`normalizeState` in store/persistence.ts) — transient world
+ *     data, never player holdings.
  */
 export const SCHEMA_VERSION = 11 as const;
 
@@ -320,6 +331,52 @@ export interface PendingChoice {
 }
 
 /**
+ * A live world price event (design/12 Item 6; Prompt 33): a temporary multiplier
+ * laid over the drift board for one product across a `scope` of countries. It
+ * lands at `peakMultiplier` (>1 shortage, <1 glut) and decays linearly back to 1
+ * by `endHours`. Read at pricing time (`marketEventMultiplier`), so no per-tick
+ * factor mutation is needed — the overlay is a pure function of the clock.
+ */
+export interface MarketEvent {
+  readonly id: string;
+  readonly product: ProductId;
+  readonly scope: MarketEventScope;
+  /** Region id (`Region`) or country id when `scope` isn't `world`; absent for world. */
+  readonly scopeId?: string;
+  readonly direction: MarketEventDirection;
+  readonly magnitude: MarketEventMagnitude;
+  /** Peak price multiplier at landing (>1 up, <1 down); decays to 1 by `endHours`. */
+  readonly peakMultiplier: number;
+  readonly startHours: number;
+  readonly endHours: number;
+}
+
+/**
+ * A news-ticker rumor heralding a possible MarketEvent (design/12 Item 6). Every
+ * event is preceded by one, but only a `credible` rumor actually lands its event
+ * (`RUMOR_TRUTH_RATE`) — the rest are fake intel pointing at nothing. `credible`
+ * is engine bookkeeping the ticker NEVER reveals: telling truth from bluff is the
+ * gamble. The line stays visible until `expiresAtHours` (outliving its landing).
+ */
+export interface Rumor {
+  readonly id: string;
+  readonly product: ProductId;
+  readonly scope: MarketEventScope;
+  readonly scopeId?: string;
+  readonly direction: MarketEventDirection;
+  readonly magnitude: MarketEventMagnitude;
+  /** Whether the heralded event actually lands. Hidden from the UI (the bluff). */
+  readonly credible: boolean;
+  /** The ticker prose (built at post time so the UI stays pure text). */
+  readonly headline: string;
+  readonly postedAtHours: number;
+  /** When the real event begins (credible only; ignored for a fake). */
+  readonly landsAtHours: number;
+  /** When the news line drops off the ticker. */
+  readonly expiresAtHours: number;
+}
+
+/**
  * Peak trackers. Score banks from PEAK values the instant a run ends, so a
  * late-game wipe still records the height climbed to (design/01 §7). Lives on
  * state but is what `endgame.ts` (Prompt 11) banks to the persistent leaderboard.
@@ -347,6 +404,13 @@ export interface GameState {
   readonly clock: Clock;
   /** Live per-location price drift for the deal loop (Prompt 04). */
   readonly markets: Markets;
+  /**
+   * Live world price events overlaying the drift board (design/12 Item 6; Prompt
+   * 33) — temporary shortage/glut multipliers that decay back to baseline.
+   */
+  readonly marketEvents: readonly MarketEvent[];
+  /** The news-ticker feed of rumors heralding events (some true, some fake). */
+  readonly rumors: readonly Rumor[];
   /** Safe, launderable money (design/01 §1). Dirty cash lives in `stashes`. */
   readonly cleanCash: number;
   /**
@@ -507,6 +571,8 @@ export function createInitialState(
     // Stock seeds draw from a dedicated fork — forking never consumes the main
     // stream, so pre-v11 saves' RNG snapshots stay byte-identical.
     markets: createInitialMarkets(rng.fork('market-stock'), config.markets),
+    marketEvents: [],
+    rumors: [],
     cleanCash: 0,
     plugs: [],
     reputation: { street: 0, business: 0, political: 0 },

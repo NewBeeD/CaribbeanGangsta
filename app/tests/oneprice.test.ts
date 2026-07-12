@@ -14,6 +14,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createInitialState,
+  tunedConfig,
   getMarketPrice,
   resolveDeal,
   restockMarkets,
@@ -256,10 +257,14 @@ describe('finite stock (design/12 Item 10)', () => {
 
   it('scarcity biases drift up but the walk never leaves the band', () => {
     // Drain a market, then drift many days: the low pool pushes the factor up,
-    // but the live price still stays inside base × (1 ± volatility).
-    const base = withStashIn(createInitialState('scarcity'), 'miami', {
-      cash: 1_000_000_000,
-    });
+    // but the live price still stays inside base × (1 ± volatility). Isolate the
+    // DRIFT band from the world-event overlay (design/12 Item 6; Prompt 33) —
+    // events deliberately push outside the band, so turn them off to test drift.
+    const base = withStashIn(
+      createInitialState('scarcity', tunedConfig({ events: { MARKET_EVENT_RATE_PER_HOUR: 0 } })),
+      'miami',
+      { cash: 1_000_000_000 },
+    );
     let state = resolveDeal(base, {
       type: 'buy',
       product: 'weed',
