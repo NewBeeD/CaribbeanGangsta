@@ -224,7 +224,7 @@ describe('endRun banks the peak score and sets the run status', () => {
 
 describe('a payrolled judge converts a prison end into a survivable comeback', () => {
   it('prison + loyal judge → run stays active, nothing banked', () => {
-    const funded = { ...createInitialState('judge'), cleanCash: 50_000 };
+    const funded = { ...createInitialState('judge'), cleanCash: 1_000_000 };
     const withJudge = hire(funded, 'judge').state;
 
     const r = endRun(withJudge, 'prison');

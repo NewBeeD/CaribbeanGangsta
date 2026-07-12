@@ -16,6 +16,7 @@ import { MoneyScreen } from '@/ui/screens/MoneyScreen';
 import { HeatScreen } from '@/ui/screens/HeatScreen';
 import { StorageScreen } from '@/ui/screens/StorageScreen';
 import { WorldMarketScreen } from '@/ui/screens/WorldMarketScreen';
+import { TransportScreen } from '@/ui/screens/TransportScreen';
 import { CorruptionScreen } from '@/ui/screens/CorruptionScreen';
 import { DebtScreen } from '@/ui/screens/DebtScreen';
 import { ArmsScreen } from '@/ui/screens/ArmsScreen';
@@ -27,6 +28,7 @@ export const SCREENS: Readonly<Record<ScreenId, () => JSX.Element>> = {
   deals: () => <DealScreen />,
   empire: () => <EmpireMap />,
   market: () => <WorldMarketScreen />,
+  transport: () => <TransportScreen />,
   crew: () => <CrewScreen />,
   money: () => <MoneyScreen />,
   heat: () => <HeatScreen />,

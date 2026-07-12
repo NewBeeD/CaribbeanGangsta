@@ -12,11 +12,12 @@
 import { useState } from 'react';
 import type { ConvertResult, DealResult } from '@/engine';
 import { useGameState, useGameStore } from '@/store';
-import { Button, Card, HeatDots, Panel, RiskMeter, SceneText, Stat, TrendArrow } from '@/ui/components';
+import { Button, Card, HeatDots, Panel, QtyInput, RiskMeter, SceneText, Stat, TrendArrow } from '@/ui/components';
 import { currentTier, tierDots } from '@/engine';
 import type { DealIntent, GameState, ProductId } from '@/engine';
 import { navigate } from '@/ui/shell/useHash';
 import {
+  buyBoundLabel,
   clampQty,
   conversionBlockedProse,
   conversionRows,
@@ -138,8 +139,8 @@ export function DealScreen() {
   const canAct = max > 0;
   // Buys don't roll a bust; the risk panel appears only for a sell (design/07 §1).
   const bustProb = mode === 'sell' ? sellBustProbability(state, selected, Math.max(1, clamped), stash) : 0;
-
-  const step = (delta: number) => setQty((q) => clampQty(clampQty(q, max) + delta, max));
+  // Name the limit that pins a buy's MAX (design/12 Item 4 — never a surprise clamp).
+  const boundLabel = mode === 'buy' ? (buyBoundLabel(state, selected, stash) ?? undefined) : undefined;
 
   const pick = (id: ProductId) => {
     setSelected(id);
@@ -205,6 +206,17 @@ export function DealScreen() {
       </header>
 
       <NewsTicker />
+
+      {/* Persistent market badge (design/12 Item 7): the board prices by the
+          COUNTRY the selected stash stands in — one price table per country — so a
+          Rotterdam container never masquerades as a home stash. */}
+      <p
+        className="cg-label"
+        data-testid="market-badge"
+        style={{ margin: '0 0 10px', fontWeight: 600 }}
+      >
+        Market: {marketName(stash)}
+      </p>
 
       <Card heading="The board">
         <div style={{ marginBottom: 12 }}>
@@ -303,25 +315,14 @@ export function DealScreen() {
           </Panel>
         )}
 
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 16,
-            margin: '18px 0',
-          }}
-        >
-          <Button variant="secondary" onClick={() => step(-1)} disabled={!canAct} aria-label="Fewer units">
-            −
-          </Button>
-          <span className="cg-stat__value" aria-live="polite">
-            {clamped} units
-          </span>
-          <Button variant="secondary" onClick={() => step(1)} disabled={!canAct} aria-label="More units">
-            +
-          </Button>
-        </div>
+        <QtyInput
+          value={clamped}
+          max={max}
+          onChange={setQty}
+          ariaLabel={mode === 'sell' ? 'Quantity to sell' : 'Quantity to buy'}
+          boundLabel={boundLabel}
+          disabled={!canAct}
+        />
 
         <Button variant="primary" fullWidth onClick={commit} disabled={!canAct}>
           {primaryLabel}
@@ -404,35 +405,14 @@ function ConversionPanel({
         Per batch: {row.fromQty} {row.fromName.toLowerCase()} + {money(row.costPerBatch)} →{' '}
         {row.toQty} {row.toName.toLowerCase()} · +{row.heatPerBatch} heat
       </p>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 16,
-          margin: '6px 0 12px',
-        }}
-      >
-        <Button
-          variant="secondary"
-          onClick={() => setBatches((b) => Math.max(1, Math.min(b, row.max) - 1))}
-          disabled={!canCook}
-          aria-label="Fewer batches"
-        >
-          −
-        </Button>
-        <span className="cg-stat__value" aria-live="polite">
-          {canCook ? clamped : 0} batch{clamped === 1 && canCook ? '' : 'es'}
-        </span>
-        <Button
-          variant="secondary"
-          onClick={() => setBatches((b) => Math.min(row.max, Math.max(1, b) + 1))}
-          disabled={!canCook}
-          aria-label="More batches"
-        >
-          +
-        </Button>
-      </div>
+      <QtyInput
+        value={clamped}
+        max={row.max}
+        onChange={setBatches}
+        ariaLabel={`${row.name} batches`}
+        unit="batches"
+        disabled={!canCook}
+      />
       <Button
         variant="secondary"
         fullWidth

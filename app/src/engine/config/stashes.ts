@@ -156,6 +156,16 @@ export function getStashType(
 export const STASH_COST_GROWTH = 1.15;
 
 /**
+ * Extra unit capacity every crew member adds to a stash's archetype base
+ * (design/12 Item 4 — crew-scaled carry). Effective capacity =
+ * `base + CREW_CARRY_PER_MEMBER × crew.length` (`storage.effectiveCapacity`).
+ * With recruiting unbounded (open access), capacity is unbounded too — "no hard
+ * max" without deleting the storage system or its raid-seizure stakes. v1: 40
+ * units/member, so a handful of soldiers meaningfully deepens every hold.
+ */
+export const CREW_CARRY_PER_MEMBER = 40;
+
+/**
  * Cost to build the `nOwned`-th+1 stash of `type`: `base × 1.15^nOwned`
  * (design/09 A.5). Deterministic, non-gambling progression. `tuning` injects an
  * alternate roster/growth (e.g. `state.config.stashes` — Prompt 26).

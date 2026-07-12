@@ -68,11 +68,9 @@ import {
   settleOffline,
   buyFront as buyFrontEngine,
   upgradeFront as upgradeFrontEngine,
-  pesoExchange as pesoExchangeEngine,
   type OfflineReport,
   type FrontResult,
   type FrontType,
-  type PesoExchangeResult,
 } from '@/engine/laundering';
 import { bribeToCoolHeat, setLieLow, type BribeCoolResult } from '@/engine/heat';
 import { buyPlug as buyPlugEngine, type PlugResult } from '@/engine/plugs';
@@ -263,12 +261,6 @@ export interface GameStore {
   upgradeFront(frontId: string): FrontResult | null;
   /** Open a new Level-1 front of `type`, paid from CLEAN cash. Commits on success. */
   buyFront(type: FrontType): FrontResult | null;
-  /**
-   * Convert a lump of DIRTY cash held in a stash to CLEAN cash at the DISCLOSED
-   * peso-exchange haircut (design/01 §3a). Commits + autosaves only when the
-   * exchange goes through (amount valid, stash exists, funds suffice).
-   */
-  exchangePeso(amount: number, stashId?: string): PesoExchangeResult | null;
   /** Bring an archetype onto the crew (open access — money/relationships gate it, never a flag). */
   recruitCrew(archetypeId: string): CrewMember | null;
   /** Train a skill by a fixed step, paid from clean cash. Rejects (no commit) if maxed/short. */
@@ -379,6 +371,14 @@ export interface GameStore {
    * from an explicit, telegraphed in-game decision (GDD §8 — absence never kills).
    */
   endCurrentRun(cause: RunEndCause): Promise<RunEndResult | null>;
+  /**
+   * Abandon the live run mid-run and start over (design/12 Item 2). Routes
+   * through `endCurrentRun` with the `abandoned` cause — the ONE banking path —
+   * so the score-so-far banks like a retirement (no penalty), the Run-End screen
+   * shows the fall, and `startNextRun` reseeds a fresh world. Destructive: the
+   * caller confirms first. A no-op when no active run is loaded.
+   */
+  abandonRun(): Promise<RunEndResult | null>;
   /**
    * The dare taken: start the next run in a NEW random world (fresh seed —
    * design/01 §0a). Clears the recap and autosaves the newborn run.
@@ -634,21 +634,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
     return result;
   },
 
-  exchangePeso(amount, stashId) {
-    const { state } = get();
-    if (!state) return null;
-    const result =
-      stashId === undefined
-        ? pesoExchangeEngine(state, amount)
-        : pesoExchangeEngine(state, amount, stashId);
-    // Only commit + autosave when the exchange actually cleared.
-    if (result.ok) {
-      set({ state: result.state });
-      void get().persist(AUTOSAVE_SLOT).catch(() => {});
-    }
-    return result;
-  },
-
   recruitCrew(archetypeId) {
     const { state } = get();
     if (!state) return null;
@@ -894,6 +879,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Persist the ENDED run — a refresh comes back to the fall, not a live run.
     void get().persist(AUTOSAVE_SLOT).catch(() => {});
     return result;
+  },
+
+  async abandonRun() {
+    // The ONLY banking path is `endCurrentRun` (the run-end model) — abandon just
+    // routes through it with the `abandoned` cause, banking the score-so-far like
+    // a retirement and landing on the Run-End screen (design/12 Item 2).
+    return get().endCurrentRun('abandoned');
   },
 
   startNextRun() {

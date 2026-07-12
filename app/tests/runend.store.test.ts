@@ -178,6 +178,40 @@ describe('startNextRun — the dare taken (design/01 §0a)', () => {
   });
 });
 
+describe('abandonRun — start over mid-run (design/12 Item 2)', () => {
+  it('banks the score-so-far like a retirement and lands on the fall, then reseeds', async () => {
+    const store = useGameStore.getState();
+    store.newGame('abandon-run');
+    withPeaks(300_000);
+
+    const result = await useGameStore.getState().abandonRun();
+
+    // Routes through endCurrentRun (the ONE banking path) with the abandoned cause.
+    expect(result?.comeback).toBe(false);
+    expect(result?.cause).toBe('abandoned');
+    expect(result?.score).toBe(300_000);
+    const { state, lastRunEnd, meta } = useGameStore.getState();
+    expect(state?.runStatus).toBe('retired'); // abandoning banks like a walk-away
+    expect(lastRunEnd?.cause).toBe('abandoned');
+    expect(lastRunEnd?.recap.peakNetWorth).toBe(300_000);
+    expect(meta.personalBest).toBe(300_000);
+    expect(meta.runsPlayed).toBe(1);
+
+    // The dare taken — a brand-new world, recap cleared.
+    const abandonedSeed = state!.seed;
+    useGameStore.getState().startNextRun();
+    const next = useGameStore.getState();
+    expect(next.state?.runStatus).toBe('active');
+    expect(next.state?.seed).not.toBe(abandonedSeed);
+    expect(next.lastRunEnd).toBeNull();
+  });
+
+  it('is a no-op with no active run loaded', async () => {
+    useGameStore.setState({ state: null });
+    expect(await useGameStore.getState().abandonRun()).toBeNull();
+  });
+});
+
 describe('hydrating an ended save — the fall survives a refresh, without re-banking', () => {
   it('rebuilds the recap from the banked peaks and does NOT bump runsPlayed', async () => {
     const store = useGameStore.getState();

@@ -299,7 +299,7 @@ describe('raise-asks scale with business level & heat (design/09 B.2 v1.1)', () 
 
 describe('official flips are telegraphed with an intervention window (design/09 B.2)', () => {
   it('heat over comfort nudges to warning; cooling heat walks it back (never silent)', () => {
-    let state = fundedCalm('interv', 200_000);
+    let state = fundedCalm('interv', 1_000_000);
     state = hire(state, 'politician').state; // comfortHeat 45
 
     // Heat crosses their comfort threshold → a telegraphed warning (no charge yet).
@@ -348,7 +348,7 @@ describe('official flips are telegraphed with an intervention window (design/09 
 
 describe('judge softens the prison end-state (design/09 B.2)', () => {
   it('a loyal hired judge can dismiss charges; none on payroll cannot', () => {
-    const state = fundedCalm('judge', 200_000);
+    const state = fundedCalm('judge', 1_000_000);
     expect(judgeCanDismiss(state)).toBe(false);
     const hired = hire(state, 'judge');
     expect(judgeCanDismiss(hired.state)).toBe(true);
@@ -359,8 +359,8 @@ describe('judge softens the prison end-state (design/09 B.2)', () => {
 
 describe('retainers never charge offline (offline-safe, GDD §6)', () => {
   it('settleOffline leaves clean cash, heat, and officials untouched by payroll', () => {
-    let state = fundedCalm('offline', 200_000);
-    state = hire(state, 'judge').state; // a $20k/wk retainer on the books
+    let state = fundedCalm('offline', 1_000_000);
+    state = hire(state, 'judge').state; // a $750k/wk retainer on the books
     const before = state;
 
     const { state: after } = settleOffline(before, 1_000); // a long absence

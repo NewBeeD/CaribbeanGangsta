@@ -28,8 +28,11 @@ describe('plug roster — the true sources (Ideas2 §2)', () => {
     );
   });
 
-  it('no Caribbean island gates anything behind a plug (open access at home)', () => {
-    for (const country of COUNTRIES.filter((c) => c.region === 'caribbean')) {
+  it('no START-ELIGIBLE island gates anything behind a plug (open access at home)', () => {
+    // A run starts on a Caribbean home island; none may gate a product behind a
+    // plug. Reachable non-start islands (e.g. Jamaica, the weed/exotic source in
+    // design/12 Item 9) CAN be true sources — the home hand just never is.
+    for (const country of COUNTRIES.filter((c) => c.startEligible)) {
       expect(country.plugFor ?? []).toHaveLength(0);
     }
   });

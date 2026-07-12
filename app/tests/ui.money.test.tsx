@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createInitialState,
   frontUpgradeCost,
-  pesoExchangeQuote,
   type Front,
   type GameState,
 } from '@/engine';
@@ -92,23 +91,14 @@ describe('MoneyScreen — the return payoff (Prompt 18)', () => {
     view.unmount();
   });
 
-  it('peso exchange shows the exact haircut and converts dirty→clean on commit', () => {
-    const state = fundedRun('money-peso', 0);
+  it('offers no bulk dirty→clean converter — fronts are the only laundry (Item 12)', () => {
+    const state = fundedRun('money-nopeso', 0);
     useGameStore.setState({ state });
-    const home = state.stashes[0]!;
-    const quote = pesoExchangeQuote(home.dirtyCash);
 
     const view = mount(<MoneyScreen />);
-    // The haircut is disclosed before commit.
-    expect(view.container.textContent).toContain('15% haircut');
-    expect(view.container.textContent).toContain(`+ $${quote.clean.toLocaleString('en-US')} clean`);
-
-    const button = view.container.querySelector('[data-testid="peso-exchange"]')!;
-    view.click(button);
-
-    const after = useGameStore.getState().state!;
-    expect(after.stashes[0]!.dirtyCash).toBe(0);
-    expect(after.cleanCash).toBe(quote.clean);
+    // The peso exchange was removed — its card/button no longer exists.
+    expect(view.container.querySelector('[data-testid="peso-exchange"]')).toBeNull();
+    expect(view.container.textContent!.toLowerCase()).not.toContain('haircut');
     view.unmount();
   });
 

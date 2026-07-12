@@ -5,7 +5,7 @@ import {
   useGameState,
   useOfflineReport,
 } from '@/store';
-import { BottomNav, type BottomNavItem } from '@/ui/components';
+import { BottomNav, Button, type BottomNavItem } from '@/ui/components';
 import { SCREEN_NODES, screenForHash, type ScreenId } from './nav';
 import { NewRunGate } from './NewRunGate';
 import { ReturnHook } from './ReturnHook';
@@ -34,6 +34,7 @@ export function AppShell() {
 
   const [booted, setBooted] = useState(false);
   const [hasSave, setHasSave] = useState(false);
+  const [confirmAbandon, setConfirmAbandon] = useState(false);
 
   // On app open: settle offline once (via the store) and resume, or fall to the gate.
   useEffect(() => {
@@ -132,17 +133,40 @@ export function AppShell() {
       <header className="cg-shell__top">
         <span className="cg-kicker">Caribbean Gangsta</span>
         <nav className="cg-shell__uplinks" aria-label="Overview">
-          {topNodes.map((n) => (
-            <button
-              key={n.id}
-              type="button"
-              className="cg-btn cg-btn--ghost"
-              aria-current={current === n.id ? 'page' : undefined}
-              onClick={() => navigate(n.route)}
-            >
-              {n.label}
-            </button>
-          ))}
+          {topNodes.map((n) => {
+            // A small count of what's in flight on the Transport uplink (Item 8).
+            const badge = n.id === 'transport' ? state.shipments.length : 0;
+            return (
+              <button
+                key={n.id}
+                type="button"
+                className="cg-btn cg-btn--ghost"
+                aria-current={current === n.id ? 'page' : undefined}
+                onClick={() => navigate(n.route)}
+              >
+                {n.label}
+                {badge > 0 ? (
+                  <span
+                    className="cg-uplink__badge"
+                    aria-label={`${badge} in flight`}
+                    data-testid="transport-badge"
+                    style={{ marginLeft: 6 }}
+                  >
+                    {badge}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+          {/* Start over mid-run — destructive, confirmed (design/12 Item 2). */}
+          <button
+            type="button"
+            className="cg-btn cg-btn--ghost"
+            data-testid="abandon-run"
+            onClick={() => setConfirmAbandon(true)}
+          >
+            Abandon run
+          </button>
         </nav>
       </header>
 
@@ -164,6 +188,67 @@ export function AppShell() {
           }
         />
       ) : null}
+
+      {confirmAbandon ? (
+        <AbandonRunModal
+          onCancel={() => setConfirmAbandon(false)}
+          onConfirm={() => {
+            setConfirmAbandon(false);
+            // Banks the score-so-far through `endCurrentRun` and drops onto the
+            // Run-End screen (the shell re-renders once runStatus flips).
+            void useGameStore.getState().abandonRun();
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The abandon-run confirmation (design/12 Item 2) — one clear, destructive
+ * warning listing what's lost before the run is banked and reset. Modeled on the
+ * story-card interrupt so it reads like an in-world decision, not a browser alert.
+ */
+function AbandonRunModal({
+  onCancel,
+  onConfirm,
+}: {
+  readonly onCancel: () => void;
+  readonly onConfirm: () => void;
+}) {
+  return (
+    <div
+      className="cg-modal__scrim"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Abandon this run?"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(0,0,0,0.6)',
+        zIndex: 50,
+        padding: 16,
+      }}
+    >
+      <div className="cg-card" style={{ maxWidth: 420 }}>
+        <h2 className="cg-kicker">Abandon this run?</h2>
+        <p className="cg-label" style={{ margin: '10px 0' }}>
+          This ends the run for good. Your empire, crew, stashes, product, and cash
+          are gone — the score you reached so far banks to the leaderboard, then a
+          brand-new city is dealt. There is no undo.
+        </p>
+        <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+          <Button variant="ghost" fullWidth onClick={onCancel}>
+            Keep playing
+          </Button>
+          <Button variant="primary" fullWidth onClick={onConfirm} data-testid="abandon-confirm">
+            Abandon run
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

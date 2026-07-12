@@ -52,8 +52,8 @@ file **is** the annotation. Summary of what lives where:
 | `products` | `config/products.ts` | the product table: price bands, heat/unit, tier risk, distance elasticities |
 | `deals` | `config/deals.ts` | bust clamp + model weights, buy-heat factor |
 | `heat` | `config/heat.ts` | tier thresholds, decay, lie-low, bribe rates, raid rates, telegraph margins |
-| `stashes` | `config/stashes.ts` | stash archetypes (capacity/seizure/cost/delay), cost growth, guard penalties, wipe threshold |
-| `fronts` | `config/fronts.ts` | front roster (rates/buy-ins/heat), offline curve, peso haircut, golden hours, crypto swing |
+| `stashes` | `config/stashes.ts` | stash archetypes (capacity/seizure/cost/delay), cost growth, crew-carry per member, guard penalties, wipe threshold |
+| `fronts` | `config/fronts.ts` | front roster (rates/buy-ins/heat), offline curve, golden hours, crypto swing |
 | `crew` | `config/crew.ts` | loyalty event bases + trait fit, betrayal thresholds, wire heat, training |
 | `corruption` | `config/corruption.ts` | port-bribe formula terms, paid-port floor/duration, haggle odds, retainer/raise loyalty |
 | `lenders` | `config/lenders.ts` | lender roster (rates/caps/ceilings), borrow-cap scaling, ladder, lifeline, rep bonuses |

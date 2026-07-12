@@ -11,8 +11,7 @@
  *
  * The ethical core (GDD §6, §8): absence forgoes gains but never risks progress.
  * Nothing in this table can reduce an asset — the offline curve only *slows* past
- * a soft cap, it never zeroes; the peso exchange is a *disclosed* sink the player
- * chooses; golden hours are *bonus-only*.
+ * a soft cap, it never zeroes; golden hours are *bonus-only*.
  */
 
 /** The rate-front archetypes (design/01 §3a). Special channels are separate. */
@@ -146,12 +145,10 @@ export const CRYPTO_SWING_PERIOD_HOURS = 24;
 
 // --- Special channels (design/01 §3a) ----------------------------------------
 
-/**
- * Black Market Peso Exchange haircut — the DISCLOSED discount converting a lump
- * of dirty cash to clean funds (design/01 §3a: a ~10–20% sink, shown before you
- * commit). This is the number the UI shows AND the number applied (fairness law).
- */
-export const PESO_EXCHANGE_HAIRCUT = 0.15;
+// The Black Market Peso Exchange (a bulk dirty→clean haircut) was REMOVED in
+// design/12 Item 12: a lump-sum converter made fronts pointless, so fronts
+// (`laundering.buyFront`/`upgradeFront`/`accrue`) are now the only dirty→clean
+// route. Its `PESO_EXCHANGE_HAIRCUT` knob is gone with it.
 
 /**
  * Trade-based laundering capacity as a fraction of the dollar value of product

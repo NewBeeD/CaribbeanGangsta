@@ -18,8 +18,8 @@
 import {
   COUNTRIES,
   cleanCashRate,
+  effectiveCapacity,
   empireComposite,
-  getStashType,
   stashCost,
   stashUnits,
   type GameState,
@@ -78,8 +78,9 @@ export function districtViews(state: GameState): readonly DistrictView[] {
   const homeId = state.world.startingCountry.id;
   return COUNTRIES.map((c) => {
     const here = state.stashes.filter((s) => s.countryId === c.id);
+    // Effective (crew-scaled) capacity — the real holding limit (design/12 Item 4).
     const capacityTotal = here.reduce(
-      (sum, s) => sum + getStashType(s.type).capacity,
+      (sum, s) => sum + effectiveCapacity(state, s),
       0,
     );
     const capacityUsed = here.reduce((sum, s) => sum + stashUnits(s), 0);

@@ -15,8 +15,8 @@
 
 import { getRecipe, type ConversionRecipe, type RecipeId } from './config/conversions';
 import { PRODUCT_IDS } from './config/countries';
-import { getStashType } from './config/stashes';
 import { getMarketPrice } from './deals';
+import { effectiveCapacity } from './storage';
 import { addHeat } from './heat';
 import { bookStreetStock, streetQueueRoom } from './street';
 import { splitCharge, type GameState, type Inventory, type Stash } from './state';
@@ -106,11 +106,7 @@ function constraintsFor(
     const net = recipe.toQty - recipe.fromQty;
     byOutput =
       net > 0
-        ? Math.floor(
-            (getStashType(stash.type, state.config.stashes.STASH_TYPES).capacity -
-              stashUnits(stash)) /
-              net,
-          )
+        ? Math.floor((effectiveCapacity(state, stash) - stashUnits(stash)) / net)
         : BIG;
   }
   return { byUnits, byCash, byOutput, noCrew };
@@ -187,11 +183,7 @@ export function convert(state: GameState, intent: ConvertIntent): ConvertResult 
     if (produced > streetQueueRoom(state)) return reject(state, 'insufficient-capacity');
   } else {
     const netUnits = produced - consumed;
-    if (
-      netUnits > 0 &&
-      stashUnits(stash) + netUnits >
-        getStashType(stash.type, state.config.stashes.STASH_TYPES).capacity
-    ) {
+    if (netUnits > 0 && stashUnits(stash) + netUnits > effectiveCapacity(state, stash)) {
       return reject(state, 'insufficient-capacity');
     }
   }

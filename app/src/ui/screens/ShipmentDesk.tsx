@@ -1,7 +1,7 @@
 /**
  * The shipment desk — dispatch cargo across the water and track what's in
- * flight (Prompt 31; design/11 §3; Ideas2 §1/§3). Lives on the Empire Map:
- * territory is where a boat can land.
+ * flight (Prompt 31; design/11 §3; Ideas2 §1/§3). Lives on the Transport page
+ * (design/12 Item 8); territory (opened on the Empire map) is where a boat lands.
  *
  * Everything is disclosed BEFORE the launch button enables (no dark patterns):
  * the transport cost, the go-fast owner's cut, every courier's cut, the ETA,
@@ -15,7 +15,7 @@
 import { useState } from 'react';
 import type { ProductId, ShipIntent, TransportId } from '@/engine';
 import { useGameState, useGameStore } from '@/store';
-import { Button, Card, Panel, RiskMeter, SceneText } from '@/ui/components';
+import { Button, Card, Panel, QtyInput, RiskMeter, SceneText } from '@/ui/components';
 import {
   courierOptions,
   deskQuote,
@@ -174,16 +174,6 @@ export function ShipmentDesk() {
                   </option>
                 ))}
               </select>
-              <input
-                className="cg-input"
-                type="number"
-                min={1}
-                max={cargo?.held ?? 1}
-                aria-label="Quantity to ship"
-                value={Math.min(Math.max(1, qty), cargo?.held ?? 1)}
-                onChange={(e) => setQty(Math.max(1, Math.round(Number(e.target.value) || 1)))}
-                style={{ width: 72 }}
-              />
               <select
                 className="cg-select"
                 aria-label="Ship to"
@@ -197,6 +187,15 @@ export function ShipmentDesk() {
                 ))}
               </select>
             </div>
+
+            {/* How much of the load rides — stepper + free field + MAX (Item 4). */}
+            <QtyInput
+              value={Math.min(Math.max(1, qty), cargo?.held ?? 1)}
+              max={cargo?.held ?? 1}
+              onChange={setQty}
+              ariaLabel="Quantity to ship"
+              boundLabel={cargo ? 'all this stash is holding' : undefined}
+            />
 
             {/* The mode table — priced trade-offs, all open from minute one. */}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} role="radiogroup" aria-label="Transport">

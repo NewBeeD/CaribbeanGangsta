@@ -101,7 +101,7 @@ describe('ArmsScreen — the trade (weapon tiers, heaviest heat)', () => {
 
   it('surfaces the Customs Chief EUC relief on a sale', () => {
     const base = armed('arms-euc');
-    const withChief = hire({ ...base, cleanCash: 100_000 }, 'customs-chief', {
+    const withChief = hire({ ...base, cleanCash: 1_000_000 }, 'customs-chief', {
       portId: base.stashes[0]!.countryId,
     }).state;
     const state: GameState = { ...withChief, armory: { ...withChief.armory, pistols: 6 } };

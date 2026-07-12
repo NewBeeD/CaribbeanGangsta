@@ -1,15 +1,17 @@
 /**
  * The Money screen's view-model (Prompt 18; design/07 §4, design/04 §1/§3). PURE
  * read selectors that turn the `GameState` into the return-payoff surface: the
- * clean-cash the empire is minting, the fronts and their priced next upgrade, the
- * disclosed peso exchange, and the decisions queued on return. The screen composes
- * these and dispatches laundering intents through the store — it authors NO rate,
- * upgrade-cost, or haircut math (README UI rule; the number shown is the number the
- * engine uses — design/01 §0.3 fairness law).
+ * clean-cash the empire is minting, the fronts and their priced next upgrade,
+ * and the decisions queued on return. The screen composes these and dispatches
+ * laundering intents through the store — it authors NO rate or upgrade-cost math
+ * (README UI rule; the number shown is the number the engine uses — design/01
+ * §0.3 fairness law).
  *
- * Open access (Ideas.md — Drug Lord 2; the [[open-access-design]] rule): every front
- * is buyable from minute one and the peso exchange is always live. Money is the only
- * gate — options show their price and affordability limits them, never a flag.
+ * Fronts are the ONLY dirty→clean route (design/12 Item 12 — the bulk peso
+ * exchange was removed so a front actually means something). Open access
+ * (Ideas.md — Drug Lord 2; the [[open-access-design]] rule): every front is
+ * buyable from minute one. Money is the only gate — options show their price and
+ * affordability limits them, never a flag.
  *
  * The ethical spine (GDD §6, §8): absence forgoes gains but never risks progress.
  * Nothing this model exposes frames an absence as a loss — there is no "your fronts
@@ -20,21 +22,16 @@
 import {
   FRONT_MAX_LEVEL,
   FRONT_TYPES,
-  PESO_EXCHANGE_HAIRCUT,
   cleanCashRate,
   cryptoSwingFactor,
   frontLieutenantBonus,
   frontUpgradeCost,
   getFrontType,
-  pesoExchangeQuote,
   totalDirtyCash,
   type Front,
   type FrontType,
   type GameState,
 } from '@/engine';
-
-/** The DISCLOSED dirty→clean discount, as a percent for the UI label. */
-export const PESO_HAIRCUT_PCT = Math.round(PESO_EXCHANGE_HAIRCUT * 100);
 
 /** Total clean cash per real hour across every front — the header's accrual figure. */
 export function totalCleanRate(state: GameState): number {
@@ -123,32 +120,6 @@ export function buyFrontOptions(state: GameState): readonly BuyFrontOption[] {
     ratePerLevel: cfg.ratePerLevel,
     affordable: state.cleanCash >= cfg.buyIn,
   }));
-}
-
-/** A stash holding exchangeable dirty cash — the peso exchange's sources. */
-export interface DirtyStashRow {
-  readonly id: string;
-  readonly name: string;
-  readonly dirtyCash: number;
-  /** Clean cash received for exchanging it ALL, at the disclosed haircut. */
-  readonly cleanIfExchanged: number;
-}
-
-/**
- * Every stash carrying dirty cash, richest first — dirty is LOCATED (it lives in
- * stashes; design/07 §4). Each row carries the exact clean payout for exchanging
- * its whole balance, so the haircut is shown before any commit (fairness law).
- */
-export function dirtyStashRows(state: GameState): readonly DirtyStashRow[] {
-  return state.stashes
-    .filter((s) => s.dirtyCash > 0)
-    .map((s) => ({
-      id: s.id,
-      name: s.name,
-      dirtyCash: s.dirtyCash,
-      cleanIfExchanged: pesoExchangeQuote(s.dirtyCash).clean,
-    }))
-    .sort((a, b) => b.dirtyCash - a.dirtyCash);
 }
 
 /** Total dirty cash across all stashes — the "dirty vs clean" readout. */

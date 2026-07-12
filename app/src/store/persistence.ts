@@ -33,7 +33,13 @@ import {
 } from '@/engine/state';
 import { createRng } from '@/engine/rng';
 import { createInitialMarkets, type Markets } from '@/engine/deals';
-import { createInitialArmsMarkets, type ArmsMarkets, type Armory } from '@/engine/arms';
+import {
+  ARMS_COUNTRY_IDS,
+  createInitialArmsMarkets,
+  type ArmsMarkets,
+  type Armory,
+} from '@/engine/arms';
+import { COUNTRY_IDS } from '@/engine/config/countries';
 import {
   hydrateLegacyWorld,
   hydrateWorldV11,
@@ -280,6 +286,11 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
  *  - Prompt 35: `armsBroker`, `armsMarkets`, `armory` (the arms trade — Item 1).
  *    Arms markets re-seed deterministically from the save's own seed (transient
  *    world data); the broker stays locked and the arsenal empty (never money).
+ *  - design/12 Item 9 (more countries): a save written before the roster grew
+ *    lacks `markets`/`armsMarkets` entries for the new countries, which would
+ *    throw at pricing time. Missing countries are seeded fresh (deterministically
+ *    from the save's own seed) and MERGED UNDER the existing ones, so the save's
+ *    live drift/stock for countries it already knew is preserved untouched.
  */
 function normalizeState(state: GameState): GameState {
   const s = state as GameState & {
@@ -298,6 +309,12 @@ function normalizeState(state: GameState): GameState {
       ? { ...s.config, arms: DEFAULT_GAME_CONFIG.arms }
       : s.config;
 
+  // Backfill drug/arms markets for any country the roster has since gained (Item 9).
+  const missingMarkets = COUNTRY_IDS.some((id) => s.markets?.[id] === undefined);
+  const missingArms =
+    s.armsMarkets !== undefined &&
+    ARMS_COUNTRY_IDS.some((id) => s.armsMarkets?.[id] === undefined);
+
   if (
     s.marketEvents &&
     s.rumors &&
@@ -305,20 +322,43 @@ function normalizeState(state: GameState): GameState {
     s.armsMarkets &&
     s.armory &&
     s.armsBroker !== undefined &&
-    config === s.config
+    config === s.config &&
+    !missingMarkets &&
+    !missingArms
   ) {
     return state; // already current-shaped
   }
+
+  // Seed FULL fresh tables, then let the save's own entries win the merge —
+  // new countries get a fresh pool; known countries keep their live drift/stock.
+  const markets: Markets = missingMarkets
+    ? {
+        ...createInitialMarkets(createRng(`${state.seed}::backfill-markets`), config.markets),
+        ...(s.markets ?? {}),
+      }
+    : state.markets;
+  const armsMarkets: ArmsMarkets =
+    s.armsMarkets === undefined
+      ? createInitialArmsMarkets(createRng(`${state.seed}::backfill-arms`), config.arms)
+      : missingArms
+        ? {
+            ...createInitialArmsMarkets(
+              createRng(`${state.seed}::backfill-arms-countries`),
+              config.arms,
+            ),
+            ...s.armsMarkets,
+          }
+        : s.armsMarkets;
+
   return {
     ...state,
     config,
+    markets,
     marketEvents: s.marketEvents ?? [],
     rumors: s.rumors ?? [],
     streetStock: s.streetStock ?? emptyStreetStock(),
     armsBroker: s.armsBroker ?? false,
-    armsMarkets:
-      s.armsMarkets ??
-      createInitialArmsMarkets(createRng(`${state.seed}::backfill-arms`), config.arms),
+    armsMarkets,
     armory: s.armory ?? emptyArmory(),
   };
 }

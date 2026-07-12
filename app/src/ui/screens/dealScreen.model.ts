@@ -21,9 +21,9 @@ import {
   PRODUCTS,
   computeBustProbability,
   convertBinding,
+  effectiveCapacity,
   getCountry,
   getMarketPrice,
-  getStashType,
   hasPlug,
   isTraded,
   maxBatches,
@@ -161,13 +161,34 @@ export function maxBuyQty(state: GameState, product: ProductId, stash: Stash): n
   const price = getMarketPrice(state, product, marketCountryId(stash));
   const affordable =
     price.price > 0 ? Math.floor(spendableAt(state, stash) / price.price) : 0;
-  const capacityLeft = getStashType(stash.type).capacity - stashUnits(stash);
+  const capacityLeft = effectiveCapacity(state, stash) - stashUnits(stash);
   return Math.max(0, Math.min(affordable, capacityLeft, price.stock));
 }
 
 /** Most units of `product` the stash can SELL: exactly what it holds. */
 export function maxSellQty(product: ProductId, stash: Stash): number {
   return stash.inventory[product] ?? 0;
+}
+
+/**
+ * Which limit pins the buy MAX right now, told in-world (design/12 Item 4 —
+ * the QtyInput note names the binding constraint so a clamp is never a surprise).
+ * `null` when nothing is buyable. Mirrors the `min(cash, stock, capacity)` in
+ * `maxBuyQty`, reporting the tightest.
+ */
+export function buyBoundLabel(
+  state: GameState,
+  product: ProductId,
+  stash: Stash,
+): string | null {
+  const price = getMarketPrice(state, product, marketCountryId(stash));
+  const affordable = price.price > 0 ? Math.floor(spendableAt(state, stash) / price.price) : 0;
+  const capacityLeft = effectiveCapacity(state, stash) - stashUnits(stash);
+  const max = Math.max(0, Math.min(affordable, capacityLeft, price.stock));
+  if (max <= 0) return null;
+  if (max === affordable) return 'all your cash covers';
+  if (max === capacityLeft) return 'all this stash can hold';
+  return "all the street's holding";
 }
 
 /** Ceiling on a stepper for the current mode (affordable/capacity vs held). */

@@ -66,6 +66,7 @@ import {
 import {
   STASH_TYPES,
   STASH_COST_GROWTH,
+  CREW_CARRY_PER_MEMBER,
   GUARD_CASH_THRESHOLD,
   GUARD_MAX_PENALTY,
   GUARD_UNGUARDED_PENALTY,
@@ -80,7 +81,6 @@ import {
   OFFLINE_REDUCED_RATE,
   CRYPTO_SWING,
   CRYPTO_SWING_PERIOD_HOURS,
-  PESO_EXCHANGE_HAIRCUT,
   TRADE_LAUNDER_FRACTION,
   GOLDEN_HOUR_MEAN_HOURS,
   GOLDEN_HOUR_MIN_MINUTES,
@@ -292,6 +292,7 @@ export interface HeatTuning {
 export interface StashesTuning {
   readonly STASH_TYPES: readonly StashTypeConfig[];
   readonly STASH_COST_GROWTH: number;
+  readonly CREW_CARRY_PER_MEMBER: number;
   readonly GUARD_CASH_THRESHOLD: number;
   readonly GUARD_MAX_PENALTY: number;
   readonly GUARD_UNGUARDED_PENALTY: number;
@@ -307,7 +308,6 @@ export interface FrontsTuning {
   readonly OFFLINE_REDUCED_RATE: number;
   readonly CRYPTO_SWING: number;
   readonly CRYPTO_SWING_PERIOD_HOURS: number;
-  readonly PESO_EXCHANGE_HAIRCUT: number;
   readonly TRADE_LAUNDER_FRACTION: number;
   readonly GOLDEN_HOUR_MEAN_HOURS: number;
   readonly GOLDEN_HOUR_MIN_MINUTES: number;
@@ -558,6 +558,7 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   stashes: {
     STASH_TYPES,
     STASH_COST_GROWTH,
+    CREW_CARRY_PER_MEMBER,
     GUARD_CASH_THRESHOLD,
     GUARD_MAX_PENALTY,
     GUARD_UNGUARDED_PENALTY,
@@ -571,7 +572,6 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     OFFLINE_REDUCED_RATE,
     CRYPTO_SWING,
     CRYPTO_SWING_PERIOD_HOURS,
-    PESO_EXCHANGE_HAIRCUT,
     TRADE_LAUNDER_FRACTION,
     GOLDEN_HOUR_MEAN_HOURS,
     GOLDEN_HOUR_MIN_MINUTES,

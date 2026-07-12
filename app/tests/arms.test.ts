@@ -213,7 +213,7 @@ describe('EUC paperwork — the Customs Chief tie-in (design/12 Item 1)', () => 
   it('a paid Customs Chief cuts the arms seizure odds (paper is the product)', () => {
     const s = armed('euc');
     const country = homeId(s);
-    const withChief = hire({ ...s, cleanCash: 100_000 }, 'customs-chief', { portId: country });
+    const withChief = hire({ ...s, cleanCash: 1_000_000 }, 'customs-chief', { portId: country });
     expect(withChief.official).not.toBeNull();
 
     const bare = armsBustProbability(s, 'military', 10, country);

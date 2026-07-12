@@ -13,7 +13,7 @@
 
 import { useGameState, useGameStore } from '@/store';
 import { Button, Card, Panel, Stat } from '@/ui/components';
-import { ShipmentDesk } from './ShipmentDesk';
+import { navigate } from '@/ui/shell/useHash';
 import {
   EXPANSION_TYPE,
   cleanRate,
@@ -155,8 +155,20 @@ export function EmpireMap() {
         </div>
       </Card>
 
-      {/* Move product between countries — priced, risky, readable (Prompt 31). */}
-      <ShipmentDesk />
+      {/* Moving product lives on its own Transport page now (design/12 Item 8);
+          opening the routes it ships between stays here. */}
+      {state.shipments.length > 0 || state.stashes.length > 1 ? (
+        <Card heading="Transport">
+          <p className="cg-label" style={{ marginBottom: 12 }}>
+            {state.shipments.length > 0
+              ? `${state.shipments.length} shipment${state.shipments.length === 1 ? '' : 's'} on the water.`
+              : 'Routes open — move product across the water from the Transport desk.'}
+          </p>
+          <Button variant="secondary" onClick={() => navigate('transport')}>
+            Open the Transport desk →
+          </Button>
+        </Card>
+      ) : null}
 
       <Panel heading="Empire at a glance">
         <div className="cg-label">

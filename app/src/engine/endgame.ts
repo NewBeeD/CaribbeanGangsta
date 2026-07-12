@@ -267,7 +267,7 @@ export function evaluatePrestige(stats: RunStats): readonly string[] {
 
 // --- Ending a run (design/01 §7; design/07 §6 run-end) -----------------------
 
-export type RunEndCause = 'killed' | 'prison' | 'retired';
+export type RunEndCause = 'killed' | 'prison' | 'retired' | 'abandoned';
 
 /** The run-recap tally shown at the end — a fall, then the numbers that dare the next run. */
 export interface RunRecap {
@@ -296,7 +296,9 @@ export interface RunEndResult {
   readonly comeback: boolean;
 }
 
-/** Map an end cause onto the persisted `RunStatus`. */
+/** Map an end cause onto the persisted `RunStatus`. Abandoning banks like a
+ * retirement — the player chose to reset; that choice costs nothing (design/12
+ * Item 2; the retire guarantee, design/01 §7). */
 function statusForCause(cause: RunEndCause): RunStatus {
   return cause === 'killed' ? 'dead' : cause === 'prison' ? 'prison' : 'retired';
 }

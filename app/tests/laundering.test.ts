@@ -10,15 +10,12 @@ import {
   rollGoldenHour,
   buyFront,
   upgradeFront,
-  pesoExchange,
-  pesoExchangeQuote,
   frontUpgradeCost,
   getFrontType,
   FRONT_MAX_LEVEL,
   FRONT_COST_GROWTH,
   OFFLINE_SOFT_CAP_HOURS,
   OFFLINE_REDUCED_RATE,
-  PESO_EXCHANGE_HAIRCUT,
   type Front,
   type GameState,
   type Stash,
@@ -245,28 +242,6 @@ describe('accrue — active clean-cash step (design/01 §3)', () => {
     expect(accrue(withF, 0)).toBe(withF);
   });
 });
-
-describe('Black Market Peso Exchange — disclosed haircut sink (design/01 §3a)', () => {
-  it('applies exactly the disclosed haircut and moves dirty → clean', () => {
-    const stash: Stash = { ...(createInitialState('peso').stashes[0] as Stash), dirtyCash: 10_000 };
-    const state = { ...createInitialState('peso'), stashes: [stash] };
-    const quote = pesoExchangeQuote(10_000);
-    expect(quote.haircut).toBe(PESO_EXCHANGE_HAIRCUT);
-    expect(quote.clean).toBe(Math.round(10_000 * (1 - PESO_EXCHANGE_HAIRCUT)));
-
-    const result = pesoExchange(state, 10_000);
-    expect(result.ok).toBe(true);
-    expect(result.clean).toBe(quote.clean); // shown == applied (fairness law)
-    expect(result.state.cleanCash).toBe(state.cleanCash + quote.clean);
-    expect((result.state.stashes[0] as Stash).dirtyCash).toBe(0);
-  });
-
-  it('rejects a bad amount or a shortfall without mutating', () => {
-    const stash: Stash = { ...(createInitialState('peso2').stashes[0] as Stash), dirtyCash: 500 };
-    const state = { ...createInitialState('peso2'), stashes: [stash] };
-    expect(pesoExchange(state, 0).rejected).toBe('invalid-amount');
-    const short = pesoExchange(state, 1_000);
-    expect(short.rejected).toBe('insufficient-funds');
-    expect(short.state).toBe(state);
-  });
-});
+// The Black Market Peso Exchange was removed in design/12 Item 12 — fronts
+// (`buyFront`/`upgradeFront`/`accrue`) are now the only dirty→clean route, so
+// there is no bulk converter left to test here.

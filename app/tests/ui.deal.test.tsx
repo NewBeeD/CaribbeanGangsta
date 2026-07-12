@@ -222,6 +222,31 @@ describe('DealScreen — market switcher & the plug gate as prose (Prompt 31)', 
   });
 });
 
+describe('DealScreen — market badge + QtyInput (design/12 Items 4/7)', () => {
+  it('shows a persistent "Market: {country}" badge for the selected stash', () => {
+    const state = createInitialState('deal-badge');
+    useGameStore.setState({ state });
+    const view = mount(<DealScreen />);
+    const badge = view.container.querySelector('[data-testid="market-badge"]')!;
+    expect(badge).not.toBeNull();
+    expect(badge.textContent).toContain('Market:');
+    expect(badge.textContent).toContain(state.world.startingCountry.name);
+    view.unmount();
+  });
+
+  it('the MAX chip fills the quantity field to the current clamp', () => {
+    // A fresh run opens in buy mode with cash — MAX buys more than one unit.
+    useGameStore.setState({ state: createInitialState('deal-max') });
+    const view = mount(<DealScreen />);
+
+    const qty = view.container.querySelector<HTMLInputElement>('[data-testid="qty-input"]')!;
+    expect(Number(qty.value)).toBe(1);
+    view.click(view.container.querySelector('[data-testid="qty-max"]')!);
+    expect(Number(qty.value)).toBeGreaterThan(1);
+    view.unmount();
+  });
+});
+
 describe('DealOutcome — success and bust both render scene text', () => {
   const base = createInitialState('deal-outcome');
 

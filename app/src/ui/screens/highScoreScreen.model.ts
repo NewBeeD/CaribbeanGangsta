@@ -21,6 +21,7 @@ const CAUSE_LABEL: Readonly<Record<RunEndCause, string>> = {
   killed: 'Killed',
   prison: 'Taken',
   retired: 'Walked',
+  abandoned: 'Walked',
 };
 
 /** "Jul 10" — board-row date from the entry's wall-clock end (display only). */

@@ -28,7 +28,7 @@ import {
 import { PRODUCT_IDS, isTraded, requiresPlug, type ProductId } from '@/engine/config/countries';
 import { getStashType } from '@/engine/config/stashes';
 import { stashUnits } from '@/engine/storage';
-import { pesoExchange, buyFront } from '@/engine/laundering';
+import { buyFront } from '@/engine/laundering';
 import type { FrontType } from '@/engine/config/fronts';
 import type { GameConfig } from '@/engine/config';
 import { setLieLow } from '@/engine/heat';
@@ -101,9 +101,9 @@ function cheapestFront(state: GameState): { readonly type: FrontType; readonly b
  * One policy step: a simple, deterministic street dealer. The one-price
  * economy (Prompt 32) has no in-place margin, so the policy trades the DRIFT:
  * buy when the local price sits below its base (factor < 1), sell the holding
- * once it's back at/above base; launder surplus dirty cash; open fronts when
- * clean cash allows; lie low when hot. No cleverness — the policy exists to
- * exercise the sim, not to win.
+ * once it's back at/above base; open fronts when clean cash allows (the only
+ * dirty→clean route now — design/12 Item 12); lie low when hot. No cleverness —
+ * the policy exists to exercise the sim, not to win.
  */
 function policyStep(state: GameState): GameState {
   const home = state.stashes[0];
@@ -128,13 +128,10 @@ function policyStep(state: GameState): GameState {
     }
   }
 
-  // Keep a CLEAN reserve roughly tracking the street bankroll — the exchange
-  // haircut buys bust insurance (a seizure takes the stash's dirty cash, never
-  // the clean pool), so one bad roll can't flatline the whole run. Then put
-  // surplus clean cash to work in a front.
-  if (home.dirtyCash > 2_000 && next.cleanCash < home.dirtyCash) {
-    next = pesoExchange(next, Math.floor(home.dirtyCash / 3), home.id).state;
-  }
+  // Put surplus clean cash to work in a front (the idle engine — the ONLY
+  // dirty→clean route now that the bulk peso exchange is gone, design/12 Item
+  // 12). Clean cash here comes from front accrual + golden hours, so a front
+  // compounds the clean side once one is affordable.
   const front = cheapestFront(next);
   if (next.cleanCash >= front.buyIn * 1.5) {
     next = buyFront(next, front.type).state;

@@ -32,3 +32,6 @@ export type { StampBadgeProps, StampVariant } from './StampBadge';
 
 export { BottomNav } from './BottomNav';
 export type { BottomNavProps, BottomNavItem } from './BottomNav';
+
+export { QtyInput } from './QtyInput';
+export type { QtyInputProps } from './QtyInput';

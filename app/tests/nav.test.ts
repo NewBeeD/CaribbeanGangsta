@@ -29,9 +29,18 @@ describe('Screen registry & routing (Ideas.md — open access)', () => {
     expect(nav).toEqual(['Deals', 'Crew', 'Money', 'Heat']);
   });
 
-  it('Empire · Market · Storage · Corruption · Debt · Arms · High Score live one level up (not in bottom nav)', () => {
+  it('Empire · Market · Transport · Storage · Corruption · Debt · Arms · High Score live one level up (not in bottom nav)', () => {
     const up = SCREEN_NODES.filter((n) => !n.inNav).map((n) => n.id);
-    expect(up).toEqual(['empire', 'market', 'storage', 'corruption', 'debt', 'arms', 'highscore']);
+    expect(up).toEqual([
+      'empire',
+      'market',
+      'transport',
+      'storage',
+      'corruption',
+      'debt',
+      'arms',
+      'highscore',
+    ]);
   });
 
   it('every node is retrievable by id', () => {

@@ -59,7 +59,8 @@ export function totalUnits(state: GameState): number {
   return state.stashes.reduce((sum, s) => sum + stashUnits(s), 0);
 }
 
-/** The unit capacity of a stash, from its archetype (config/stashes.ts). */
+/** The BASE unit capacity of a stash, from its archetype (config/stashes.ts) —
+ * before the crew-carry bonus. Prefer `effectiveCapacity` for any real limit. */
 export function stashCapacity(
   stash: Stash,
   types: readonly StashTypeConfig[] = STASH_TYPES,
@@ -67,7 +68,27 @@ export function stashCapacity(
   return getStashType(stash.type, types).capacity;
 }
 
-/** Free unit capacity left in a stash (never negative). */
+/**
+ * A stash's EFFECTIVE unit capacity (design/12 Item 4 — crew-scaled carry): the
+ * archetype base plus `CREW_CARRY_PER_MEMBER × crew.length`. THE single capacity
+ * rule — buys (`deals.ts`), cooks (`conversions.ts`), same-country moves (this
+ * module), and shipment arrivals (`travel.ts`) all route through it, so effective
+ * capacity means one thing everywhere. With recruiting unbounded (open access),
+ * capacity is unbounded too — "no hard max" without deleting the storage system
+ * or its raid-seizure stakes.
+ */
+export function effectiveCapacity(state: GameState, stash: Stash): number {
+  const tuning = state.config.stashes;
+  return stashCapacity(stash, tuning.STASH_TYPES) + tuning.CREW_CARRY_PER_MEMBER * state.crew.length;
+}
+
+/** Free EFFECTIVE unit capacity left in a stash (never negative) — the crew-scaled
+ * headroom the deal/convert/move/ship checks all clamp to. */
+export function effectiveCapacityRemaining(state: GameState, stash: Stash): number {
+  return Math.max(0, effectiveCapacity(state, stash) - stashUnits(stash));
+}
+
+/** Free BASE capacity left in a stash (never negative) — archetype only, no crew. */
 export function capacityRemaining(
   stash: Stash,
   types: readonly StashTypeConfig[] = STASH_TYPES,
@@ -262,7 +283,8 @@ export function moveProduct(
   if (from.countryId !== to.countryId) return rejectMove(state, 'cross-country');
   if (from.inventory[product] < qty) return rejectMove(state, 'insufficient-inventory');
   const types = state.config.stashes.STASH_TYPES;
-  if (stashUnits(to) + qty > stashCapacity(to, types)) {
+  // Effective (crew-scaled) capacity bounds the destination (design/12 Item 4).
+  if (stashUnits(to) + qty > effectiveCapacity(state, to)) {
     return rejectMove(state, 'insufficient-capacity');
   }
 

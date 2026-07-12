@@ -38,9 +38,9 @@ import {
   type ProductId,
 } from './config/countries';
 import { getProduct } from './config/products';
-import { getStashType } from './config/stashes';
 import { getTransport, type TransportId } from './config/transport';
 import { getMarketPrice } from './deals';
+import { effectiveCapacity } from './storage';
 import { addHeat } from './heat';
 import {
   splitCharge,
@@ -405,9 +405,8 @@ function deliverShipment(state: GameState, shipment: Shipment): GameState {
   const to = findStash(state, shipment.toStashId);
   const destName = to ? findCountry(to.countryId)?.name : undefined;
   const delivered = shipment.qty - shipment.skimUnits;
-  const capacity = to
-    ? getStashType(to.type, state.config.stashes.STASH_TYPES).capacity
-    : 0;
+  // Effective (crew-scaled) capacity bounds the arrival (design/12 Item 4).
+  const capacity = to ? effectiveCapacity(state, to) : 0;
 
   if (!to || stashUnits(to) + delivered > capacity) {
     if (shipment.cleared) return state; // already waiting — nothing to update

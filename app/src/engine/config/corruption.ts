@@ -52,14 +52,22 @@ export interface OfficialConfig {
 }
 
 /**
- * The roster (design/09 B.2). Costs and benefits mirror the design table: a beat
- * cop is cheap local cover; a judge is a big retainer that can keep a run alive.
+ * The roster (design/09 B.2; design/12 Item 13 — retainers retuned to realistic
+ * weekly asks). Ranked cheapest → dearest: a beat cop is cheap local cover; a
+ * judge is the biggest retainer in the game and can keep a run alive. Note the
+ * player's ordering swaps rank vs. cost — the Customs Chief ($250k) now outranks
+ * the DEA Insider ($100k) — so the list order mirrors the ask (design/12 Item 13).
+ *
+ * BALANCE (design/12 balancing note): these are 40–60× the old asks and only
+ * carry AFTER the one-price economy retune + the arms/street income streams
+ * (Prompts 32/34/35). Confirm a mid-game empire can afford a Judge via the
+ * Prompt 25 batch sim before treating them as final.
  */
 export const OFFICIALS: readonly OfficialConfig[] = [
   {
     id: 'beat-cop',
     name: 'Beat Cop',
-    retainerPerWeek: 1_500,
+    retainerPerWeek: 50_000,
     benefit: 'raid-tipoff',
     benefitSummary: 'Tips you off on local raids and cools local heat faster.',
     greed: 0.9,
@@ -69,7 +77,7 @@ export const OFFICIALS: readonly OfficialConfig[] = [
   {
     id: 'detective',
     name: 'DEA Insider',
-    retainerPerWeek: 8_000,
+    retainerPerWeek: 100_000,
     benefit: 'taskforce-warning',
     benefitSummary: 'Advance warning on task-force moves; buries one charge a season.',
     greed: 1.1,
@@ -79,7 +87,7 @@ export const OFFICIALS: readonly OfficialConfig[] = [
   {
     id: 'customs-chief',
     name: 'Customs Chief',
-    retainerPerWeek: 6_000,
+    retainerPerWeek: 250_000,
     benefit: 'port-seizure-floor',
     benefitSummary: 'Standing low seizure on their port — a permanent paid port.',
     greed: 1.05,
@@ -89,7 +97,7 @@ export const OFFICIALS: readonly OfficialConfig[] = [
   {
     id: 'politician',
     name: 'Local Politician',
-    retainerPerWeek: 12_000,
+    retainerPerWeek: 400_000,
     benefit: 'territory-protection',
     benefitSummary: 'Protects a front/territory, slows escalation, and lifts your standing.',
     greed: 1.2,
@@ -99,7 +107,7 @@ export const OFFICIALS: readonly OfficialConfig[] = [
   {
     id: 'judge',
     name: 'Judge',
-    retainerPerWeek: 20_000,
+    retainerPerWeek: 750_000,
     benefit: 'dismiss-charges',
     benefitSummary: 'Can dismiss charges — softens the prison end-state, keeping a run alive.',
     greed: 1.25,

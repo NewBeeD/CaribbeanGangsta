@@ -26,12 +26,11 @@ import { frontLieutenantBonus } from './crew';
 import {
   OFFLINE_REDUCED_RATE,
   OFFLINE_SOFT_CAP_HOURS,
-  PESO_EXCHANGE_HAIRCUT,
   frontUpgradeCost,
   getFrontType,
   type FrontType,
 } from './config/fronts';
-import type { Front, GameState, PendingChoice, Stash } from './state';
+import type { Front, GameState, PendingChoice } from './state';
 
 export type { FrontType } from './config/fronts';
 
@@ -382,63 +381,8 @@ export function upgradeFront(state: GameState, frontId: string): FrontResult {
   };
 }
 
-// --- Black Market Peso Exchange (a disclosed dirty→clean sink) ----------------
-
-/** The disclosed quote for exchanging `amount` dirty cash (design/01 §3a). */
-export interface PesoQuote {
-  readonly haircut: number;
-  /** Clean cash received = `amount × (1 − haircut)`, rounded. */
-  readonly clean: number;
-}
-
-/** The quote shown before committing — exactly what `pesoExchange` applies. */
-export function pesoExchangeQuote(
-  amount: number,
-  haircut: number = PESO_EXCHANGE_HAIRCUT,
-): PesoQuote {
-  const clean = Math.round(Math.max(0, amount) * (1 - haircut));
-  return { haircut, clean };
-}
-
-export interface PesoExchangeResult {
-  readonly state: GameState;
-  readonly ok: boolean;
-  readonly clean: number;
-  readonly haircut: number;
-  readonly rejected?: LaunderRejectReason;
-}
-
-/**
- * Convert `amount` of DIRTY cash held in a stash to CLEAN cash at the disclosed
- * haircut (design/01 §3a — a sink, not a generator). Defaults to the home stash.
- * Applies **exactly** the shown haircut (fairness law). Rejects without mutating
- * on a bad amount, unknown stash, or shortfall.
- */
-export function pesoExchange(
-  state: GameState,
-  amount: number,
-  stashId?: string,
-): PesoExchangeResult {
-  const quote = pesoExchangeQuote(amount, state.config.fronts.PESO_EXCHANGE_HAIRCUT);
-  if (!(amount > 0)) {
-    return { state, ok: false, clean: 0, haircut: quote.haircut, rejected: 'invalid-amount' };
-  }
-  const stash: Stash | null =
-    stashId !== undefined
-      ? state.stashes.find((s) => s.id === stashId) ?? null
-      : state.stashes[0] ?? null;
-  if (!stash) {
-    return { state, ok: false, clean: 0, haircut: quote.haircut, rejected: 'no-stash' };
-  }
-  if (stash.dirtyCash < amount) {
-    return { state, ok: false, clean: 0, haircut: quote.haircut, rejected: 'insufficient-funds' };
-  }
-
-  const nextStash: Stash = { ...stash, dirtyCash: stash.dirtyCash - amount };
-  const next: GameState = bankCleanPeaks({
-    ...state,
-    cleanCash: state.cleanCash + quote.clean,
-    stashes: state.stashes.map((s) => (s.id === nextStash.id ? nextStash : s)),
-  });
-  return { state: next, ok: true, clean: quote.clean, haircut: quote.haircut };
-}
+// The Black Market Peso Exchange (a bulk dirty→clean converter) was REMOVED in
+// design/12 Item 12 — a lump-sum haircut made fronts pointless. Fronts
+// (`buyFront`/`upgradeFront`/`accrue`) are now the ONLY dirty→clean route. Any
+// historical peso field on an old save is simply ignored (hydrate keeps it
+// harmlessly).

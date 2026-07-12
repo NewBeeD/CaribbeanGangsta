@@ -365,6 +365,7 @@ export {
   getStashType,
   stashCost,
   STASH_COST_GROWTH,
+  CREW_CARRY_PER_MEMBER,
   GUARD_CASH_THRESHOLD,
   GUARD_MAX_PENALTY,
   GUARD_UNGUARDED_PENALTY,
@@ -377,6 +378,8 @@ export {
   totalUnits,
   stashCapacity,
   capacityRemaining,
+  effectiveCapacity,
+  effectiveCapacityRemaining,
   effectiveSeizurePct,
   diversificationIndex,
   addStash,
@@ -404,7 +407,6 @@ export {
   OFFLINE_SOFT_CAP_HOURS,
   OFFLINE_REDUCED_RATE,
   CRYPTO_SWING,
-  PESO_EXCHANGE_HAIRCUT,
   TRADE_LAUNDER_FRACTION,
   tradeLaunderCapacity,
 } from './config/fronts';
@@ -418,16 +420,12 @@ export {
   rollGoldenHour,
   buyFront,
   upgradeFront,
-  pesoExchange,
-  pesoExchangeQuote,
 } from './laundering';
 export type {
   OfflineReport,
   GoldenHourEvent,
   FrontResult,
   LaunderRejectReason,
-  PesoQuote,
-  PesoExchangeResult,
 } from './laundering';
 
 // Crew & NPC relatedness engine — Prompt 08.

@@ -43,10 +43,10 @@ import {
 } from './config/countries';
 import { getProduct } from './config/products';
 import { HEAT_MAX } from './config/heat';
-import { getStashType } from './config/stashes';
 import { DEFAULT_GAME_CONFIG, type MarketsTuning } from './config';
 import { basePriceAt } from './world';
 import { addHeat } from './heat';
+import { effectiveCapacity } from './storage';
 import { splitCharge, type GameState, type Inventory, type MarketEvent, type Stash } from './state';
 
 // --- Live market state (drifts each active tick) -----------------------------
@@ -503,8 +503,8 @@ function resolveBuy(state: GameState, intent: BuyIntent): DealResult {
   // buy the shipment it was taken out for, not just fronts (the come-up hook).
   const charge = splitCharge(state, stash, cost);
   if (!charge) return reject(state, 'insufficient-funds');
-  const capacity = getStashType(stash.type, state.config.stashes.STASH_TYPES).capacity;
-  if (stashUnits(stash) + qty > capacity) {
+  // Effective (crew-scaled) capacity bounds the buy (design/12 Item 4).
+  if (stashUnits(stash) + qty > effectiveCapacity(state, stash)) {
     return reject(state, 'insufficient-capacity');
   }
 

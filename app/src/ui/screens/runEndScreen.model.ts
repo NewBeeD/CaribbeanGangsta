@@ -35,6 +35,9 @@ const FALL_PROSE: Readonly<Record<RunEndCause, string>> = {
   retired:
     'You walked out on top, on your own terms. That number is banked — ' +
     'now it is the one to beat.',
+  abandoned:
+    'You torched it and walked — a clean slate on your own terms. The score so ' +
+    'far is banked; the next city is waiting.',
 };
 
 export function fallProse(cause: RunEndCause): string {
@@ -43,7 +46,13 @@ export function fallProse(cause: RunEndCause): string {
 
 /** The short cause tag under the headline ("KILLED" / "TAKEN" / "WALKED"). */
 export function causeStamp(cause: RunEndCause): string {
-  return cause === 'killed' ? 'KILLED' : cause === 'prison' ? 'TAKEN' : 'WALKED';
+  return cause === 'killed'
+    ? 'KILLED'
+    : cause === 'prison'
+      ? 'TAKEN'
+      : cause === 'abandoned'
+        ? 'WALKED AWAY'
+        : 'WALKED';
 }
 
 // --- Farthest act (design/07 §6 "Farthest act: III — Kingpin") -----------------

@@ -4,10 +4,9 @@
  * On reopen this is where "the longer you're away, the more options await" is made
  * concrete: the offline take reads as GAINS + decisions to allocate, never a loss.
  * Fronts turn time into clean cash; each shows its $/h and a priced next upgrade with
- * the affordable step highlighted; the black-market peso exchange converts dirty cash
- * to clean at the DISCLOSED haircut, shown before you commit. Every front is buyable
- * and the exchange is live from minute one (open access — Ideas.md); money is the
- * only gate.
+ * the affordable step highlighted. Fronts are the ONLY dirty→clean route (design/12
+ * Item 12 — the bulk peso exchange was removed so a front means something). Every
+ * front is buyable from minute one (open access — Ideas.md); money is the only gate.
  *
  * The hard line (GDD §6, §8): absence forgoes gains but never risks progress. There
  * is NO "your fronts are at risk" surface anywhere here. PURE composition — every
@@ -20,9 +19,7 @@ import { Button, Card, Panel, SceneText, Stat } from '@/ui/components';
 import { SessionEndHook } from '@/ui/shell/SessionEndHook';
 import { navigate } from '@/ui/shell/useHash';
 import {
-  PESO_HAIRCUT_PCT,
   buyFrontOptions,
-  dirtyStashRows,
   frontRows,
   nextAffordableUpgradeId,
   pendingDecisions,
@@ -122,15 +119,12 @@ export function MoneyScreen() {
   const highlightId = nextAffordableUpgradeId(state);
   const buyOptions = buyFrontOptions(state);
   const decisions = pendingDecisions(state);
-  const dirtyRows = dirtyStashRows(state);
   const rate = totalCleanRate(state);
   const cleanCash = state.cleanCash;
   const dirty = totalDirty(state);
 
   const upgrade = (frontId: string) => useGameStore.getState().upgradeFront(frontId);
   const buy = (type: FrontRow['type']) => useGameStore.getState().buyFront(type);
-  const exchange = (stashId: string, amount: number) =>
-    useGameStore.getState().exchangePeso(amount, stashId);
 
   return (
     <div>
@@ -195,32 +189,11 @@ export function MoneyScreen() {
           <Stat label="Clean cash" value={money(cleanCash)} tone="gold" big />
           <Stat label="Dirty (in stashes)" value={money(dirty)} tone="default" big />
         </div>
-
-        {dirtyRows.length > 0 ? (
-          <div style={{ display: 'grid', gap: 8, marginTop: 14 }}>
-            <p className="cg-label">
-              Peso exchange · dirty → clean at a {PESO_HAIRCUT_PCT}% haircut
-            </p>
-            {dirtyRows.map((s) => (
-              <Button
-                key={s.id}
-                variant="secondary"
-                fullWidth
-                onClick={() => exchange(s.id, s.dirtyCash)}
-                data-testid="peso-exchange"
-              >
-                Exchange {money(s.dirtyCash)} from {s.name}
-                <small>
-                  + {money(s.cleanIfExchanged)} clean · {PESO_HAIRCUT_PCT}% haircut
-                </small>
-              </Button>
-            ))}
-          </div>
-        ) : (
-          <p className="cg-label" style={{ marginTop: 12 }}>
-            No dirty cash to launder — sell some product first.
-          </p>
-        )}
+        <p className="cg-label" style={{ marginTop: 12 }}>
+          {dirty > 0
+            ? 'Fronts turn the operation legitimate — run and upgrade them to keep the clean side growing.'
+            : 'No dirty cash yet — sell some product, then let the fronts wash it.'}
+        </p>
       </Card>
 
       <Card heading="Fronts">

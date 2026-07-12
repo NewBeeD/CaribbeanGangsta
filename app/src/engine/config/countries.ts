@@ -435,6 +435,156 @@ export const COUNTRIES: readonly CountryConfig[] = [
       'The brokers here deal in trust and cash, in that order.',
     ],
   },
+
+  // --- More Caribbean islands (design/12 Item 9 — reachable, never start-eligible)
+  {
+    id: 'jamaica',
+    name: 'Jamaica',
+    region: 'caribbean',
+    startEligible: false,
+    risk: 0.28,
+    startingCash: { min: 4000, max: 7500 },
+    heatBaseline: 7,
+    portProtectionBaseline: 0.4,
+    traded: CARIBBEAN_TRADED,
+    costBias: { min: 0.75, max: 1.0 },
+    demandBias: { min: 0.8, max: 1.05 },
+    productBias: { weed: 0.7, exotic: 0.75 }, // the source of the green
+    plugFor: ['weed', 'exotic'],
+    plugCost: 90_000,
+    plugPriceFactor: 0.6,
+    openingHooks: [
+      'The source of the green — with the connect, weed and exotic move at grower prices.',
+      'The dons run the corners; respect travels faster than money here.',
+    ],
+  },
+  {
+    id: 'trinidad',
+    name: 'Trinidad',
+    region: 'caribbean',
+    startEligible: false,
+    risk: 0.32,
+    startingCash: { min: 4000, max: 7000 },
+    heatBaseline: 11,
+    portProtectionBaseline: 0.3,
+    traded: CARIBBEAN_TRADED,
+    costBias: { min: 0.85, max: 1.1 },
+    demandBias: { min: 0.9, max: 1.15 },
+    productBias: { arms: 0.8, synthetics: 0.9 }, // a transshipment crossroads
+    openingHooks: [
+      'A transshipment crossroads — everything passes through, and some of it stays.',
+      'The gangs here are armed and organized; a crate finds a buyer fast.',
+    ],
+  },
+  {
+    id: 'bahamas',
+    name: 'Bahamas',
+    region: 'caribbean',
+    startEligible: false,
+    risk: 0.3,
+    startingCash: { min: 6000, max: 10000 },
+    heatBaseline: 9,
+    portProtectionBaseline: 0.4,
+    traded: CARIBBEAN_TRADED,
+    costBias: { min: 1.0, max: 1.25 },
+    demandBias: { min: 1.1, max: 1.35 }, // the last hop before Miami — demand runs hot
+    openingHooks: [
+      'The last islands before Miami — prices run high on the strength of what waits across the strait.',
+      'Fast boats leave here nightly. The Coast Guard knows it, and works it.',
+    ],
+  },
+  {
+    id: 'hispaniola',
+    name: 'Hispaniola',
+    region: 'caribbean',
+    startEligible: false,
+    risk: 0.42,
+    startingCash: { min: 3000, max: 6000 },
+    heatBaseline: 15,
+    portProtectionBaseline: 0.15,
+    traded: CARIBBEAN_TRADED,
+    costBias: { min: 0.7, max: 0.95 }, // cheap
+    demandBias: { min: 0.8, max: 1.0 },
+    openingHooks: [
+      'Cheap and lawless — product moves for less here, and so does a life.',
+      'Little protection at the port. What you carry, you carry at your own risk.',
+    ],
+  },
+
+  // --- More Latin America (design/12 Item 9) ---------------------------------
+  {
+    id: 'panama',
+    name: 'Panama',
+    region: 'latin-america',
+    startEligible: false,
+    risk: 0.33,
+    startingCash: { min: 6000, max: 10000 },
+    heatBaseline: 10,
+    portProtectionBaseline: 0.45,
+    traded: ['weed', 'synthetics', 'cocaine', 'arms'],
+    costBias: { min: 0.9, max: 1.15 },
+    demandBias: { min: 0.95, max: 1.2 },
+    openingHooks: [
+      'The isthmus where money learns to swim — banks here ask few questions.',
+      'Every load between two oceans stops in Panama. So does every dollar.',
+    ],
+  },
+  {
+    id: 'venezuela',
+    name: 'Venezuela',
+    region: 'latin-america',
+    startEligible: false,
+    risk: 0.55,
+    startingCash: { min: 4000, max: 8000 },
+    heatBaseline: 18,
+    portProtectionBaseline: 0.2,
+    traded: ['cocaine', 'synthetics', 'arms'],
+    costBias: { min: 0.7, max: 0.95 },
+    demandBias: { min: 0.75, max: 1.0 },
+    productBias: { arms: 0.8 }, // a transit state awash in weapons
+    openingHooks: [
+      'A collapsing state — coke transits north and arms move for scrap, if you dare the risk.',
+      'The colectivos and the generals both want their cut. Cross either and you vanish.',
+    ],
+  },
+
+  // --- More demand sinks (design/12 Item 9) ----------------------------------
+  {
+    id: 'new-york',
+    name: 'New York',
+    region: 'north-america',
+    startEligible: false,
+    risk: 0.5,
+    startingCash: { min: 8000, max: 12000 },
+    heatBaseline: 18,
+    portProtectionBaseline: 0.4,
+    traded: [...PRODUCT_IDS], // the second great sink — everything moves here
+    costBias: { min: 1.1, max: 1.35 },
+    demandBias: { min: 1.25, max: 1.55 },
+    productBias: { pills: 1.1, heroin: 1.1 }, // the pill-and-dope corridor
+    openingHooks: [
+      'The other sink — eight million buyers and a subway that never sleeps.',
+      'Every borough is a market and every market has a task force. Move quiet.',
+    ],
+  },
+  {
+    id: 'london',
+    name: 'London',
+    region: 'europe',
+    startEligible: false,
+    risk: 0.4,
+    startingCash: { min: 8000, max: 12000 },
+    heatBaseline: 12,
+    portProtectionBaseline: 0.45,
+    traded: ['weed', 'hash', 'synthetics', 'cocaine', 'heroin', 'pills'],
+    costBias: { min: 1.05, max: 1.3 },
+    demandBias: { min: 1.35, max: 1.65 },
+    productBias: { cocaine: 1.2 }, // the deepest coke demand in the game
+    openingHooks: [
+      'The City runs on it — nowhere on earth pays for cocaine like the Square Mile.',
+      'The Met is patient and the cameras are everywhere. Wide margins, watchful eyes.',
+    ],
+  },
 ] as const;
 
 export const COUNTRY_IDS: readonly string[] = COUNTRIES.map((c) => c.id);

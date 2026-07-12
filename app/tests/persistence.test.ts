@@ -177,6 +177,35 @@ describe('migrateEnvelope — schema version + migration hook', () => {
     // Acknowledged tier derived from stored heat → never self-telegraphs on load.
     expect(migrated?.leTierAck).toBe('dea');
   });
+
+  it('backfills markets for countries added to the roster, preserving known ones (Item 9)', () => {
+    // A v11 save written before the roster grew: drop the new countries' markets
+    // and mutate a known country's live stock to prove it survives the merge.
+    const legacyMarkets = { ...state.markets } as Record<string, unknown>;
+    delete legacyMarkets['london'];
+    delete legacyMarkets['new-york'];
+    delete legacyMarkets['jamaica'];
+    const knownStock = 7; // an arbitrary depleted pool the save already tracked
+    const sanCristo = {
+      ...state.markets['san-cristo']!,
+      cocaine: { ...state.markets['san-cristo']!.cocaine, stock: knownStock },
+    };
+    legacyMarkets['san-cristo'] = sanCristo;
+
+    const legacy = { ...state, markets: legacyMarkets } as Record<string, unknown>;
+    const migrated = migrateEnvelope({
+      ...envelope,
+      state: legacy as unknown as GameState,
+    });
+
+    expect(migrated).not.toBeNull();
+    // The new countries gained fresh market entries (no throw at pricing time)…
+    expect(migrated?.markets['london']?.cocaine.stock).toBeGreaterThan(0);
+    expect(migrated?.markets['new-york']?.cocaine).toBeDefined();
+    expect(migrated?.markets['jamaica']?.weed).toBeDefined();
+    // …while a country the save already knew keeps its live stock untouched.
+    expect(migrated?.markets['san-cristo']?.cocaine.stock).toBe(knownStock);
+  });
 });
 
 describe('CloudSaveStore — conforming stub', () => {

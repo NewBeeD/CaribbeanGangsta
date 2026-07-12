@@ -19,11 +19,11 @@ import {
   PRODUCTS,
   PRODUCT_IDS,
   STASH_TYPES,
-  capacityRemaining,
   diversificationIndex,
+  effectiveCapacity,
+  effectiveCapacityRemaining,
   effectiveSeizurePct,
   getStashType,
-  stashCapacity,
   stashCost,
   stashUnits,
   type GameState,
@@ -89,7 +89,8 @@ export interface StashRow {
 export function stashRows(state: GameState): readonly StashRow[] {
   return state.stashes.map((stash) => {
     const cfg = getStashType(stash.type);
-    const total = stashCapacity(stash);
+    // Effective (crew-scaled) capacity — the real holding limit (design/12 Item 4).
+    const total = effectiveCapacity(state, stash);
     const used = stashUnits(stash);
     const pct = effectiveSeizurePct(state, stash.id);
     const guard = stash.guardCrewId
@@ -110,7 +111,7 @@ export function stashRows(state: GameState): readonly StashRow[] {
       countryId: stash.countryId,
       capacityUsed: used,
       capacityTotal: total,
-      capacityFree: capacityRemaining(stash),
+      capacityFree: effectiveCapacityRemaining(state, stash),
       fill: total > 0 ? used / total : 0,
       seizurePct: pct,
       seizurePctLabel: `${Math.round(pct * 100)}%`,
