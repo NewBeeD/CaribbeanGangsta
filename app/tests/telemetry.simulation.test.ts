@@ -67,7 +67,9 @@ describe('headless batch sim (Prompt 25 acceptance; design/01 §8)', () => {
     for (const run of batch.runs) {
       if (run.endedBySpiral) expect(run.cause).not.toBe('retired');
     }
-  });
+    // 40 full runs over the heavier post-Prompt-32 economy sit right at the
+    // default 5s per-test cap; give the batch explicit breathing room.
+  }, 15000);
 
   it('honors the horizon option (shorter cap, still no DOA)', () => {
     const batch = runBatchSim(seeds(10, 'short'), { maxDays: 14 });
