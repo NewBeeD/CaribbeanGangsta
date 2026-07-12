@@ -60,6 +60,7 @@ export type {
   PrestigeTuning,
   TransportTuning,
   ConversionsTuning,
+  StreetTuning,
   PlugsTuning,
   OnboardingTuning,
 } from './config';
@@ -114,6 +115,7 @@ export {
   applyIntent,
   emptyInventory,
   emptyDebt,
+  emptyStreetStock,
   debtOwed,
   totalDirtyCash,
   spendableAt,
@@ -148,6 +150,7 @@ export type {
   HighScore,
   MarketEvent,
   Rumor,
+  StreetStock,
 } from './state';
 
 // Injected-time clock + per-tick pipeline (Prompt 03).
@@ -194,12 +197,27 @@ export type {
 // Product conversions — cook crack / press hash (Ideas2 §4; design/11 §4).
 export { CONVERSION_RECIPES, getRecipe } from './config/conversions';
 export type { RecipeId, ConversionRecipe } from './config/conversions';
-export { convert, maxBatches } from './conversions';
+export { convert, maxBatches, convertBinding } from './conversions';
 export type {
   ConvertIntent,
   ConvertResult,
   ConvertRejectReason,
 } from './conversions';
+
+// Street teams — the crack corner economy (design/12 Item 5; Prompt 34).
+export {
+  STREET_SALE_PER_CREW_PER_DAY,
+  STREET_QUEUE_PER_CREW,
+  STREET_HEAT_PER_UNIT,
+} from './config/street';
+export {
+  streetQueueCap,
+  streetQueueRoom,
+  streetSalePerDay,
+  streetRevenuePerDay,
+  bookStreetStock,
+  streetStep,
+} from './street';
 
 // Travel, transports & couriers (design/11 §3; Ideas2 §1/§3) — Prompt 30.
 export {

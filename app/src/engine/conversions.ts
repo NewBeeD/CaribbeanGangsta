@@ -16,7 +16,9 @@
 import { getRecipe, type ConversionRecipe, type RecipeId } from './config/conversions';
 import { PRODUCT_IDS } from './config/countries';
 import { getStashType } from './config/stashes';
+import { getMarketPrice } from './deals';
 import { addHeat } from './heat';
+import { bookStreetStock, streetQueueRoom } from './street';
 import { splitCharge, type GameState, type Inventory, type Stash } from './state';
 
 export interface ConvertIntent {
@@ -33,7 +35,9 @@ export type ConvertRejectReason =
   | 'no-stash'
   | 'insufficient-inventory'
   | 'insufficient-funds'
-  | 'insufficient-capacity';
+  | 'insufficient-capacity'
+  /** A `toStreet` cook with no crew to work the corners (design/12 Item 5b). */
+  | 'no-crew';
 
 export interface ConvertResult {
   readonly state: GameState;
@@ -64,35 +68,84 @@ function reject(state: GameState, rejected: ConvertRejectReason): ConvertResult 
   };
 }
 
-/**
- * The most batches of `recipe` this stash can run right now (units/cash/space).
- * `cleanCash` is the run's clean pool, spendable here like anywhere money is a
- * gate (a borrowed stake can fund the cook — design/10's come-up hook).
- */
-export function maxBatches(
-  recipeId: RecipeId,
+const BIG = Number.MAX_SAFE_INTEGER;
+
+/** The runnable-batch constraints for a recipe at a stash — the exact terms
+ * `convert` enforces, so `maxBatches` and `convertBinding` agree with it. */
+interface Constraints {
+  /** Batches the held input allows. */
+  readonly byUnits: number;
+  /** Batches the stash's dirty cash + the run's clean cash allow. */
+  readonly byCash: number;
+  /** Batches the OUTPUT sink allows: stash space, or the crew's corner queue. */
+  readonly byOutput: number;
+  /** True when `byOutput` is 0 because a `toStreet` cook has no crew (5b). */
+  readonly noCrew: boolean;
+}
+
+function constraintsFor(
+  state: GameState,
+  recipe: ConversionRecipe,
   stash: Stash,
-  cleanCash = 0,
-  tuning?: {
-    readonly recipes?: readonly ConversionRecipe[];
-    readonly stashTypes?: Parameters<typeof getStashType>[1];
-  },
-): number {
-  const recipe = getRecipe(recipeId, tuning?.recipes);
+): Constraints {
   const byUnits = Math.floor((stash.inventory[recipe.from] ?? 0) / recipe.fromQty);
   const byCash =
     recipe.costPerBatch > 0
-      ? Math.floor((stash.dirtyCash + cleanCash) / recipe.costPerBatch)
-      : Number.MAX_SAFE_INTEGER;
-  const netPerBatch = recipe.toQty - recipe.fromQty;
-  const bySpace =
-    netPerBatch > 0
-      ? Math.floor(
-          (getStashType(stash.type, tuning?.stashTypes).capacity - stashUnits(stash)) /
-            netPerBatch,
-        )
-      : Number.MAX_SAFE_INTEGER;
-  return Math.max(0, Math.min(byUnits, byCash, bySpace));
+      ? Math.floor((stash.dirtyCash + state.cleanCash) / recipe.costPerBatch)
+      : BIG;
+
+  // The output sink: a `toStreet` cook is bounded by the crew's corner queue
+  // (crew-scaled — no crew, no cook, design/12 Item 5b); everything else is
+  // bounded by stash space when it bulks up (net units per batch > 0).
+  let byOutput: number;
+  let noCrew = false;
+  if (recipe.toStreet) {
+    noCrew = state.crew.length === 0;
+    byOutput = Math.floor(streetQueueRoom(state) / recipe.toQty);
+  } else {
+    const net = recipe.toQty - recipe.fromQty;
+    byOutput =
+      net > 0
+        ? Math.floor(
+            (getStashType(stash.type, state.config.stashes.STASH_TYPES).capacity -
+              stashUnits(stash)) /
+              net,
+          )
+        : BIG;
+  }
+  return { byUnits, byCash, byOutput, noCrew };
+}
+
+/**
+ * The most batches of `recipe` this stash can run right now — the min of the
+ * held input, the spendable cash (stash dirty + the run's clean pool, so a
+ * borrowed stake can fund the cook, design/10), and the output sink (stash
+ * space, or the crew's corner queue for a `toStreet` cook, design/12 Item 5).
+ */
+export function maxBatches(state: GameState, recipeId: RecipeId, stash: Stash): number {
+  const recipe = getRecipe(recipeId, state.config.conversions.CONVERSION_RECIPES);
+  const c = constraintsFor(state, recipe, stash);
+  return Math.max(0, Math.min(c.byUnits, c.byCash, c.byOutput));
+}
+
+/**
+ * The binding constraint that pins `maxBatches` to 0 right now, as a reject
+ * reason — so the UI can name WHY a cook is blocked instead of the old
+ * "Not enough on hand" mislabel that surfaced a space/cash/crew shortfall as
+ * missing product (design/12 Item 5a). `null` when a batch is runnable. Reported
+ * in the same order `convert` checks: inventory, then funds, then the output sink.
+ */
+export function convertBinding(
+  state: GameState,
+  recipeId: RecipeId,
+  stash: Stash,
+): ConvertRejectReason | null {
+  const recipe = getRecipe(recipeId, state.config.conversions.CONVERSION_RECIPES);
+  const c = constraintsFor(state, recipe, stash);
+  if (Math.min(c.byUnits, c.byCash, c.byOutput) >= 1) return null;
+  if (c.byUnits < 1) return 'insufficient-inventory';
+  if (c.byCash < 1) return 'insufficient-funds';
+  return c.noCrew ? 'no-crew' : 'insufficient-capacity';
 }
 
 /**
@@ -125,20 +178,33 @@ export function convert(state: GameState, intent: ConvertIntent): ConvertResult 
   // shortfall (clean/borrowed capital spends anywhere — design/10).
   const charge = splitCharge(state, stash, cost);
   if (!charge) return reject(state, 'insufficient-funds');
-  const netUnits = produced - consumed;
-  if (
-    netUnits > 0 &&
-    stashUnits(stash) + netUnits >
-      getStashType(stash.type, state.config.stashes.STASH_TYPES).capacity
-  ) {
-    return reject(state, 'insufficient-capacity');
+
+  // The output has to have somewhere to go. A `toStreet` cook needs a crew to
+  // work the corners and room in their queue (design/12 Item 5); everything
+  // else needs stash space when it bulks up.
+  if (recipe.toStreet) {
+    if (state.crew.length === 0) return reject(state, 'no-crew');
+    if (produced > streetQueueRoom(state)) return reject(state, 'insufficient-capacity');
+  } else {
+    const netUnits = produced - consumed;
+    if (
+      netUnits > 0 &&
+      stashUnits(stash) + netUnits >
+        getStashType(stash.type, state.config.stashes.STASH_TYPES).capacity
+    ) {
+      return reject(state, 'insufficient-capacity');
+    }
   }
 
-  const inventory: Inventory = {
-    ...stash.inventory,
-    [recipe.from]: (stash.inventory[recipe.from] ?? 0) - consumed,
-    [recipe.to]: (stash.inventory[recipe.to] ?? 0) + produced,
-  };
+  // A `toStreet` cook only removes the input (the rock goes to the crew, not the
+  // shelf); an ordinary conversion yields into the same stash.
+  const inventory: Inventory = recipe.toStreet
+    ? { ...stash.inventory, [recipe.from]: (stash.inventory[recipe.from] ?? 0) - consumed }
+    : {
+        ...stash.inventory,
+        [recipe.from]: (stash.inventory[recipe.from] ?? 0) - consumed,
+        [recipe.to]: (stash.inventory[recipe.to] ?? 0) + produced,
+      };
   const nextStash: Stash = {
     ...stash,
     dirtyCash: stash.dirtyCash - charge.fromDirty,
@@ -149,6 +215,12 @@ export function convert(state: GameState, intent: ConvertIntent): ConvertResult 
     cleanCash: state.cleanCash - charge.fromClean,
     stashes: state.stashes.map((s) => (s.id === nextStash.id ? nextStash : s)),
   };
+  // Book the cooked rock into the crew's corner queue at the LOCAL price now —
+  // the street-sales tick drips it back as dirty cash over time (street.ts).
+  if (recipe.toStreet) {
+    const localPrice = getMarketPrice(next, recipe.to, stash.countryId).price;
+    next = bookStreetStock(next, produced, localPrice);
+  }
   next = addHeat(next, recipe.heatPerBatch * batches, `convert.${recipe.id}`);
 
   return {

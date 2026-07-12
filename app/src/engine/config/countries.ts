@@ -162,10 +162,11 @@ export const PRODUCT_PRICE_BANDS: readonly ProductPriceBand[] = [
     heatPerUnit: 1.0,
   },
   {
-    // Cooked from cocaine (config/conversions.ts; Ideas2 §4). Priced at
-    // roughly half of coke per unit wherever both trade (real-band flavored —
-    // design/12 Item 5 lands the full recipe retune in Prompt 34); the cooked
-    // key draws more total heat than the raw one.
+    // Cooked from cocaine (config/conversions.ts; Ideas2 §4). Priced at ~half
+    // of coke per unit wherever both trade (real-band flavored — crack ≈ half
+    // powder per gram, design/12 Item 5c). With the near-wash `cook-crack`
+    // recipe, cooking barely pays on price alone — its value is the street-team
+    // drip (street.ts), not the number.
     id: 'crack',
     name: 'Crack',
     price: { min: 1000, max: 1600 },

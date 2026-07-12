@@ -22,6 +22,7 @@ import { applyHeatEscalation, decayHeat } from './heat';
 import { raidStep } from './storage';
 import { travelStep } from './travel';
 import { accrue } from './laundering';
+import { streetStep } from './street';
 import { crewStep } from './crew';
 import { corruptionStep } from './corruption';
 import { debtStep } from './debt';
@@ -88,6 +89,11 @@ export const TICK_STEPS: readonly TickStep[] = [
   // (design/01 §3). Prompt 07. Active-only: the offline return payoff is settled
   // separately by `laundering.settleOffline` on its own piecewise curve.
   { id: 'laundering-accrual', modes: ['active'], run: (s, dt) => accrue(s, dt) },
+  // Street teams drip cooked crack back as dirty cash + a little corner heat
+  // (design/12 Item 5d; Prompt 34). Active-only: the crew's hustle freezes while
+  // the player is away, so absence never earns or heats (GDD §6). Deterministic —
+  // no randomness — so it sits beside laundering without touching the RNG stream.
+  { id: 'street-sales', modes: ['active'], run: (s, dt, mode) => streetStep(s, dt, mode) },
   // Crew: advance betrayal arcs one telegraphed stage, then apply any flipped-wire
   // heat (design/02 §4). Prompt 08. Active-only: offline never advances an arc or a
   // wire's heat (GDD §6). Deterministic — the arc uses no randomness.

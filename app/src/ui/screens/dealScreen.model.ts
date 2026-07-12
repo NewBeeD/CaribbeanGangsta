@@ -20,6 +20,7 @@ import {
   CONVERSION_RECIPES,
   PRODUCTS,
   computeBustProbability,
+  convertBinding,
   getCountry,
   getMarketPrice,
   getStashType,
@@ -31,6 +32,8 @@ import {
   requiresPlug,
   spendableAt,
   stashUnits,
+  streetRevenuePerDay,
+  type ConvertRejectReason,
   type GameState,
   type PriceTrend,
   type ProductId,
@@ -249,8 +252,12 @@ export interface ConversionRow {
   readonly toQty: number;
   readonly costPerBatch: number;
   readonly heatPerBatch: number;
-  /** The most batches this stash can run right now (units/cash/space). */
+  /** True when the output goes to the crew's corners, not the stash (Item 5). */
+  readonly toStreet: boolean;
+  /** The most batches this stash can run right now (units/cash/space/queue). */
   readonly max: number;
+  /** Why `max` is 0, so the block reads honestly (design/12 Item 5a). `null` when runnable. */
+  readonly binding: ConvertRejectReason | null;
   /** The completed-batch scene line (never a toast — design/05 §4). */
   readonly prose: string;
 }
@@ -259,7 +266,7 @@ export interface ConversionRow {
  * Every recipe as a panel row for `stash` — shown whenever the stash holds any
  * of the input (a kitchen is always an option; `max` is the honest clamp).
  * Numbers are the recipe config verbatim; `max` is the engine's `maxBatches`,
- * exactly what `convert` will accept.
+ * exactly what `convert` will accept, and `binding` names the limit when it's 0.
  */
 export function conversionRows(state: GameState, stash: Stash): readonly ConversionRow[] {
   return CONVERSION_RECIPES.filter((r) => (stash.inventory[r.from] ?? 0) > 0).map((r) => ({
@@ -271,7 +278,52 @@ export function conversionRows(state: GameState, stash: Stash): readonly Convers
     toQty: r.toQty,
     costPerBatch: r.costPerBatch,
     heatPerBatch: r.heatPerBatch,
-    max: maxBatches(r.id, stash, state.cleanCash),
+    toStreet: r.toStreet ?? false,
+    max: maxBatches(state, r.id, stash),
+    binding: convertBinding(state, r.id, stash),
     prose: r.prose,
   }));
+}
+
+/**
+ * The reason a cook can't run right now, as PROSE — the same binding constraint
+ * the engine reports, told in-world so the disabled button never mislabels a
+ * space/cash/crew shortfall as missing product (design/12 Item 5a).
+ */
+export function conversionBlockedProse(
+  reason: ConvertRejectReason,
+  row: ConversionRow,
+): string {
+  switch (reason) {
+    case 'insufficient-inventory':
+      return `Not enough ${row.fromName.toLowerCase()} on hand`;
+    case 'insufficient-funds':
+      return 'Not enough cash for a batch';
+    case 'no-crew':
+      return 'No crew to work the corners';
+    case 'insufficient-capacity':
+      return row.toStreet ? 'Your crew’s corners are full' : 'No room in this stash';
+    default:
+      return 'Can’t run a batch right now';
+  }
+}
+
+/** The crew's corner status: rocks on hand and the dirty cash they drip per day. */
+export interface StreetStatus {
+  /** Whole rocks the crew is currently holding to sell. */
+  readonly units: number;
+  /** Projected dirty cash the corners bring in per active day, rounded. */
+  readonly perDay: number;
+  /** True when there's product on the corners (show the status line). */
+  readonly active: boolean;
+}
+
+/**
+ * The street-team drip surfaced for the convert card (design/12 Item 5d):
+ * "your crew is holding N rocks — ~$X/day coming back". Pure read over
+ * `state.streetStock`; the number is the engine's own projection.
+ */
+export function streetStatus(state: GameState): StreetStatus {
+  const units = Math.floor(state.streetStock.units);
+  return { units, perDay: Math.round(streetRevenuePerDay(state)), active: units >= 1 };
 }

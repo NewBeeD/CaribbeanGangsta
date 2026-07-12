@@ -78,9 +78,10 @@ import type {
  *
  *     v11 is EXTENDED IN PLACE by prompts 33–35 (design/12 workstreams B–D — no
  *     further schema bump): Prompt 33 adds `marketEvents` + `rumors` (world price
- *     events & the rumor ticker). Missing on a pre-33 v11 save they default to
- *     empty arrays (`normalizeState` in store/persistence.ts) — transient world
- *     data, never player holdings.
+ *     events & the rumor ticker); Prompt 34 adds `streetStock` (crack cooked to
+ *     the crew's corner queue — design/12 Item 5). Missing on an older v11 save
+ *     they default to empty (`normalizeState` in store/persistence.ts) —
+ *     transient world/crew data, never player cash or holdings.
  */
 export const SCHEMA_VERSION = 11 as const;
 
@@ -377,6 +378,21 @@ export interface Rumor {
 }
 
 /**
+ * The crack the crew is holding to sell on the corners (design/12 Item 5;
+ * Prompt 34). Cooking crack books its rocks here at the LOCAL crack price of the
+ * moment (`bookedUnitPrice`, a units-weighted average across cooks), and the
+ * street-sales tick (`street.ts`) drips them back as dirty cash over time. A
+ * single global pool — the crew hustles wherever they are; proceeds land in the
+ * home stash. Empty is `{ units: 0, bookedUnitPrice: 0 }`.
+ */
+export interface StreetStock {
+  /** Rocks queued for the corners (fractional internally; floored where shown). */
+  readonly units: number;
+  /** Units-weighted booked crack price the drip sells each rock at, $. */
+  readonly bookedUnitPrice: number;
+}
+
+/**
  * Peak trackers. Score banks from PEAK values the instant a run ends, so a
  * late-game wipe still records the height climbed to (design/01 §7). Lives on
  * state but is what `endgame.ts` (Prompt 11) banks to the persistent leaderboard.
@@ -411,6 +427,8 @@ export interface GameState {
   readonly marketEvents: readonly MarketEvent[];
   /** The news-ticker feed of rumors heralding events (some true, some fake). */
   readonly rumors: readonly Rumor[];
+  /** Crack the crew is holding to move on the corners (design/12 Item 5; Prompt 34). */
+  readonly streetStock: StreetStock;
   /** Safe, launderable money (design/01 §1). Dirty cash lives in `stashes`. */
   readonly cleanCash: number;
   /**
@@ -462,6 +480,11 @@ export function emptyInventory(): Inventory {
   const inv = {} as Record<ProductId, number>;
   for (const id of PRODUCT_IDS) inv[id] = 0;
   return inv;
+}
+
+/** No rocks on the corners — the run's starting (and fully-sold-through) street pool. */
+export function emptyStreetStock(): StreetStock {
+  return { units: 0, bookedUnitPrice: 0 };
 }
 
 /** A ledger with no active loan — the run's starting (and post-repayment) debt. */
@@ -573,6 +596,7 @@ export function createInitialState(
     markets: createInitialMarkets(rng.fork('market-stock'), config.markets),
     marketEvents: [],
     rumors: [],
+    streetStock: emptyStreetStock(),
     cleanCash: 0,
     plugs: [],
     reputation: { street: 0, business: 0, political: 0 },

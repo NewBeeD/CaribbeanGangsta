@@ -20,6 +20,7 @@ import {
   SCHEMA_VERSION,
   emptyDebt,
   emptyInventory,
+  emptyStreetStock,
   type Corruption,
   type CrewMember,
   type Debt,
@@ -273,14 +274,21 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
  * skips the migration chain entirely; default the transient world data to empty
  * here so nothing lands on `undefined`. Never touches player holdings.
  *  - Prompt 33: `marketEvents`, `rumors` (world price events & the rumor ticker).
+ *  - Prompt 34: `streetStock` (crack the crew is holding for the corners).
  */
 function normalizeState(state: GameState): GameState {
   const s = state as GameState & {
     marketEvents?: GameState['marketEvents'];
     rumors?: GameState['rumors'];
+    streetStock?: GameState['streetStock'];
   };
-  if (s.marketEvents && s.rumors) return state; // already current-shaped
-  return { ...state, marketEvents: s.marketEvents ?? [], rumors: s.rumors ?? [] };
+  if (s.marketEvents && s.rumors && s.streetStock) return state; // already current-shaped
+  return {
+    ...state,
+    marketEvents: s.marketEvents ?? [],
+    rumors: s.rumors ?? [],
+    streetStock: s.streetStock ?? emptyStreetStock(),
+  };
 }
 
 /**

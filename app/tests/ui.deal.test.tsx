@@ -9,6 +9,7 @@ import {
   createInitialState,
   emptyInventory,
   getRecipe,
+  recruit,
   type DealResult,
   type GameState,
   type Stash,
@@ -143,7 +144,7 @@ describe('DealScreen — the outcome is a scene, not a toast (design/05 §4)', (
 
 describe('DealScreen — the kitchen (conversions, Prompt 31; Ideas2 §4)', () => {
   it('shows the recipe config verbatim, commits through the store, and renders the scene', () => {
-    const base = createInitialState('deal-cook');
+    const base = recruit(createInitialState('deal-cook'), 'deon').state; // corners need crew
     const state: GameState = {
       ...base,
       stashes: base.stashes.map((s, i) =>
@@ -168,8 +169,11 @@ describe('DealScreen — the kitchen (conversions, Prompt 31; Ideas2 §4)', () =
     // Outcome is the recipe's scene (never a toast) and the store really cooked.
     expect(view.container.querySelector('.cg-scene')).not.toBeNull();
     expect(view.container.textContent).toContain('Baking soda');
-    const home = useGameStore.getState().state!.stashes[0]!;
-    expect(home.inventory.crack).toBe(recipe.toQty);
+    const after = useGameStore.getState().state!;
+    const home = after.stashes[0]!;
+    // The rock goes to the CREW's corners, not the stash shelf (design/12 Item 5).
+    expect(home.inventory.crack).toBe(0);
+    expect(after.streetStock.units).toBe(recipe.toQty);
     expect(home.inventory.cocaine).toBe(15 - recipe.fromQty);
     expect(home.dirtyCash).toBe(10_000 - recipe.costPerBatch);
     view.unmount();

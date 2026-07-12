@@ -200,6 +200,11 @@ import {
   SELL_RESTOCK_FRACTION,
   SCARCITY_PRICE_WEIGHT,
 } from './markets';
+import {
+  STREET_SALE_PER_CREW_PER_DAY,
+  STREET_QUEUE_PER_CREW,
+  STREET_HEAT_PER_UNIT,
+} from './street';
 import { PLUG_MEETING_HEAT } from './plugs';
 import {
   SESSION_TARGET_MIN_MINUTES,
@@ -410,6 +415,13 @@ export interface MarketsTuning {
   readonly SCARCITY_PRICE_WEIGHT: number;
 }
 
+/** Street-team crack economy (design/12 Item 5; Prompt 34). */
+export interface StreetTuning {
+  readonly STREET_SALE_PER_CREW_PER_DAY: number;
+  readonly STREET_QUEUE_PER_CREW: number;
+  readonly STREET_HEAT_PER_UNIT: number;
+}
+
 /** Plug scalars (Ideas2 §2) — per-source costs live on the country roster. */
 export interface PlugsTuning {
   readonly PLUG_MEETING_HEAT: number;
@@ -442,6 +454,7 @@ export interface GameConfig {
   readonly transport: TransportTuning;
   readonly conversions: ConversionsTuning;
   readonly markets: MarketsTuning;
+  readonly street: StreetTuning;
   readonly plugs: PlugsTuning;
   readonly onboarding: OnboardingTuning;
 }
@@ -614,6 +627,11 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     RESTOCK_PER_DAY,
     SELL_RESTOCK_FRACTION,
     SCARCITY_PRICE_WEIGHT,
+  },
+  street: {
+    STREET_SALE_PER_CREW_PER_DAY,
+    STREET_QUEUE_PER_CREW,
+    STREET_HEAT_PER_UNIT,
   },
   plugs: { PLUG_MEETING_HEAT },
   onboarding: {

@@ -14,10 +14,11 @@ import type { ConvertResult, DealResult } from '@/engine';
 import { useGameState, useGameStore } from '@/store';
 import { Button, Card, HeatDots, Panel, RiskMeter, SceneText, Stat, TrendArrow } from '@/ui/components';
 import { currentTier, tierDots } from '@/engine';
-import type { DealIntent, ProductId } from '@/engine';
+import type { DealIntent, GameState, ProductId } from '@/engine';
 import { navigate } from '@/ui/shell/useHash';
 import {
   clampQty,
+  conversionBlockedProse,
   conversionRows,
   dealStashes,
   defaultMode,
@@ -29,6 +30,7 @@ import {
   sceneFor,
   sellBustProbability,
   stashById,
+  streetStatus,
   type ConversionRow,
   type DealMode,
 } from './dealScreen.model';
@@ -346,7 +348,28 @@ export function DealScreen() {
           onDone={(convRow, convResult) => setCooked({ row: convRow, result: convResult })}
         />
       ))}
+
+      {/* The crew's corners — cooked crack dripping back as dirty cash (Item 5d). */}
+      <StreetStatusLine state={state} />
     </div>
+  );
+}
+
+/**
+ * The street-team status: what the crew is holding on the corners and roughly
+ * how much dirty cash it's dripping back per day (design/12 Item 5d). Shown only
+ * while there's product out there — otherwise the kitchen just offers the cook.
+ */
+function StreetStatusLine({ state }: { readonly state: GameState }) {
+  const street = streetStatus(state);
+  if (!street.active) return null;
+  return (
+    <Card heading="On the corners">
+      <p className="cg-label" data-testid="street-status">
+        Your crew is holding {street.units} rock{street.units === 1 ? '' : 's'} —{' '}
+        {street.perDay > 0 ? `~${money(street.perDay)}/day coming back` : 'moving it slow'}.
+      </p>
+    </Card>
   );
 }
 
@@ -421,7 +444,9 @@ function ConversionPanel({
         <small>
           {canCook
             ? `${clamped * row.fromQty} ${row.fromName.toLowerCase()} + ${money(clamped * row.costPerBatch)}`
-            : 'Not enough on hand'}
+            : row.binding
+              ? conversionBlockedProse(row.binding, row)
+              : 'Can’t run a batch right now'}
         </small>
       </Button>
     </Card>
