@@ -302,7 +302,7 @@ describe('resolveDeal — sell (fairness law, GDD §8)', () => {
     expect(result.state).toBe(state);
   });
 
-  it('a bust seizes cash + product only at the deal’s stash and spikes heat', () => {
+  it('a bust seizes only the product on the table and spikes heat (design/13 B2)', () => {
     // Two stashes: the deal targets the Miami foothold; home must be untouched.
     const start = seed(createInitialState('bust'), { heat: 50, cash: 9999 });
     const base = withStashIn(start, 'miami', {
@@ -329,11 +329,31 @@ describe('resolveDeal — sell (fairness law, GDD §8)', () => {
 
     const home = bust.state.stashes[0] as Stash;
     const seized = bust.state.stashes.find((s) => s.id === 'stash-miami')!;
-    expect(seized.dirtyCash).toBe(0); // staked cash seized
+    expect(seized.dirtyCash).toBe(5000); // stored dirty cash is UNTOUCHED (B2)
     expect(seized.inventory.cocaine).toBe(150); // 200 − 50 moved product lost
     expect(home).toEqual(homeBefore); // the other location is not touched
     expect(bust.state.heat).toBeGreaterThan(50); // heat spikes on a bust
-    expect(bust.cashDelta).toBe(-5000);
+    expect(bust.cashDelta).toBe(0); // nothing but the table walked
+  });
+
+  it('a MAJOR bust opens the disclosed investigation window (design/13 B5.5)', () => {
+    const start = seed(createInitialState('bust-invest'), { heat: 50, cash: 9999 });
+    const base = withStashIn(start, 'miami', { cash: 0, inventory: { cocaine: 200 } });
+    // 50 cocaine × heat 1.0 × bustMult 4 = a 200-point spike — far past the threshold.
+    const intent = { type: 'sell', product: 'cocaine', qty: 50, stashId: 'stash-miami' } as const;
+    let rngState = base.rngState;
+    let bust = resolveDeal(base, intent);
+    for (let i = 0; i < 1000 && bust.outcome !== 'bust'; i++) {
+      const trial: GameState = { ...base, rngState };
+      bust = resolveDeal(trial, intent);
+      rngState = bust.state.rngState;
+    }
+    expect(bust.outcome).toBe('bust');
+    expect(bust.state.investigationUntilHours).toBe(
+      bust.state.clock.hours + bust.state.config.heat.INVESTIGATION_HOURS,
+    );
+    const line = bust.state.pendingChoices.find((c) => c.kind === 'investigation');
+    expect(line?.summary).toContain('opened a file');
   });
 });
 
@@ -415,8 +435,8 @@ describe('rejections carry per-reason scene keys (design/13 A1 — never success
   });
 });
 
-describe('a bust discloses the seized dirty cash as a feed line (design/13 A6)', () => {
-  it('queues a cash-seized pending choice naming the stash and the dollars', () => {
+describe('a bust never touches stored dirty cash (design/13 B2 — Prompt 44)', () => {
+  it('leaves the stash cash in place and queues no cash-seized line', () => {
     // Force a bust exactly as the seizure test does: hot Miami, retry the roll.
     const start = seed(createInitialState('bust-feed'), { heat: 50, cash: 0 });
     const staged = withStashIn(start, 'miami', {
@@ -434,9 +454,10 @@ describe('a bust discloses the seized dirty cash as a feed line (design/13 A6)',
     }
     expect(bust.outcome).toBe('bust');
 
-    const line = bust.state.pendingChoices.find((c) => c.kind === 'cash-seized');
-    expect(line).toBeTruthy();
-    expect(line!.summary).toContain('Bust at miami');
-    expect(line!.summary).toContain('$12,400');
+    // Only the table is seized: the stored dirty cash stays; raids (storage.ts)
+    // are the ONLY path stored dirty cash is lost through now.
+    const stash = bust.state.stashes.find((s) => s.id === 'stash-miami')!;
+    expect(stash.dirtyCash).toBe(12_400);
+    expect(bust.state.pendingChoices.some((c) => c.kind === 'cash-seized')).toBe(false);
   });
 });

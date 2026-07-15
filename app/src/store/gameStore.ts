@@ -88,7 +88,13 @@ import { setLieLow } from '@/engine/heat';
 import { buyPlug as buyPlugEngine, type PlugResult } from '@/engine/plugs';
 import { convert as convertEngine, type ConvertResult } from '@/engine/conversions';
 import type { RecipeId } from '@/engine/config/conversions';
-import { ship as shipEngine, type ShipIntent, type ShipResult } from '@/engine/travel';
+import {
+  ship as shipEngine,
+  postBond as postBondEngine,
+  type PostBondResult,
+  type ShipIntent,
+  type ShipResult,
+} from '@/engine/travel';
 import {
   borrow as borrowEngine,
   repay as repayEngine,
@@ -401,6 +407,14 @@ export interface GameStore {
    * the launch lands; returns the full `ShipResult` or `null`.
    */
   shipCargo(intent: ShipIntent): ShipResult | null;
+  /**
+   * Resolve a pending self-run ARREST interrupt (design/13 B4; Prompt 44) —
+   * the bond-or-run-end choice the launch quote disclosed. `'bond'` pays the
+   * shown `arrestBond` from clean cash (+ the heat spike) and the run
+   * continues; `'surrender'` ends the run through `endCurrentRun('arrested')`
+   * — the ONE banking path — so the fall banks like any other end.
+   */
+  resolveArrest(choiceId: string, choice: 'bond' | 'surrender'): Promise<PostBondResult | RunEndResult | null>;
   /**
    * Arms trade (Prompt 35; design/12 Item 1) — each wraps the pure `arms.ts`
    * engine, commits only when the operation lands, and autosaves. The UI authors
@@ -927,6 +941,28 @@ export const useGameStore = create<GameStore>((set, get) => ({
       void get().persist(AUTOSAVE_SLOT).catch(() => {});
     }
     return result;
+  },
+
+  async resolveArrest(choiceId, choice) {
+    const { state } = get();
+    if (!state) return null;
+    if (choice === 'bond') {
+      const result = postBondEngine(state, choiceId);
+      if (result.ok) {
+        set({ state: result.state });
+        void get().persist(AUTOSAVE_SLOT).catch(() => {});
+      }
+      return result;
+    }
+    // Surrender: clear the interrupt, then end the run through the ONE banking
+    // path with the `arrested` cause (design/13 B4).
+    set({
+      state: {
+        ...state,
+        pendingChoices: state.pendingChoices.filter((c) => c.id !== choiceId),
+      },
+    });
+    return get().endCurrentRun('arrested');
   },
 
   async endCurrentRun(cause) {

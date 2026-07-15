@@ -20,6 +20,7 @@ export type { PrestigeView };
 const CAUSE_LABEL: Readonly<Record<RunEndCause, string>> = {
   killed: 'Killed',
   prison: 'Taken',
+  arrested: 'Cuffed',
   retired: 'Walked',
   abandoned: 'Walked',
 };

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ARREST_CHOICE_KIND,
   COURIER_CUT_PCT,
   COURIER_SKIM_PCT,
   CONSIGNED_BUST_HEAT_FACTOR,
@@ -288,7 +289,9 @@ describe('travelStep — the fairness law on the water (GDD §8)', () => {
       const trial: GameState = { ...launched.state, clock: dueClock, rngState };
       const resolved = travelStep(trial, 1);
       const scene = resolved.pendingChoices.at(-1);
-      if (scene?.kind === 'shipment-seized') seizures++;
+      // The fixture ships SOLO, so an interdiction presents as the arrest
+      // interrupt (design/13 B4) rather than a plain seizure scene.
+      if (scene?.kind === ARREST_CHOICE_KIND) seizures++;
       else expect(scene?.kind).toBe('shipment-arrived');
       expect(resolved.shipments).toHaveLength(0); // resolved either way
       rngState = resolved.rngState;
@@ -342,7 +345,10 @@ describe('travelStep — the fairness law on the water (GDD §8)', () => {
       for (let i = 0; i < 5_000; i++) {
         const trial: GameState = { ...launched.state, clock: dueClock, rngState };
         const resolved = travelStep(trial, 1);
-        if (resolved.pendingChoices.at(-1)?.kind === 'shipment-seized') {
+        const last = resolved.pendingChoices.at(-1)?.kind;
+        // Solo interdictions present as the arrest interrupt (design/13 B4);
+        // consigned ones keep the plain seizure scene.
+        if (last === 'shipment-seized' || last === ARREST_CHOICE_KIND) {
           // Other stashes untouched — a loss is never a wipe (design/11 §3).
           expect(home(resolved).inventory.cocaine).toBe(35);
           expect(home(resolved).dirtyCash).toBe(home(launched.state).dirtyCash);
@@ -383,7 +389,8 @@ describe('travelStep — the fairness law on the water (GDD §8)', () => {
     for (let i = 0; i < 100; i++) {
       const trial: GameState = { ...launched.state, clock: dueClock, rngState };
       const resolved = travelStep(trial, 1);
-      if (resolved.pendingChoices.at(-1)?.kind === 'shipment-seized') {
+      const last = resolved.pendingChoices.at(-1)?.kind;
+      if (last === 'shipment-seized' || last === ARREST_CHOICE_KIND) {
         rngState = resolved.rngState;
         continue;
       }

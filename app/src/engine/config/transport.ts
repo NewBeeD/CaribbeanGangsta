@@ -140,3 +140,18 @@ export const COURIER_SKIM_PCT = 0.05;
  * (solo runs carry the full spike — Ideas2 §1).
  */
 export const CONSIGNED_BUST_HEAT_FACTOR = 0.25;
+
+// --- Self-run arrest (design/13 B4; Prompt 44) ---------------------------------
+//
+// A shipment with NO courier consigned is a run YOU helmed — the launch quote
+// says so ("You're driving — if this is stopped, you're in the cuffs"). If it's
+// interdicted, you're arrested: a telegraphed, consensual interrupt — post bond
+// (a clean-cash hit scaled to net worth, plus a heat spike) or the run ends with
+// the `arrested` cause. Consigned runs never fire this (the courier takes the
+// fall — `CONSIGNED_BUST_HEAT_FACTOR` above).
+
+/** Bond = max(`net worth × this`, `ARREST_BOND_MIN`), payable from CLEAN cash. */
+export const ARREST_BOND_FRACTION = 0.15;
+export const ARREST_BOND_MIN = 25_000;
+/** Heat spike on posting bond — you walked, but they printed your name. */
+export const ARREST_BOND_HEAT = 15;

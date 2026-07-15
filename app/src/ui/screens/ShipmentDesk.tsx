@@ -254,7 +254,27 @@ export function ShipmentDesk() {
                   {quote.skimUnits > 0 ? (
                     <> · {quote.skimUnits} units will walk ({quote.courierWarnings.join(', ')})</>
                   ) : null}
+                  {quote.launchHeat > 0 ? (
+                    // Shipment heat (design/13 B5.1): the launch's own footprint,
+                    // disclosed before commit — shown = applied.
+                    <> · launch heat +{quote.launchHeat.toFixed(1)}</>
+                  ) : null}
                 </div>
+                {quote.patternOddsSurcharge > 0 ? (
+                  // Repeated patterns (design/13 B5.3): the surcharge is already
+                  // INSIDE the odds above — this line says why they're up.
+                  <p className="cg-label" data-testid="pattern-surcharge" style={{ marginTop: 6 }}>
+                    They&apos;re watching this port — running it again inside the
+                    window added +{Math.round(quote.patternOddsSurcharge * 100)}% to the odds.
+                  </p>
+                ) : null}
+                {quote.soloRun ? (
+                  // The B4 disclosure (design/13): helming the run has teeth.
+                  <p className="cg-label" data-testid="solo-arrest-risk" style={{ marginTop: 6 }}>
+                    You&apos;re driving — if this is stopped, you&apos;re in the cuffs:
+                    post bond (~{money(quote.arrestBond)} clean) or the run ends.
+                  </p>
+                ) : null}
                 <div style={{ marginTop: 12 }}>
                   {/* The label only ever carries the price — a disabled-state hint
                       renders as its OWN helper line below, never concatenated into

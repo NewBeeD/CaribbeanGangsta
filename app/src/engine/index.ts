@@ -130,6 +130,7 @@ export {
   dismissAllPendingChoices,
   rngFor,
   withRngState,
+  ARREST_CHOICE_KIND,
 } from './state';
 export type {
   GameState,
@@ -159,6 +160,7 @@ export type {
   Rumor,
   StreetStock,
   WashQueue,
+  MarkedEnforcement,
 } from './state';
 
 // Injected-time clock + per-tick pipeline (Prompt 03).
@@ -309,6 +311,9 @@ export {
   ESCORT_ODDS_REDUCTION,
   COURIER_SKIM_PCT,
   CONSIGNED_BUST_HEAT_FACTOR,
+  ARREST_BOND_FRACTION,
+  ARREST_BOND_MIN,
+  ARREST_BOND_HEAT,
 } from './config/transport';
 export type { TransportId, TransportConfig } from './config/transport';
 export {
@@ -318,6 +323,11 @@ export {
   travelStep,
   shipmentsInFlight,
   shipmentRoute,
+  launchHeat,
+  patternOddsSurcharge,
+  patternHeatSurcharge,
+  arrestBond,
+  postBond,
 } from './travel';
 export type {
   Shipment,
@@ -325,6 +335,7 @@ export type {
   ShipRejectReason,
   ShipmentQuote,
   ShipResult,
+  PostBondResult,
 } from './travel';
 
 // Plugs — true-source connections (Ideas2 §2; design/11 §2).
@@ -354,6 +365,7 @@ export {
   setLieLow,
   raidChance,
   rollRaid,
+  investigationActive,
 } from './heat';
 export type {
   LeTier,
@@ -361,6 +373,18 @@ export type {
   LieLowIntent,
   RaidEvent,
 } from './heat';
+
+// The six-source heat model (design/13 B5) — Prompt 44.
+export {
+  passiveHeatTerms,
+  passiveHeatPerHour,
+  heatSourcesStep,
+  maybeOpenInvestigation,
+  portUseKey,
+  recentUseOf,
+  bumpRecentUse,
+} from './heatSources';
+export type { PassiveHeatTerm } from './heatSources';
 export {
   HEAT_MIN,
   HEAT_MAX,
@@ -376,6 +400,23 @@ export {
   RAID_TIPOFF_MIN_CHANCE,
   RAID_BASE_RATE_PER_HOUR,
   RAID_EMPIRE_FACTOR,
+  SHIPMENT_LAUNCH_HEAT_FACTOR,
+  SHIPMENT_LANDING_HEAT_FACTOR,
+  CONCENTRATION_UNITS_THRESHOLD,
+  CONCENTRATION_HEAT_PER_UNIT_HOUR,
+  PATTERN_DECAY_PER_HOUR,
+  PATTERN_HEAT_PER_USE,
+  PATTERN_ODDS_PER_USE,
+  RAID_SURVIVED_HEAT,
+  RIVAL_CLASH_HEAT,
+  CONSPICUOUS_PURCHASE_HEAT,
+  CONSPICUOUS_FRONT_TYPES,
+  INVESTIGATION_SPIKE_THRESHOLD,
+  INVESTIGATION_HOURS,
+  INVESTIGATION_DECAY_MULTIPLIER,
+  INVESTIGATION_RAID_MULTIPLIER,
+  EMPIRE_HEAT_PER_SIZE_HOUR,
+  EMPIRE_HEAT_FREE_SIZE,
 } from './config/heat';
 export type { HeatTierConfig } from './config/heat';
 
@@ -664,11 +705,13 @@ export {
   repay,
   defaultLadder,
   debtStep,
+  enforcementStep,
   lifelineOffer,
   isDebtMarked,
   DEBT_MARKED_FLAG,
   DEBT_DEFAULT_CHOICE,
   DEBT_CLEARED_CHOICE,
+  DEBT_COLLECTOR_CHOICE,
 } from './debt';
 export type {
   LoanQuote,

@@ -194,7 +194,9 @@ export type LoyaltyEvent =
   | { readonly kind: 'tookTheFall' }
   | { readonly kind: 'protected' }
   | { readonly kind: 'confronted' }
-  | { readonly kind: 'neglected' };
+  | { readonly kind: 'neglected' }
+  /** Debt collectors leaned on them over YOUR marker (design/13 B3; Prompt 44). */
+  | { readonly kind: 'leanedOn' };
 
 /** The loyalty-model slice of `CrewTuning` the delta math reads. */
 type LoyaltyTuning = Pick<
@@ -288,6 +290,8 @@ function noteFor(npc: CrewMember, event: LoyaltyEvent): string {
       return `You confronted ${n} and cleared the air.`;
     case 'neglected':
       return `You left ${n} sitting idle while others worked.`;
+    case 'leanedOn':
+      return `Collectors leaned on ${n} over your unpaid marker.`;
   }
 }
 

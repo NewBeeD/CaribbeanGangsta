@@ -61,6 +61,22 @@ function hasLoyalBeatCop(state: GameState): boolean {
   );
 }
 
+// --- Investigation window (design/13 B5.5; Prompt 44) --------------------------
+
+/**
+ * Whether a post-major-bust INVESTIGATION window is open right now. While open,
+ * heat decays slower (`INVESTIGATION_DECAY_MULTIPLIER` in `decayHeat`) and raid
+ * chance runs `INVESTIGATION_RAID_MULTIPLIER` (in `raidChance`) — both disclosed
+ * when the window opens and itemized on the Heat screen. The clock only advances
+ * online, so the window burns ACTIVE hours only.
+ */
+export function investigationActive(state: GameState): boolean {
+  return (
+    state.investigationUntilHours !== undefined &&
+    state.clock.hours < state.investigationUntilHours
+  );
+}
+
 // --- Heat scalar -------------------------------------------------------------
 
 /**
@@ -86,8 +102,14 @@ export function decayHeat(state: GameState, dtHours: number): GameState {
   const cfg = state.config.heat;
   const lieLowMult = state.lyingLow ? cfg.LIE_LOW_DECAY_MULTIPLIER : 1;
   const copMult = hasLoyalBeatCop(state) ? cfg.PAYROLLED_COP_DECAY_MULTIPLIER : 1;
+  // An open investigation window slows the cool-down (design/13 B5.5; disclosed).
+  const investMult = investigationActive(state) ? cfg.INVESTIGATION_DECAY_MULTIPLIER : 1;
   const slowdown = 1 + empireSizeOf(state) * cfg.EMPIRE_DECAY_SLOWDOWN;
-  const rate = clamp((cfg.HEAT_DECAY_RATE_PER_HOUR * lieLowMult * copMult) / slowdown, 0, 1);
+  const rate = clamp(
+    (cfg.HEAT_DECAY_RATE_PER_HOUR * lieLowMult * copMult * investMult) / slowdown,
+    0,
+    1,
+  );
   const heat = state.heat * Math.pow(1 - rate, dtHours);
   return { ...state, heat: clamp(heat, HEAT_MIN, HEAT_MAX) };
 }
@@ -240,7 +262,9 @@ export function raidChance(state: GameState, dtHours: number): number {
     cfg.RAID_BASE_RATE_PER_HOUR[currentTier(state)] *
     (state.heat / HEAT_MAX) *
     (1 + empireSizeOf(state) * cfg.RAID_EMPIRE_FACTOR) *
-    (1 + maxVulnerability(state));
+    (1 + maxVulnerability(state)) *
+    // An open investigation window keeps them looking (design/13 B5.5; disclosed).
+    (investigationActive(state) ? cfg.INVESTIGATION_RAID_MULTIPLIER : 1);
   return clamp(1 - Math.pow(1 - clamp(perHour, 0, 1), dtHours), 0, 1);
 }
 

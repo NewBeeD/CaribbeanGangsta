@@ -20,6 +20,7 @@ import { restoreRng } from './rng';
 import { driftPrices, restockMarkets } from './deals';
 import { armsMarketStep } from './arms';
 import { applyHeatEscalation, decayHeat } from './heat';
+import { heatSourcesStep } from './heatSources';
 import { raidStep } from './storage';
 import { travelStep } from './travel';
 import { accrue } from './laundering';
@@ -28,7 +29,7 @@ import { washStep } from './wash';
 import { streetStep } from './street';
 import { crewStep } from './crew';
 import { corruptionStep } from './corruption';
-import { debtStep } from './debt';
+import { debtStep, enforcementStep } from './debt';
 import { chaosStep } from './chaos';
 import { marketEventStep } from './marketEvents';
 import { beatStep } from './beats';
@@ -107,6 +108,12 @@ export const TICK_STEPS: readonly TickStep[] = [
   // are frozen while away (GDD §6). Draws from an INDEPENDENT run-seeded stream
   // (like chaos / market events), so it never perturbs the main deal/raid RNG.
   { id: 'arms-markets', modes: ['active'], run: (s, dt) => armsMarketStep(s, dt) },
+  // The six-source model's passive heat terms — storage concentration + empire
+  // size — plus the repeated-pattern counter decay (design/13 B5; Prompt 44).
+  // Active-only: a fat stash doesn't hum while away, and a pattern doesn't cool
+  // either (GDD §6). Deterministic — never touches the RNG stream. Runs BEFORE
+  // decay so a tick's accrual and cool-down settle in a fixed order.
+  { id: 'heat-sources', modes: ['active'], run: (s, dt) => heatSourcesStep(s, dt) },
   // Heat decays over online time (design/01 §4). Prompt 05. Active-only: offline
   // is frozen, so heat neither rises nor falls while away.
   { id: 'heat-decay', modes: ['active'], run: (s, dt) => decayHeat(s, dt) },
@@ -170,6 +177,12 @@ export const TICK_STEPS: readonly TickStep[] = [
       return hours > 0 ? debtStep(s, hours) : s;
     },
   },
+  // Marked enforcement (design/13 B3; Prompt 44): while rung 5's flag is up,
+  // collector pressure escalates one TELEGRAPHED hit at a time on a visible
+  // clock — warning first, always. Active-only AND right after the debt ladder
+  // that sets the mark: no collector moves while the player is away (the Prompt
+  // 21 tested guardrail). Deterministic — no RNG.
+  { id: 'marked-enforcement', modes: ['active'], run: (s, dt) => enforcementStep(s, dt) },
   // Procedural world events — the variable-reward core (design/05 §2; design/01
   // §4.7). Prompt 12. Active-only: offline is frozen/safe, so absence never
   // triggers chaos (GDD §6). Draws from an INDEPENDENT run-seeded stream, so it

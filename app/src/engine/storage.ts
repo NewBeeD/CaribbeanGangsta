@@ -479,7 +479,15 @@ export function raidStep(state: GameState, dtHours: number): GameState {
   const raid = rollRaid(state, rng, dtHours);
   if (!raid) return { ...state, rngState: rng.getState() };
 
-  const result = resolveRaid(state, raid, rng);
+  let result = resolveRaid(state, raid, rng);
+  if (!result.seized) {
+    // Surviving a raid is a flashy, one-time heat bump (design/13 B5.4): they
+    // came, they missed, and now they're sore — the scene below discloses it.
+    result = {
+      ...result,
+      state: addHeat(result.state, state.config.heat.RAID_SURVIVED_HEAT, 'raid.survived'),
+    };
+  }
   const stash = findStash(state, raid.targetStashId);
   const where = stash?.name ?? 'a stash';
   // The loss carries its numbers (design/13 A6): seized dirty cash never reads
@@ -496,7 +504,7 @@ export function raidStep(state: GameState, dtHours: number): GameState {
     .join(' and ');
   const summary = result.seized
     ? `They raided ${where} and took what was there${taken ? ` — ${taken} seized` : ''}.`
-    : `Law enforcement hit ${where} — and came up empty.`;
+    : `Law enforcement hit ${where} — and came up empty. Word travels; the block is hotter for it.`;
   const scene: PendingChoice = {
     id: `raid-${raid.targetStashId}-${state.clock.hours}`,
     kind: 'raid',

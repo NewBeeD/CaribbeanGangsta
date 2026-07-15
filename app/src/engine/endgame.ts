@@ -273,7 +273,7 @@ export function evaluatePrestige(stats: RunStats): readonly string[] {
 
 // --- Ending a run (design/01 §7; design/07 §6 run-end) -----------------------
 
-export type RunEndCause = 'killed' | 'prison' | 'retired' | 'abandoned';
+export type RunEndCause = 'killed' | 'prison' | 'arrested' | 'retired' | 'abandoned';
 
 /** The run-recap tally shown at the end — a fall, then the numbers that dare the next run. */
 export interface RunRecap {
@@ -304,9 +304,14 @@ export interface RunEndResult {
 
 /** Map an end cause onto the persisted `RunStatus`. Abandoning banks like a
  * retirement — the player chose to reset; that choice costs nothing (design/12
- * Item 2; the retire guarantee, design/01 §7). */
+ * Item 2; the retire guarantee, design/01 §7). An arrest (design/13 B4 — a
+ * self-run interdiction with no bond posted) lands you inside like `prison`. */
 function statusForCause(cause: RunEndCause): RunStatus {
-  return cause === 'killed' ? 'dead' : cause === 'prison' ? 'prison' : 'retired';
+  return cause === 'killed'
+    ? 'dead'
+    : cause === 'prison' || cause === 'arrested'
+      ? 'prison'
+      : 'retired';
 }
 
 /**

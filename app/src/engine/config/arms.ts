@@ -142,14 +142,10 @@ export const ARMS_SCARCITY_PRICE_WEIGHT = 0.15;
 
 // --- Heat & seizure (the heaviest-risk market — design/12 Item 1) -------------
 
-/** Fraction of a unit's move heat that a BUY carries (a sale carries the full
- * `heatPerUnit`; a buy is quieter, like the drug loop's `BUY_HEAT_FACTOR`). */
-export const ARMS_BUY_HEAT_FACTOR = 0.5;
-
-/** Selling into a CONFLICT SPIKE (an up-event covering the market) adds bonus
- * heat = `qty × tier.heatPerUnit × this` — the risk/reward the player asked for
- * (design/12 Item 1: war-zone money is loud money). */
-export const ARMS_CONFLICT_HEAT_MULT = 0.5;
+// ARMS_BUY_HEAT_FACTOR and ARMS_CONFLICT_HEAT_MULT are GONE (design/13 B1;
+// Prompt 44): transacting arms cleanly adds zero heat, the same law as the drug
+// loop. Heat lands on the BUST (`ARMS_BUST_HEAT_MULT` below) and through the
+// six-source model in config/heat.ts. The v14→v15 migration drops the knobs.
 
 // --- Bust probability on an arms sale (its own model, arms are riskier) -------
 // Same fairness law as the drug loop (design/01 §0.3): the number shown is the

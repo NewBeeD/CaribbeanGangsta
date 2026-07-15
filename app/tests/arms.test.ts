@@ -74,7 +74,7 @@ describe('arms broker — the money gate (design/12 Item 1; Prompt 35)', () => {
 });
 
 describe('arms trade — buy / sell / stock', () => {
-  it('buys arms into the armory, off the street, paying cash + the heaviest heat', () => {
+  it('buys arms into the armory, off the street, paying cash — and ZERO heat (design/13 B1)', () => {
     const s = armed('buy');
     const country = homeId(s);
     const before = getArmsPrice(s, 'pistols', country);
@@ -82,7 +82,7 @@ describe('arms trade — buy / sell / stock', () => {
     expect(r.outcome).toBe('success');
     expect(r.state.armory.pistols).toBe(10);
     expect(getArmsPrice(r.state, 'pistols', country).stock).toBe(before.stock - 10);
-    expect(r.state.heat).toBeGreaterThan(s.heat);
+    expect(r.state.heat).toBe(s.heat); // transacting cleanly is COLD now (B1)
     expect(r.cashDelta).toBe(-before.price * 10);
   });
 
@@ -179,7 +179,7 @@ describe('arms tiers, geography & conflict pricing', () => {
     expect(priced.price).toBeGreaterThan(calm);
   });
 
-  it('selling into a conflict spike adds bonus heat over a calm sale', () => {
+  it('a clean sale adds ZERO heat, even into a conflict spike (design/13 B1)', () => {
     const stock = resolveArmsDeal(armed('spike-heat'), {
       type: 'buyArms',
       tier: 'automatic',
@@ -202,10 +202,10 @@ describe('arms tiers, geography & conflict pricing', () => {
 
     const calmSale = resolveArmsDeal(stock, { type: 'sellArms', tier: 'automatic', qty: 3, countryId: country });
     const warSale = resolveArmsDeal(spiked, { type: 'sellArms', tier: 'automatic', qty: 3, countryId: country });
-    // Compare only when neither busts (heat deltas are otherwise incomparable).
-    if (calmSale.outcome === 'success' && warSale.outcome === 'success') {
-      expect(warSale.state.heat - stock.heat).toBeGreaterThan(calmSale.state.heat - stock.heat);
-    }
+    // Transacting cleanly is COLD (B1) — war-zone money included. Only a BUST heats.
+    if (calmSale.outcome === 'success') expect(calmSale.state.heat).toBe(stock.heat);
+    if (warSale.outcome === 'success') expect(warSale.state.heat).toBe(stock.heat);
+    if (calmSale.outcome === 'bust') expect(calmSale.state.heat).toBeGreaterThan(stock.heat);
   });
 });
 

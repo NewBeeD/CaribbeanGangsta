@@ -231,6 +231,25 @@ export const CEILING_MAX_RUNG: Readonly<Record<ConsequenceCeiling, LadderRung>> 
  */
 export const LADDER_DAYS_PER_RUNG = 1;
 
+// --- Marked enforcement (design/13 B3; Prompt 44) -----------------------------
+//
+// Rung 5 sets `DEBT_MARKED_FLAG` — and being marked now MEANS something: while
+// the flag is up, telegraphed collector pressure escalates one hit at a time on
+// a visible clock (warning card first, every hit preceded by its warning).
+// Repaying to zero clears the mark and the pressure instantly. ACTIVE-only —
+// no collector moves while the player is away (the Prompt 21 tested guardrail).
+
+/** ACTIVE in-game hours between collector moves — the visible clock. */
+export const MARKED_ENFORCEMENT_PERIOD_HOURS = 24;
+
+/** Fraction of the fattest stash's dirty cash a collector hit takes (hit 1, and
+ * the fallback whenever a later hit finds nothing else to squeeze). */
+export const MARKED_CASH_CUT = 0.25;
+
+/** The loyalty event kind applied when collectors lean on a crew member (hit 3)
+ * — routed through `loyaltyDelta`, so it writes memory like every shift. */
+export const MARKED_CREW_LEAN_EVENT = 'leanedOn' as const;
+
 // --- Lifeline (design/10 §1; Prompt 11 hook) ---------------------------------
 
 /**

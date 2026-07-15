@@ -168,7 +168,13 @@ function applyEffect(state: GameState, effect: ChaosEffect): GameState {
     case 'heat-surge':
       return addHeat(state, effect.amount, 'chaos');
     case 'rival-tension':
-      return applyRivalTension(state, effect.amount);
+      // A rival conflict flaring is flashy (design/13 B5.4): turf noise draws a
+      // one-time config'd heat bump alongside the tension itself.
+      return addHeat(
+        applyRivalTension(state, effect.amount),
+        state.config.heat.RIVAL_CLASH_HEAT,
+        'rival.clash',
+      );
     case 'windfall-cash':
       return { ...state, cleanCash: state.cleanCash + effect.amount };
   }

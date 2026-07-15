@@ -43,6 +43,14 @@ import { getMarketPrice } from './deals';
 import { effectiveCapacity } from './storage';
 import { addHeat } from './heat';
 import {
+  bumpRecentUse,
+  maybeOpenInvestigation,
+  portUseKey,
+  recentUseOf,
+} from './heatSources';
+import {
+  ARREST_CHOICE_KIND,
+  netWorth,
   splitCharge,
   type CrewMember,
   type GameState,
@@ -182,11 +190,111 @@ export function interdictionChance(state: GameState, intent: ShipIntent): number
     cargoHeatN * T.CARGO_HEAT_WEIGHT +
     toCountry.risk * T.DEST_RISK_WEIGHT -
     toCountry.portProtectionBaseline * T.PORT_PROTECTION_WEIGHT -
-    (paid ? T.PAID_PORT_RELIEF : 0);
+    (paid ? T.PAID_PORT_RELIEF : 0) +
+    // Repeated patterns (design/13 B5.3): re-running the same origin port inside
+    // the decay window adds a DISCLOSED odds surcharge — it lands here, INSIDE
+    // the number the quote shows and arrival rolls (shown = rolled).
+    patternOddsSurcharge(state, intent);
 
   const clamped = clamp(raw, T.INTERDICTION_MIN, T.INTERDICTION_MAX);
   const escorts = Math.max(0, (intent.courierIds?.length ?? 0) - 1);
   return clamped * Math.pow(1 - T.ESCORT_ODDS_REDUCTION, escorts);
+}
+
+// --- Shipment heat & pattern surcharges (design/13 B5.1/B5.3; Prompt 44) -------
+
+/** The extra interdiction odds from recent reuse of the origin port (disclosed). */
+export function patternOddsSurcharge(state: GameState, intent: ShipIntent): number {
+  const from = findStash(state, intent.fromStashId);
+  if (!from) return 0;
+  return (
+    recentUseOf(state, portUseKey(from.countryId)) * state.config.heat.PATTERN_ODDS_PER_USE
+  );
+}
+
+/** The extra launch heat from recent reuse of the origin port (disclosed). */
+export function patternHeatSurcharge(state: GameState, intent: ShipIntent): number {
+  const from = findStash(state, intent.fromStashId);
+  if (!from) return 0;
+  return (
+    recentUseOf(state, portUseKey(from.countryId)) * state.config.heat.PATTERN_HEAT_PER_USE
+  );
+}
+
+/**
+ * The heat one LEG END adds (design/13 B5.1): `cargo heat class × qty ×
+ * displayed odds × factor` — the interdiction quote's own inputs, so big moves
+ * on hot corridors run hot even when they succeed. `factor` is the launch or
+ * landing knob; the launch side also carries the pattern surcharge.
+ */
+function shipmentLegHeat(
+  state: GameState,
+  product: ProductId,
+  qty: number,
+  odds: number,
+  factor: number,
+): number {
+  const cargoHeat = getProduct(product, state.config.products.PRODUCTS).heatPerUnit * qty;
+  return cargoHeat * odds * factor;
+}
+
+/** The full heat a LAUNCH applies (disclosed on the quote before commit). */
+export function launchHeat(state: GameState, intent: ShipIntent): number {
+  const odds = interdictionChance(state, intent);
+  return (
+    shipmentLegHeat(
+      state,
+      intent.product,
+      intent.qty,
+      odds,
+      state.config.heat.SHIPMENT_LAUNCH_HEAT_FACTOR,
+    ) + patternHeatSurcharge(state, intent)
+  );
+}
+
+// --- Self-run arrest (design/13 B4; Prompt 44) ----------------------------------
+
+/**
+ * The bond price an arrest demands right now: `max(net worth × fraction, floor)`,
+ * payable from CLEAN cash. Shown BEFORE the player chooses (and disclosed on the
+ * launch quote as the risk of driving yourself) — never a surprise number.
+ */
+export function arrestBond(state: GameState): number {
+  const T = state.config.transport;
+  return Math.round(Math.max(netWorth(state) * T.ARREST_BOND_FRACTION, T.ARREST_BOND_MIN));
+}
+
+export interface PostBondResult {
+  readonly state: GameState;
+  readonly ok: boolean;
+  /** What was charged (the disclosed bond). 0 on rejection. */
+  readonly paid: number;
+  readonly rejected?: 'no-arrest' | 'insufficient-funds';
+}
+
+/**
+ * Post bond on a pending arrest (design/13 B4): pay `arrestBond` from CLEAN
+ * cash, take the disclosed heat spike, and clear the arrest interrupt — the run
+ * continues. Rejects without mutating when the choice isn't a pending arrest or
+ * clean cash can't cover the bond (the other exit is `endRun('arrested')`,
+ * dispatched by the store — this module never ends a run itself).
+ */
+export function postBond(state: GameState, choiceId: string): PostBondResult {
+  const choice = state.pendingChoices.find((c) => c.id === choiceId);
+  if (!choice || choice.kind !== ARREST_CHOICE_KIND) {
+    return { state, ok: false, paid: 0, rejected: 'no-arrest' };
+  }
+  const bond = arrestBond(state);
+  if (state.cleanCash < bond) {
+    return { state, ok: false, paid: 0, rejected: 'insufficient-funds' };
+  }
+  let next: GameState = {
+    ...state,
+    cleanCash: state.cleanCash - bond,
+    pendingChoices: state.pendingChoices.filter((c) => c.id !== choiceId),
+  };
+  next = addHeat(next, state.config.transport.ARREST_BOND_HEAT, 'arrest.bond');
+  return { state: next, ok: true, paid: bond };
 }
 
 // --- The quote (everything disclosed before commit) ---------------------------
@@ -216,6 +324,17 @@ export interface ShipmentQuote {
   readonly skimUnits: number;
   /** Names of couriers currently mid-betrayal-arc (the readable warning). */
   readonly courierWarnings: readonly string[];
+  /** Heat the LAUNCH applies — volume × route risk + any pattern surcharge
+   * (design/13 B5.1/B5.3; disclosed before commit, shown = applied). */
+  readonly launchHeat: number;
+  /** The odds surcharge from recent reuse of this origin port (design/13 B5.3
+   * — already inside `interdictionChance`; broken out so the quote can say WHY). */
+  readonly patternOddsSurcharge: number;
+  /** True when no courier is consigned — YOU are driving, and an interdiction
+   * means arrest: post bond or the run ends (design/13 B4; disclosed here). */
+  readonly soloRun: boolean;
+  /** The bond an arrest would demand right now (the disclosed downside). */
+  readonly arrestBond: number;
 }
 
 function validate(state: GameState, intent: ShipIntent): ShipRejectReason | null {
@@ -271,6 +390,10 @@ export function quoteShipment(state: GameState, intent: ShipIntent): ShipmentQuo
       cargoValue: 0,
       skimUnits: 0,
       courierWarnings: [],
+      launchHeat: 0,
+      patternOddsSurcharge: 0,
+      soloRun: (intent.courierIds ?? []).length === 0,
+      arrestBond: arrestBond(state),
     };
   }
 
@@ -304,6 +427,10 @@ export function quoteShipment(state: GameState, intent: ShipIntent): ShipmentQuo
     cargoValue,
     skimUnits,
     courierWarnings: warned.map((c) => c.name),
+    launchHeat: launchHeat(state, intent),
+    patternOddsSurcharge: patternOddsSurcharge(state, intent),
+    soloRun: couriers.length === 0 && (intent.courierIds ?? []).length === 0,
+    arrestBond: arrestBond(state),
   };
 }
 
@@ -367,6 +494,12 @@ export function ship(state: GameState, intent: ShipIntent): ShipResult {
         : c,
     ),
   };
+  // Shipment volume & route risk (design/13 B5.1): the launch heat the quote
+  // disclosed lands now — big moves on hot corridors run hot even when they
+  // succeed. Then the origin port's pattern counter bumps (B5.3), so the NEXT
+  // run from here quotes the surcharge this one just previewed.
+  if (quote.launchHeat > 0) next = addHeat(next, quote.launchHeat, 'shipment.launch');
+  next = bumpRecentUse(next, portUseKey(from.countryId));
 
   return { state: next, ok: true, quote, shipment };
 }
@@ -425,6 +558,16 @@ function deliverShipment(state: GameState, shipment: Shipment): GameState {
   let next = withStash(state, nextTo);
   next = { ...next, shipments: next.shipments.filter((s) => s.id !== shipment.id) };
   next = freeCouriers(next, shipment);
+  // Landing heat (design/13 B5.1): the other half of the shipment's footprint,
+  // scaled by the SAME snapshotted odds the quote showed — success still hums.
+  const landing = shipmentLegHeat(
+    next,
+    shipment.product,
+    shipment.qty,
+    shipment.interdictionChance,
+    next.config.heat.SHIPMENT_LANDING_HEAT_FACTOR,
+  );
+  if (landing > 0) next = addHeat(next, landing, 'shipment.landed');
   const skimNote =
     shipment.skimUnits > 0 ? ` The count came up ${shipment.skimUnits} short.` : '';
   return queueScene(
@@ -464,9 +607,22 @@ function resolveShipment(
     };
     next = freeCouriers(next, shipment);
     next = addHeat(next, spike, 'shipment.seized');
-    const summary = solo
-      ? `They were waiting on the water. The ${modeName} was boarded and the load is gone — and they know your face now.`
-      : `The ${modeName} got boarded en route${destName ? ` to ${destName}` : ''}. Your people walked, but the load is gone.`;
+    // A MAJOR seizure opens the disclosed investigation window (design/13 B5.5).
+    next = maybeOpenInvestigation(next, spike);
+    if (solo) {
+      // YOU were driving (design/13 B4) — the launch quote said what this means.
+      // The arrest presents as a consequential interrupt: post the disclosed
+      // bond (travel.postBond) or the run ends `arrested` (the store's call —
+      // this tick step never ends a run; GDD §8).
+      const arrest: PendingChoice = {
+        id: `arrest-${shipment.id}`,
+        kind: ARREST_CHOICE_KIND,
+        summary: `They boarded the ${modeName} with you at the helm. You're in the cuffs — post bond or the run ends here.`,
+        createdAtHours: next.clock.hours,
+      };
+      return { ...next, pendingChoices: [...next.pendingChoices, arrest] };
+    }
+    const summary = `The ${modeName} got boarded en route${destName ? ` to ${destName}` : ''}. Your people walked, but the load is gone.`;
     return queueScene(next, `shipment-seized-${shipment.id}`, 'shipment-seized', summary);
   }
 

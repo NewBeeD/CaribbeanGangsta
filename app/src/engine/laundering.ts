@@ -358,10 +358,17 @@ export function buyFront(state: GameState, type: FrontType): FrontResult {
     return { state, front: null, rejected: 'insufficient-funds' };
   }
   const front: Front = { id: `front-${type}`, type, level: 1 };
-  return {
-    state: { ...state, cleanCash: state.cleanCash - cfg.buyIn, fronts: [...state.fronts, front] },
-    front,
+  let next: GameState = {
+    ...state,
+    cleanCash: state.cleanCash - cfg.buyIn,
+    fronts: [...state.fronts, front],
   };
+  // A conspicuous purchase — the real-estate class (and owned vessels, when they
+  // land) — is a flashy one-time heat bump (design/13 B5.4): loud money.
+  if (state.config.heat.CONSPICUOUS_FRONT_TYPES.includes(type)) {
+    next = addHeat(next, state.config.heat.CONSPICUOUS_PURCHASE_HEAT, 'conspicuous.purchase');
+  }
+  return { state: next, front };
 }
 
 /**

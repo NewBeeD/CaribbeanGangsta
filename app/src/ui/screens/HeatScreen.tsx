@@ -20,10 +20,12 @@ import { Button, Card, HeatDots, Panel, SceneText } from '@/ui/components';
 import { navigate } from '@/ui/shell/useHash';
 import {
   beatCopRelief,
+  heatSourceRows,
   heatStatus,
   heatWarnings,
   lieLowLever,
   raidTipoff,
+  totalPassiveHeatPerHour,
 } from './heatScreen.model';
 
 export function HeatScreen() {
@@ -37,6 +39,8 @@ export function HeatScreen() {
   const tipoff = raidTipoff(state);
   const lieLow = lieLowLever(state);
   const copRelief = beatCopRelief(state);
+  const sources = heatSourceRows(state);
+  const passivePerHour = totalPassiveHeatPerHour(state);
 
   const setLieLow = (enabled: boolean) => useGameStore.getState().setLieLow(enabled);
 
@@ -91,6 +95,35 @@ export function HeatScreen() {
           </div>
         </Card>
       ) : null}
+
+      {/* Why is my heat rising — every active source itemized, shown = applied
+          (design/13 B5; Prompt 44). Quiet operations show the quiet line. */}
+      <Card heading="Why your heat is rising">
+        {sources.length === 0 ? (
+          <p className="cg-label" data-testid="heat-sources-quiet">
+            Nothing is drawing attention right now. Busts, big shipments, fat
+            stashes, reused routes, and a growing empire all raise it.
+          </p>
+        ) : (
+          <ul style={{ display: 'grid', gap: 6, margin: 0, padding: 0, listStyle: 'none' }}>
+            {sources.map((row) => (
+              <li key={row.id} className="cg-label" data-testid="heat-source-row">
+                {row.label}
+                {row.perHour !== undefined ? (
+                  <strong style={{ marginLeft: 6 }}>
+                    +{row.perHour.toFixed(2)}/hr
+                  </strong>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+        {passivePerHour > 0 ? (
+          <p className="cg-label" style={{ marginTop: 10 }} data-testid="heat-sources-total">
+            Passive total: +{passivePerHour.toFixed(2)} heat per played hour.
+          </p>
+        ) : null}
+      </Card>
 
       {/* Payroll raid tip-off — lead time to move product (design/07 §5). */}
       {tipoff ? (

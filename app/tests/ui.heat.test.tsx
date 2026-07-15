@@ -170,3 +170,38 @@ describe('HeatScreen — the reduce-heat levers (Prompt 19)', () => {
     view.unmount();
   });
 });
+
+describe('HeatScreen — "why your heat is rising" itemization (design/13 B5; Prompt 44)', () => {
+  it('shows the quiet line when nothing is drawing attention', () => {
+    useGameStore.setState({ state: runAtHeat('heat-quiet-src', 20) });
+    const view = mount(<HeatScreen />);
+    expect(view.container.querySelector('[data-testid="heat-sources-quiet"]')).not.toBeNull();
+    view.unmount();
+  });
+
+  it('itemizes each active source and totals the applied per-hour sum (shown = applied)', () => {
+    const base = runAtHeat('heat-src-ui', 20);
+    const threshold = base.config.heat.CONCENTRATION_UNITS_THRESHOLD;
+    const home = base.stashes[0]!;
+    const fat: GameState = {
+      ...base,
+      investigationUntilHours: base.clock.hours + 48,
+      stashes: [
+        { ...home, inventory: { ...home.inventory, cocaine: threshold + 100 } },
+        ...base.stashes.slice(1),
+      ],
+    };
+    useGameStore.setState({ state: fat });
+    const view = mount(<HeatScreen />);
+
+    const rows = [...view.container.querySelectorAll('[data-testid="heat-source-row"]')];
+    const labels = rows.map((r) => r.textContent ?? '');
+    expect(labels.some((l) => l.includes('Fat stash'))).toBe(true);
+    expect(labels.some((l) => l.includes('Open investigation'))).toBe(true);
+    // The total line carries the engine's own summed rate — the tick applies it.
+    expect(
+      view.container.querySelector('[data-testid="heat-sources-total"]')?.textContent,
+    ).toContain('per played hour');
+    view.unmount();
+  });
+});

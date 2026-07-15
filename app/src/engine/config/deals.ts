@@ -26,8 +26,9 @@ export const BUST_CREW_WEIGHT = 0.15;
 /** Quantity at which the size term saturates its weight. */
 export const BUST_QTY_FULL_RISK = 100;
 
-/** Buying is quieter than selling: buy heat is scaled down from the per-unit rate. */
-export const BUY_HEAT_FACTOR = 0.5;
+// BUY_HEAT_FACTOR is GONE (design/13 B1; Prompt 44): transacting itself is no
+// longer hot — heat comes from getting caught (busts, interdictions) and from
+// the six-source model in config/heat.ts. The v14→v15 migration drops the knob.
 
 /**
  * Legacy per-stash unit cap. Real capacity is per-archetype (Prompt 06:

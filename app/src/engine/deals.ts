@@ -46,13 +46,13 @@ import { HEAT_MAX } from './config/heat';
 import { DEFAULT_GAME_CONFIG, type MarketsTuning } from './config';
 import { basePriceAt } from './world';
 import { addHeat } from './heat';
+import { maybeOpenInvestigation } from './heatSources';
 import { effectiveCapacity } from './storage';
 import {
   splitCharge,
   type GameState,
   type Inventory,
   type MarketEvent,
-  type PendingChoice,
   type Stash,
 } from './state';
 
@@ -522,13 +522,13 @@ function resolveBuy(state: GameState, intent: BuyIntent): DealResult {
     dirtyCash: stash.dirtyCash - charge.fromDirty,
     inventory: adjustInventory(stash.inventory, product, qty),
   };
-  const cfg = getProduct(product, state.config.products.PRODUCTS);
   let next = withStash(state, nextStash);
   next = { ...next, cleanCash: next.cleanCash - charge.fromClean };
   // The units came OFF the street (design/12 Item 10).
   const pool = marketStateFor(state, countryId, product).stock;
   next = withMarketStock(next, countryId, product, Math.max(0, pool - qty));
-  next = addHeat(next, cfg.heatPerUnit * qty * state.config.deals.BUY_HEAT_FACTOR, 'deal.buy');
+  // A clean buy adds ZERO heat (design/13 B1; Prompt 44): heat comes from
+  // getting caught, never from transacting — the six-source model replaces it.
   next = bankPeaks(next);
 
   return {
@@ -564,35 +564,25 @@ function resolveSell(state: GameState, intent: SellIntent): DealResult {
   const rolled = { ...state, rngState: rng.getState() };
 
   if (busted) {
-    // Seizure hits only THIS stash: lose the product moved + the staked (dirty)
-    // cash held here; other stashes are untouched (design/07 §1).
-    const seizedCash = stash.dirtyCash;
+    // The bust seizes THE TABLE, not the stash (design/13 B2; Prompt 44): only
+    // the product being moved is lost. Stored dirty cash stays where it sits —
+    // a raid on the stash (`heat.ts` → `storage.ts`) is the ONLY way it's taken.
     const bustedStash: Stash = {
       ...stash,
-      dirtyCash: 0,
       inventory: adjustInventory(stash.inventory, product, -qty),
     };
     let next = withStash(rolled, bustedStash);
-    next = addHeat(next, cfg.heatPerUnit * qty * cfg.bustHeatMultiplier, 'deal.bust');
-    // No silent cash movement (design/13 A6): the seized dirty cash gets a feed
-    // line with its number, so the loss never reads as money vanishing. (The
-    // bust-seizure MODEL — stop zeroing stored cash — is Prompt 44.)
-    if (seizedCash > 0) {
-      const line: PendingChoice = {
-        id: `cash-seized-${stash.id}-${state.clock.hours}`,
-        kind: 'cash-seized',
-        summary: `Bust at ${stash.name} — $${Math.round(seizedCash).toLocaleString('en-US')} dirty seized with the product.`,
-        createdAtHours: state.clock.hours,
-      };
-      next = { ...next, pendingChoices: [...next.pendingChoices, line] };
-    }
+    const spike = cfg.heatPerUnit * qty * cfg.bustHeatMultiplier;
+    next = addHeat(next, spike, 'deal.bust');
+    // A MAJOR bust opens the disclosed investigation window (design/13 B5.5).
+    next = maybeOpenInvestigation(next, spike);
     next = bankPeaks(next);
     return {
       state: next,
       outcome: 'bust',
       displayedBustProb,
       rolledValue,
-      cashDelta: -seizedCash,
+      cashDelta: 0,
       sceneKey: 'deal.sell.bust',
     };
   }
@@ -613,7 +603,8 @@ function resolveSell(state: GameState, intent: SellIntent): DealResult {
     product,
     Math.min(cap, pool + qty * state.config.markets.SELL_RESTOCK_FRACTION),
   );
-  next = addHeat(next, cfg.heatPerUnit * qty, 'deal.sell');
+  // A clean sale adds ZERO heat (design/13 B1; Prompt 44) — only the bust above
+  // spikes the meter; the six-source model carries the pressure instead.
   next = { ...next, flags: { ...next.flags, [DEAL_WIN_FLAG]: true } };
   next = bankPeaks(next);
   return {

@@ -44,6 +44,7 @@ import { marketEventMultiplier, type MarketState } from './deals';
 import { eventCoversCountry } from './marketEvents';
 import { hasCustomsProtection } from './corruption';
 import { addHeat } from './heat';
+import { maybeOpenInvestigation } from './heatSources';
 import { splitCharge, type GameState, type Stash } from './state';
 
 // --- Types (arms reuse the drug market's live shape) --------------------------
@@ -424,16 +425,12 @@ function resolveBuyArms(state: GameState, intent: BuyArmsIntent): ArmsDealResult
   const charge = splitCharge(state, home, cost);
   if (!charge) return rejectArms(state, 'insufficient-funds');
 
-  const tierCfg = getWeaponTier(tier, state.config.arms.WEAPON_TIERS);
   let next = withHomeDirty(state, home.dirtyCash - charge.fromDirty);
   next = { ...next, cleanCash: next.cleanCash - charge.fromClean };
   next = withArmory(next, tier, (state.armory[tier] ?? 0) + qty);
   next = withArmsStock(next, countryId, tier, Math.max(0, price.stock - qty));
-  next = addHeat(
-    next,
-    tierCfg.heatPerUnit * qty * state.config.arms.ARMS_BUY_HEAT_FACTOR,
-    'arms.buy',
-  );
+  // A clean arms buy adds ZERO heat (design/13 B1; Prompt 44) — same law as the
+  // drug loop: heat comes from getting caught, never from transacting.
 
   return {
     state: next,
@@ -466,16 +463,20 @@ function resolveSellArms(state: GameState, intent: SellArmsIntent): ArmsDealResu
   const rolled = { ...state, rngState: rng.getState() };
 
   if (busted) {
-    // Seizure: lose the arms moved + the home stash's staked (dirty) cash.
+    // The bust seizes THE TABLE only (design/13 B2; Prompt 44): the arms being
+    // moved are lost; the home stash's stored dirty cash stays — a raid is the
+    // ONLY way stored cash is taken.
     let next = withArmory(rolled, tier, (state.armory[tier] ?? 0) - qty);
-    next = withHomeDirty(next, 0);
-    next = addHeat(next, tierCfg.heatPerUnit * qty * a.ARMS_BUST_HEAT_MULT, 'arms.bust');
+    const spike = tierCfg.heatPerUnit * qty * a.ARMS_BUST_HEAT_MULT;
+    next = addHeat(next, spike, 'arms.bust');
+    // A MAJOR arms bust opens the disclosed investigation window (design/13 B5.5).
+    next = maybeOpenInvestigation(next, spike);
     return {
       state: next,
       outcome: 'bust',
       displayedBustProb,
       rolledValue,
-      cashDelta: -home.dirtyCash,
+      cashDelta: 0,
       sceneKey: 'arms.sell.bust',
     };
   }
@@ -486,10 +487,8 @@ function resolveSellArms(state: GameState, intent: SellArmsIntent): ArmsDealResu
   const cap = armsStockCap(countryId, a);
   const pool = armsMarketFor(state, countryId, tier)?.stock ?? 0;
   next = withArmsStock(next, countryId, tier, Math.min(cap, pool + qty * a.ARMS_SELL_RESTOCK_FRACTION));
-  let heat = tierCfg.heatPerUnit * qty;
-  // Selling into a conflict spike is loud money (design/12 Item 1).
-  if (price.conflict) heat += tierCfg.heatPerUnit * qty * a.ARMS_CONFLICT_HEAT_MULT;
-  next = addHeat(next, heat, 'arms.sell');
+  // A clean arms sale adds ZERO heat (design/13 B1; Prompt 44) — the bust above
+  // is the spike; conflict-zone risk lives in the bust odds, not a success tax.
   next = bankArmsPeaks(next);
 
   return {

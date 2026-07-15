@@ -41,6 +41,7 @@ import {
   type LenderConfig,
   type LenderId,
 } from './config/lenders';
+import { loyaltyDelta } from './crew';
 import {
   debtOwed,
   emptyDebt,
@@ -48,6 +49,7 @@ import {
   type Debt,
   type Front,
   type GameState,
+  type MarkedEnforcement,
   type PendingChoice,
   type Stash,
 } from './state';
@@ -302,10 +304,14 @@ export function repay(state: GameState, amount: number): RepayResult {
     const onTime = state.debt.ladderRung === 0 && state.clock.day <= state.debt.dueDay;
     const repBonus = L.DEBT_REPAY_REP_BONUS + (onTime ? L.DEBT_ONTIME_REP_BONUS : 0);
     const cfg = findLender(state.debt.lenderId, L.LENDERS);
+    // The balance hitting zero clears the MARK and the collector pressure
+    // INSTANTLY (design/13 B3) — the enforcement clock never outlives the debt.
+    const { enforcement: _pressure, ...rest } = state;
     const cleared: GameState = {
-      ...state,
+      ...rest,
       cleanCash: clean,
       debt: emptyDebt(),
+      flags: { ...state.flags, [DEBT_MARKED_FLAG]: false },
       reputation: { ...state.reputation, street: state.reputation.street + repBonus },
       pendingChoices: [
         ...state.pendingChoices,
@@ -541,6 +547,150 @@ export function debtStep(state: GameState, dtHours: number): GameState {
     next = { ...defaultLadder(next, rng), rngState: rng.getState() };
   }
   return next;
+}
+
+// --- Marked enforcement (design/13 B3; Prompt 44) ------------------------------
+//
+// Rung 5's `DEBT_MARKED_FLAG` now MEANS something: while marked, collector
+// pressure escalates one telegraphed hit at a time on a visible clock — the
+// warning card first, then: seize dirty cash from the fattest stash → jump an
+// in-flight shipment → lean on a crew member — every hit preceded by its
+// warning, every rate/size in config/lenders.ts. Repaying to zero clears the
+// mark and the pressure instantly (`repay` above). Registered ACTIVE-only in
+// clock.ts, so no collector moves while the player is away (the Prompt 21
+// tested guardrail holds verbatim). Deterministic — no RNG: the fattest stash
+// (ties to the first), the oldest shipment, the most-loyal crew member.
+
+/** The beat kind of every collector warning/hit line (the Money-feed scenes). */
+export const DEBT_COLLECTOR_CHOICE = 'debt-collectors';
+
+/** What the NEXT collector move will be — the warning each hit is preceded by. */
+function collectorWarning(state: GameState, stage: number, atHours: number): string {
+  const inHours = Math.max(0, Math.round(atHours - state.clock.hours));
+  const move =
+    stage === 0
+      ? `they take a cut of the cash at ${fattestStash(state)?.name ?? 'your stash'}`
+      : stage === 1
+        ? 'they jump one of your loads in transit'
+        : stage === 2
+          ? 'they lean on one of your people'
+          : 'they take another cut of your cash';
+  return `You're marked. Pay up, or in ${inHours} played hours ${move}.`;
+}
+
+/** The fattest stash by dirty cash (ties to the first) — the collectors' target. */
+function fattestStash(state: GameState): Stash | null {
+  if (state.stashes.length === 0) return null;
+  return state.stashes.reduce((top, s) => (s.dirtyCash > top.dirtyCash ? s : top));
+}
+
+/** Hit: take `MARKED_CASH_CUT` of the fattest stash's dirty cash. */
+function collectorCashHit(state: GameState): { state: GameState; note: string } {
+  const target = fattestStash(state);
+  const taken = target ? Math.round(target.dirtyCash * state.config.lenders.MARKED_CASH_CUT) : 0;
+  if (!target || taken <= 0) {
+    return { state, note: 'Collectors tossed your spots and found nothing worth taking — this time.' };
+  }
+  const cut: Stash = { ...target, dirtyCash: target.dirtyCash - taken };
+  return {
+    state: { ...state, stashes: state.stashes.map((s) => (s.id === cut.id ? cut : s)) },
+    note: `Collectors hit ${target.name} — ${dollars(taken)} dirty gone against what you owe.`,
+  };
+}
+
+/** Hit: jump the oldest in-flight shipment (cargo lost, couriers walk home). */
+function collectorShipmentHit(state: GameState): { state: GameState; note: string } {
+  const shipment = state.shipments[0];
+  if (!shipment) return collectorCashHit(state); // nothing in flight — the pressure lands on cash
+  const next: GameState = {
+    ...state,
+    shipments: state.shipments.filter((s) => s.id !== shipment.id),
+    crew: state.crew.map((c) =>
+      shipment.courierIds.includes(c.id) ? { ...c, assignment: { kind: 'idle' as const } } : c,
+    ),
+  };
+  return {
+    state: next,
+    note: `Collectors jumped your load on the water — ${shipment.qty} units gone against what you owe.`,
+  };
+}
+
+/** Hit: lean on the most-loyal crew member (routed through `loyaltyDelta`). */
+function collectorCrewHit(state: GameState): { state: GameState; note: string } {
+  if (state.crew.length === 0) return collectorCashHit(state);
+  const target = state.crew.reduce((top, c) => (c.loyalty > top.loyalty ? c : top));
+  const next = loyaltyDelta(state, target.id, { kind: 'leanedOn' }).state;
+  return {
+    state: next,
+    note: `Collectors leaned on ${target.name} over your marker. That kind of thing is remembered.`,
+  };
+}
+
+/** Apply the stage-th collector hit (0-based). Past the ladder, cash repeats. */
+function collectorHit(state: GameState, stage: number): { state: GameState; note: string } {
+  if (stage === 0) return collectorCashHit(state);
+  if (stage === 1) return collectorShipmentHit(state);
+  if (stage === 2) return collectorCrewHit(state);
+  return collectorCashHit(state);
+}
+
+/**
+ * The `marked-enforcement` tick step (design/13 B3; registered ACTIVE-only in
+ * clock.ts after `debt-interest`). Not marked → any leftover pressure record is
+ * dropped. Freshly marked → the warning card goes out with the visible clock
+ * (nothing is taken yet). On each clock expiry → the telegraphed hit lands with
+ * its numbers, and the NEXT move's warning goes out with a fresh clock. Pure and
+ * RNG-free; offline never runs it.
+ */
+export function enforcementStep(state: GameState, dtHours: number): GameState {
+  if (dtHours <= 0) return state;
+  const marked = state.flags[DEBT_MARKED_FLAG] === true;
+
+  if (!marked) {
+    if (state.enforcement === undefined) return state;
+    const { enforcement: _done, ...rest } = state;
+    return rest;
+  }
+
+  const L = state.config.lenders;
+  const queue = (s: GameState, id: string, summary: string): GameState => ({
+    ...s,
+    pendingChoices: [
+      ...s.pendingChoices,
+      { id, kind: DEBT_COLLECTOR_CHOICE, summary, createdAtHours: s.clock.hours },
+    ],
+  });
+
+  if (state.enforcement === undefined) {
+    // Freshly marked: the warning goes out first — the visible clock starts.
+    const enforcement: MarkedEnforcement = {
+      stage: 0,
+      nextAtHours: state.clock.hours + L.MARKED_ENFORCEMENT_PERIOD_HOURS,
+    };
+    return queue(
+      { ...state, enforcement },
+      `debt-collectors-warn-0-${state.clock.hours}`,
+      collectorWarning(state, 0, enforcement.nextAtHours),
+    );
+  }
+
+  if (state.clock.hours < state.enforcement.nextAtHours) return state;
+
+  // The warned hit lands — then the NEXT move's warning goes out (one rung at a
+  // time; a long tick still lands at most one hit per step call).
+  const stage = state.enforcement.stage;
+  const hit = collectorHit(state, stage);
+  const enforcement: MarkedEnforcement = {
+    stage: stage + 1,
+    nextAtHours: state.clock.hours + L.MARKED_ENFORCEMENT_PERIOD_HOURS,
+  };
+  let next: GameState = { ...hit.state, enforcement };
+  next = queue(next, `debt-collectors-hit-${stage}-${state.clock.hours}`, hit.note);
+  return queue(
+    next,
+    `debt-collectors-warn-${stage + 1}-${state.clock.hours}`,
+    collectorWarning(next, stage + 1, enforcement.nextAtHours),
+  );
 }
 
 // --- Lifeline out of the spiral (design/10 §1; Prompt 11 hook) ----------------

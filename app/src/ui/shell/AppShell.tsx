@@ -5,6 +5,7 @@ import {
   useGameState,
   useOfflineReport,
 } from '@/store';
+import { ARREST_CHOICE_KIND, arrestBond, type GameState } from '@/engine';
 import { BottomNav, Button, type BottomNavItem } from '@/ui/components';
 import { SCREEN_NODES, screenForHash, type ScreenId } from './nav';
 import { NewRunGate } from './NewRunGate';
@@ -142,6 +143,10 @@ export function AppShell() {
   // queue. Return-hook choices (no card) stay on the Money screen, not here.
   const scene = nextCardScene(state);
 
+  // A self-run arrest presents as a consequential interrupt in the death-spiral
+  // style (design/13 B4): post the disclosed bond, or the run ends `arrested`.
+  const arrest = state.pendingChoices.find((c) => c.kind === ARREST_CHOICE_KIND) ?? null;
+
   const navItems: BottomNavItem[] = SCREEN_NODES.filter((n) => n.inNav).map(
     (n) => ({
       id: n.id,
@@ -223,6 +228,17 @@ export function AppShell() {
         />
       ) : null}
 
+      {!scene && arrest ? (
+        <ArrestModal
+          state={state}
+          summary={arrest.summary}
+          onBond={() => void useGameStore.getState().resolveArrest(arrest.id, 'bond')}
+          onSurrender={() =>
+            void useGameStore.getState().resolveArrest(arrest.id, 'surrender')
+          }
+        />
+      ) : null}
+
       {confirmAbandon ? (
         <AbandonRunModal
           onCancel={() => setConfirmAbandon(false)}
@@ -234,6 +250,73 @@ export function AppShell() {
           }}
         />
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The self-run arrest interrupt (design/13 B4; Prompt 44) — the telegraphed,
+ * consensual bond-or-run-end choice. The bond price is SHOWN before choosing
+ * (the launch quote already disclosed the risk: "You're driving — if this is
+ * stopped, you're in the cuffs"). Unaffordable bond = the run ends; that's the
+ * teeth the player signed up for by helming the run. Never fires consigned.
+ */
+function ArrestModal({
+  state,
+  summary,
+  onBond,
+  onSurrender,
+}: {
+  readonly state: GameState;
+  readonly summary: string;
+  readonly onBond: () => void;
+  readonly onSurrender: () => void;
+}) {
+  const bond = arrestBond(state);
+  const canAfford = state.cleanCash >= bond;
+  return (
+    <div
+      className="cg-modal__scrim"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Arrested"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(0,0,0,0.6)',
+        zIndex: 50,
+        padding: 16,
+      }}
+    >
+      <div className="cg-card" style={{ maxWidth: 420 }} data-testid="arrest-modal">
+        <h2 className="cg-kicker">Arrested</h2>
+        <p className="cg-label" style={{ margin: '10px 0' }}>
+          {summary}
+        </p>
+        <p className="cg-label" style={{ margin: '10px 0' }}>
+          Bond is ${Math.round(bond).toLocaleString('en-US')}, clean cash only
+          {canAfford ? '.' : " — and you can't cover it. The run ends here."}
+        </p>
+        <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+          <Button
+            variant="primary"
+            fullWidth
+            onClick={onBond}
+            disabled={!canAfford}
+            data-testid="arrest-bond"
+          >
+            Post bond
+            <small>${Math.round(bond).toLocaleString('en-US')} clean · heat spikes</small>
+          </Button>
+          <Button variant="ghost" fullWidth onClick={onSurrender} data-testid="arrest-surrender">
+            Take the fall
+            <small>the run ends — the score banks</small>
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

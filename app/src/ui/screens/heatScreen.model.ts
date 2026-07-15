@@ -24,8 +24,13 @@ import {
   TIER_TELEGRAPH_MARGIN,
   currentTier,
   hasRaidTipoff,
+  investigationActive,
+  passiveHeatTerms,
   raidChance,
+  recentUseOf,
+  portUseKey,
   tierDots,
+  findCountry,
   type GameState,
   type LeTier,
   type Stash,
@@ -171,4 +176,63 @@ export function beatCopRelief(state: GameState): BeatCopRelief {
 /** Peso-style fraction of the gauge that's filled — for the caption "decays…". */
 export function heatFraction(state: GameState): number {
   return Math.max(0, Math.min(1, state.heat / HEAT_MAX));
+}
+
+// --- "Why is my heat rising" — the six-source itemization (design/13 B5) -------
+
+/** One line of the Heat screen's source list. `perHour` present on the passive
+ * (continuously-accruing) sources; status sources carry prose only. */
+export interface HeatSourceRow {
+  readonly id: string;
+  readonly label: string;
+  /** Heat/hour for passive terms; absent for status rows (patterns, files). */
+  readonly perHour?: number;
+}
+
+/**
+ * Every heat source ACTIVE right now, itemized (design/13 B5 — shown = applied):
+ *
+ *  - the engine's own `passiveHeatTerms` verbatim (storage concentration +
+ *    empire size — exactly the list the `heat-sources` tick step sums, so the
+ *    shown per-hour numbers ARE the applied ones);
+ *  - an open investigation window (slower decay + raised raid odds, hours left);
+ *  - any warm repeated-pattern counter (the port being watched, and what the
+ *    next run from it costs on the quote).
+ *
+ * One-time events (busts, launches, flashy bumps) disclose at their own moments
+ * — quotes and scenes — so they aren't standing lines here.
+ */
+export function heatSourceRows(state: GameState): readonly HeatSourceRow[] {
+  const cfg = state.config.heat;
+  const rows: HeatSourceRow[] = passiveHeatTerms(state).map((t) => ({
+    id: t.id,
+    label: t.label,
+    perHour: t.perHour,
+  }));
+
+  if (investigationActive(state)) {
+    const left = Math.max(0, Math.ceil((state.investigationUntilHours ?? 0) - state.clock.hours));
+    rows.push({
+      id: 'investigation',
+      label: `Open investigation — heat cools slower and raids run ×${cfg.INVESTIGATION_RAID_MULTIPLIER} for ${left} more played hours`,
+    });
+  }
+
+  for (const countryId of [...new Set(state.stashes.map((s) => s.countryId))]) {
+    const uses = recentUseOf(state, portUseKey(countryId));
+    if (uses <= 0) continue;
+    const name = findCountry(countryId)?.name ?? countryId;
+    const odds = Math.round(uses * cfg.PATTERN_ODDS_PER_USE * 100);
+    rows.push({
+      id: `pattern:${countryId}`,
+      label: `Watched port — ${name} has been run recently (next launch: +${odds}% odds, +${Math.round(uses * cfg.PATTERN_HEAT_PER_USE)} heat)`,
+    });
+  }
+
+  return rows;
+}
+
+/** Total passive heat/hour — the sum the tick step applies (shown = applied). */
+export function totalPassiveHeatPerHour(state: GameState): number {
+  return passiveHeatTerms(state).reduce((sum, t) => sum + t.perHour, 0);
 }

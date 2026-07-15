@@ -340,6 +340,50 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
       },
     };
   },
+  // 14 → 15: the heat & consequence rework (design/13 B; Prompt 44). New state
+  // seeds empty (`recentUse` — no port has been run recently; no investigation,
+  // no collector clock), and the saved config re-shapes: the transaction-heat
+  // knobs are DROPPED (`deals.BUY_HEAT_FACTOR`, `arms.ARMS_BUY_HEAT_FACTOR`,
+  // `arms.ARMS_CONFLICT_HEAT_MULT` — transacting is no longer hot) and the new
+  // six-source / marked-enforcement / arrest knobs (and the `leanedOn` loyalty
+  // base) backfill from the default — any other saved tuning survives. Nothing
+  // the player holds changes: no cash, holdings, or RNG movement (and B2 only
+  // NARROWS future seizures — a migration never takes anything).
+  14: (env) => {
+    const legacy = env.state as GameState & { recentUse?: GameState['recentUse'] };
+    const savedDeals = legacy.config.deals as GameConfig['deals'] & {
+      BUY_HEAT_FACTOR?: number;
+    };
+    const { BUY_HEAT_FACTOR: _buyHeat, ...deals } = savedDeals;
+    const savedArms = legacy.config.arms as GameConfig['arms'] & {
+      ARMS_BUY_HEAT_FACTOR?: number;
+      ARMS_CONFLICT_HEAT_MULT?: number;
+    };
+    const { ARMS_BUY_HEAT_FACTOR: _armsBuy, ARMS_CONFLICT_HEAT_MULT: _conflict, ...arms } =
+      savedArms;
+    const config: GameConfig = {
+      ...legacy.config,
+      deals,
+      arms,
+      // Defaults FIRST so the new knobs land; the save's own tuning wins on top.
+      heat: { ...DEFAULT_GAME_CONFIG.heat, ...legacy.config.heat },
+      lenders: { ...DEFAULT_GAME_CONFIG.lenders, ...legacy.config.lenders },
+      transport: { ...DEFAULT_GAME_CONFIG.transport, ...legacy.config.transport },
+      crew: {
+        ...DEFAULT_GAME_CONFIG.crew,
+        ...legacy.config.crew,
+        LOYALTY_EVENT_BASE: {
+          ...DEFAULT_GAME_CONFIG.crew.LOYALTY_EVENT_BASE,
+          ...legacy.config.crew.LOYALTY_EVENT_BASE,
+        },
+      },
+    };
+    return {
+      ...env,
+      schemaVersion: 15,
+      state: { ...legacy, config, recentUse: legacy.recentUse ?? {} },
+    };
+  },
 };
 
 /**

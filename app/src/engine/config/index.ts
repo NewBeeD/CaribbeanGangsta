@@ -44,7 +44,6 @@ import {
   BUST_QTY_WEIGHT,
   BUST_CREW_WEIGHT,
   BUST_QTY_FULL_RISK,
-  BUY_HEAT_FACTOR,
   DEFAULT_STASH_CAPACITY,
 } from './deals';
 import {
@@ -59,6 +58,23 @@ import {
   RAID_TIPOFF_MIN_CHANCE,
   RAID_BASE_RATE_PER_HOUR,
   RAID_EMPIRE_FACTOR,
+  SHIPMENT_LAUNCH_HEAT_FACTOR,
+  SHIPMENT_LANDING_HEAT_FACTOR,
+  CONCENTRATION_UNITS_THRESHOLD,
+  CONCENTRATION_HEAT_PER_UNIT_HOUR,
+  PATTERN_DECAY_PER_HOUR,
+  PATTERN_HEAT_PER_USE,
+  PATTERN_ODDS_PER_USE,
+  RAID_SURVIVED_HEAT,
+  RIVAL_CLASH_HEAT,
+  CONSPICUOUS_PURCHASE_HEAT,
+  CONSPICUOUS_FRONT_TYPES,
+  INVESTIGATION_SPIKE_THRESHOLD,
+  INVESTIGATION_HOURS,
+  INVESTIGATION_DECAY_MULTIPLIER,
+  INVESTIGATION_RAID_MULTIPLIER,
+  EMPIRE_HEAT_PER_SIZE_HOUR,
+  EMPIRE_HEAT_FREE_SIZE,
   type HeatTierConfig,
   type LeTier,
 } from './heat';
@@ -142,6 +158,8 @@ import {
   LADDER_INCOME_CUT,
   LADDER_DAYS_PER_RUNG,
   CEILING_MAX_RUNG,
+  MARKED_ENFORCEMENT_PERIOD_HOURS,
+  MARKED_CASH_CUT,
   LIFELINE_CAPITAL_THRESHOLD,
   LIFELINE_MIN_REPUTATION,
   LIFELINE_OFFER_FRACTION,
@@ -193,6 +211,9 @@ import {
   ESCORT_ODDS_REDUCTION,
   COURIER_SKIM_PCT,
   CONSIGNED_BUST_HEAT_FACTOR,
+  ARREST_BOND_FRACTION,
+  ARREST_BOND_MIN,
+  ARREST_BOND_HEAT,
   type TransportConfig,
 } from './transport';
 import { CONVERSION_RECIPES, type ConversionRecipe } from './conversions';
@@ -235,8 +256,6 @@ import {
   ARMS_RESTOCK_PER_DAY,
   ARMS_SELL_RESTOCK_FRACTION,
   ARMS_SCARCITY_PRICE_WEIGHT,
-  ARMS_BUY_HEAT_FACTOR,
-  ARMS_CONFLICT_HEAT_MULT,
   ARMS_BUST_BASE,
   ARMS_BUST_HEAT_WEIGHT,
   ARMS_BUST_LOCATION_WEIGHT,
@@ -286,7 +305,6 @@ export interface DealsTuning {
   readonly BUST_QTY_WEIGHT: number;
   readonly BUST_CREW_WEIGHT: number;
   readonly BUST_QTY_FULL_RISK: number;
-  readonly BUY_HEAT_FACTOR: number;
   readonly DEFAULT_STASH_CAPACITY: number;
 }
 
@@ -303,6 +321,24 @@ export interface HeatTuning {
   readonly RAID_TIPOFF_MIN_CHANCE: number;
   readonly RAID_BASE_RATE_PER_HOUR: Readonly<Record<LeTier, number>>;
   readonly RAID_EMPIRE_FACTOR: number;
+  /** The six-source heat model (design/13 B5; Prompt 44). */
+  readonly SHIPMENT_LAUNCH_HEAT_FACTOR: number;
+  readonly SHIPMENT_LANDING_HEAT_FACTOR: number;
+  readonly CONCENTRATION_UNITS_THRESHOLD: number;
+  readonly CONCENTRATION_HEAT_PER_UNIT_HOUR: number;
+  readonly PATTERN_DECAY_PER_HOUR: number;
+  readonly PATTERN_HEAT_PER_USE: number;
+  readonly PATTERN_ODDS_PER_USE: number;
+  readonly RAID_SURVIVED_HEAT: number;
+  readonly RIVAL_CLASH_HEAT: number;
+  readonly CONSPICUOUS_PURCHASE_HEAT: number;
+  readonly CONSPICUOUS_FRONT_TYPES: readonly string[];
+  readonly INVESTIGATION_SPIKE_THRESHOLD: number;
+  readonly INVESTIGATION_HOURS: number;
+  readonly INVESTIGATION_DECAY_MULTIPLIER: number;
+  readonly INVESTIGATION_RAID_MULTIPLIER: number;
+  readonly EMPIRE_HEAT_PER_SIZE_HOUR: number;
+  readonly EMPIRE_HEAT_FREE_SIZE: number;
 }
 
 /** Contraband storage (design/09 System A). */
@@ -393,6 +429,9 @@ export interface LendersTuning {
   readonly LADDER_INCOME_CUT: number;
   readonly LADDER_DAYS_PER_RUNG: number;
   readonly CEILING_MAX_RUNG: Readonly<Record<ConsequenceCeiling, LadderRung>>;
+  /** Marked enforcement — collector pressure while rung 5's flag is up (B3). */
+  readonly MARKED_ENFORCEMENT_PERIOD_HOURS: number;
+  readonly MARKED_CASH_CUT: number;
   readonly LIFELINE_CAPITAL_THRESHOLD: number;
   readonly LIFELINE_MIN_REPUTATION: number;
   readonly LIFELINE_OFFER_FRACTION: number;
@@ -447,6 +486,10 @@ export interface TransportTuning {
   readonly ESCORT_ODDS_REDUCTION: number;
   readonly COURIER_SKIM_PCT: number;
   readonly CONSIGNED_BUST_HEAT_FACTOR: number;
+  /** Self-run arrest — the bond-or-run-end consequence (design/13 B4). */
+  readonly ARREST_BOND_FRACTION: number;
+  readonly ARREST_BOND_MIN: number;
+  readonly ARREST_BOND_HEAT: number;
 }
 
 /** Product-conversion recipes (Ideas2 §4; design/11 §4). */
@@ -508,8 +551,6 @@ export interface ArmsTuning {
   readonly ARMS_RESTOCK_PER_DAY: number;
   readonly ARMS_SELL_RESTOCK_FRACTION: number;
   readonly ARMS_SCARCITY_PRICE_WEIGHT: number;
-  readonly ARMS_BUY_HEAT_FACTOR: number;
-  readonly ARMS_CONFLICT_HEAT_MULT: number;
   readonly ARMS_BUST_BASE: number;
   readonly ARMS_BUST_HEAT_WEIGHT: number;
   readonly ARMS_BUST_LOCATION_WEIGHT: number;
@@ -581,7 +622,6 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     BUST_QTY_WEIGHT,
     BUST_CREW_WEIGHT,
     BUST_QTY_FULL_RISK,
-    BUY_HEAT_FACTOR,
     DEFAULT_STASH_CAPACITY,
   },
   heat: {
@@ -596,6 +636,23 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     RAID_TIPOFF_MIN_CHANCE,
     RAID_BASE_RATE_PER_HOUR,
     RAID_EMPIRE_FACTOR,
+    SHIPMENT_LAUNCH_HEAT_FACTOR,
+    SHIPMENT_LANDING_HEAT_FACTOR,
+    CONCENTRATION_UNITS_THRESHOLD,
+    CONCENTRATION_HEAT_PER_UNIT_HOUR,
+    PATTERN_DECAY_PER_HOUR,
+    PATTERN_HEAT_PER_USE,
+    PATTERN_ODDS_PER_USE,
+    RAID_SURVIVED_HEAT,
+    RIVAL_CLASH_HEAT,
+    CONSPICUOUS_PURCHASE_HEAT,
+    CONSPICUOUS_FRONT_TYPES,
+    INVESTIGATION_SPIKE_THRESHOLD,
+    INVESTIGATION_HOURS,
+    INVESTIGATION_DECAY_MULTIPLIER,
+    INVESTIGATION_RAID_MULTIPLIER,
+    EMPIRE_HEAT_PER_SIZE_HOUR,
+    EMPIRE_HEAT_FREE_SIZE,
   },
   stashes: {
     STASH_TYPES,
@@ -673,6 +730,8 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     LADDER_INCOME_CUT,
     LADDER_DAYS_PER_RUNG,
     CEILING_MAX_RUNG,
+    MARKED_ENFORCEMENT_PERIOD_HOURS,
+    MARKED_CASH_CUT,
     LIFELINE_CAPITAL_THRESHOLD,
     LIFELINE_MIN_REPUTATION,
     LIFELINE_OFFER_FRACTION,
@@ -720,6 +779,9 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     ESCORT_ODDS_REDUCTION,
     COURIER_SKIM_PCT,
     CONSIGNED_BUST_HEAT_FACTOR,
+    ARREST_BOND_FRACTION,
+    ARREST_BOND_MIN,
+    ARREST_BOND_HEAT,
   },
   conversions: { CONVERSION_RECIPES },
   production: {
@@ -760,8 +822,6 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     ARMS_RESTOCK_PER_DAY,
     ARMS_SELL_RESTOCK_FRACTION,
     ARMS_SCARCITY_PRICE_WEIGHT,
-    ARMS_BUY_HEAT_FACTOR,
-    ARMS_CONFLICT_HEAT_MULT,
     ARMS_BUST_BASE,
     ARMS_BUST_HEAT_WEIGHT,
     ARMS_BUST_LOCATION_WEIGHT,

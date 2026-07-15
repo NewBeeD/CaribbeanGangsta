@@ -1,0 +1,648 @@
+/**
+ * Prompt 44 — Heat & Consequence Rework (design/13 Workstream B).
+ *
+ * The redistribution contract: heat and losses come from getting CAUGHT and
+ * getting BIG, never from transacting. B1: clean buys/sells add zero heat.
+ * B5: the six-source model replaces it, every source individually testable and
+ * itemized (shown = applied). B2: busts seize only the table. B3: marked debt
+ * means telegraphed collector pressure on a visible clock. B4: a self-run
+ * interdiction is an arrest — bond or the run ends.
+ */
+
+import { describe, expect, it } from 'vitest';
+import {
+  ARREST_CHOICE_KIND,
+  DEBT_COLLECTOR_CHOICE,
+  DEBT_MARKED_FLAG,
+  TICK_STEPS,
+  applyChaos,
+  arrestBond,
+  borrow,
+  buyFront,
+  createInitialState,
+  decayHeat,
+  emptyInventory,
+  endRun,
+  enforcementStep,
+  getChaosEvent,
+  heatSourcesStep,
+  investigationActive,
+  launchHeat,
+  maybeOpenInvestigation,
+  netWorth,
+  passiveHeatPerHour,
+  passiveHeatTerms,
+  portUseKey,
+  postBond,
+  quoteShipment,
+  raidChance,
+  raidStep,
+  recentUseOf,
+  repay,
+  resolveDeal,
+  ship,
+  spawnCrew,
+  travelStep,
+  type GameState,
+  type ProductId,
+  type ShipIntent,
+  type Stash,
+} from '@/engine';
+import { migrateEnvelope } from '@/store';
+
+/** Overwrite the home stash's cash/inventory, immutably. */
+function seedHome(
+  state: GameState,
+  opts: { cash?: number; inventory?: Partial<Record<ProductId, number>> },
+): GameState {
+  const home = state.stashes[0] as Stash;
+  const nextHome: Stash = {
+    ...home,
+    dirtyCash: opts.cash ?? home.dirtyCash,
+    inventory: { ...home.inventory, ...(opts.inventory ?? {}) },
+  };
+  return { ...state, stashes: [nextHome, ...state.stashes.slice(1)] };
+}
+
+/** Append a foothold stash in `countryId` (a big safehouse — room to receive). */
+function withStashIn(
+  state: GameState,
+  countryId: string,
+  opts: { inventory?: Partial<Record<ProductId, number>>; cash?: number } = {},
+): GameState {
+  const stash: Stash = {
+    id: `stash-${countryId}`,
+    name: `${countryId} stash`,
+    countryId,
+    type: 'safehouse',
+    dirtyCash: opts.cash ?? 0,
+    inventory: { ...emptyInventory(), ...(opts.inventory ?? {}) },
+  };
+  return { ...state, stashes: [...state.stashes, stash] };
+}
+
+const home = (state: GameState): Stash => state.stashes[0] as Stash;
+
+/** A funded run with cocaine at home and a Miami foothold to ship to. */
+function fixture(seedKey = 'p44'): { state: GameState; intent: ShipIntent } {
+  let state = createInitialState(seedKey);
+  state = seedHome(state, { cash: 5_000_000, inventory: { cocaine: 40, weed: 40 } });
+  state = withStashIn(state, 'miami');
+  const intent: ShipIntent = {
+    type: 'ship',
+    product: 'cocaine',
+    qty: 20,
+    fromStashId: 'stash-home',
+    toStashId: 'stash-miami',
+    mode: 'go-fast',
+  };
+  return { state, intent };
+}
+
+// --- B1 · transacting cleanly is COLD ------------------------------------------
+
+describe('B1 — no transaction heat: clean buys and sells add zero heat', () => {
+  it('a drug buy leaves the meter exactly where it was', () => {
+    const state = seedHome(createInitialState('b1-buy'), { cash: 500_000 });
+    const r = resolveDeal(state, { type: 'buy', product: 'weed', qty: 5 });
+    expect(r.outcome).toBe('success');
+    expect(r.state.heat).toBe(state.heat);
+  });
+
+  it('a clean drug sale leaves the meter exactly where it was', () => {
+    const state = seedHome(createInitialState('b1-sell'), {
+      cash: 1000,
+      inventory: { weed: 20 },
+    });
+    // Thread the RNG until the roll survives (the bust floor is 3%).
+    let rngState = state.rngState;
+    for (let i = 0; i < 200; i++) {
+      const trial: GameState = { ...state, rngState };
+      const r = resolveDeal(trial, { type: 'sell', product: 'weed', qty: 5 });
+      rngState = r.state.rngState;
+      if (r.outcome === 'success') {
+        expect(r.state.heat).toBe(state.heat);
+        return;
+      }
+    }
+    throw new Error('no clean sale in 200 trials');
+  });
+});
+
+// --- B5.1 · shipment volume & route risk ----------------------------------------
+
+describe('B5.1 — shipment heat scales with cargo class × qty × corridor risk', () => {
+  it('a bigger/hotter shipment heats more than a small/cool one', () => {
+    const { state } = fixture('b5-ship');
+    const big: ShipIntent = {
+      type: 'ship',
+      product: 'cocaine',
+      qty: 40,
+      fromStashId: 'stash-home',
+      toStashId: 'stash-miami',
+      mode: 'go-fast',
+    };
+    const small: ShipIntent = { ...big, product: 'weed', qty: 5, mode: 'ferry' };
+    expect(launchHeat(state, big)).toBeGreaterThan(launchHeat(state, small));
+  });
+
+  it('the launch applies exactly the disclosed quote heat (shown = applied)', () => {
+    const { state, intent } = fixture('b5-launch');
+    const quote = quoteShipment(state, intent);
+    expect(quote.launchHeat).toBeGreaterThan(0);
+    const launched = ship(state, intent);
+    expect(launched.ok).toBe(true);
+    expect(launched.state.heat).toBeCloseTo(state.heat + quote.launchHeat, 6);
+  });
+});
+
+// --- B5.2 + B5.6 · storage concentration & empire size (the passive terms) ------
+
+describe('B5.2/B5.6 — passive terms: fat stashes hum, empires draw eyes', () => {
+  it('a stash over the threshold accrues; a spread empire does not', () => {
+    const base = createInitialState('b5-conc');
+    const threshold = base.config.heat.CONCENTRATION_UNITS_THRESHOLD;
+
+    const fat = seedHome(base, { inventory: { cocaine: threshold + 100 } });
+    const fatTerm = passiveHeatTerms(fat).find((t) => t.id.startsWith('concentration:'));
+    expect(fatTerm).toBeDefined();
+    expect(fatTerm!.perHour).toBeCloseTo(
+      100 * base.config.heat.CONCENTRATION_HEAT_PER_UNIT_HOUR,
+      6,
+    );
+
+    // The same units spread thin: no stash over the line, no concentration hum.
+    let spread = seedHome(base, { inventory: { cocaine: threshold - 1 } });
+    spread = withStashIn(spread, 'miami', { inventory: { cocaine: 101 } });
+    expect(
+      passiveHeatTerms(spread).some((t) => t.id.startsWith('concentration:')),
+    ).toBe(false);
+  });
+
+  it('empire growth raises the passive term', () => {
+    const small = createInitialState('b5-empire');
+    const big: GameState = {
+      ...small,
+      crew: [spawnCrew('deon'), spawnCrew('marco'), spawnCrew('yolanda')],
+      fronts: [
+        { id: 'front-cash-front', type: 'cash-front', level: 1 },
+        { id: 'front-crypto', type: 'crypto', level: 1 },
+      ],
+    };
+    expect(passiveHeatPerHour(big)).toBeGreaterThan(passiveHeatPerHour(small));
+  });
+
+  it('the tick step applies exactly the itemized sum (shown = applied)', () => {
+    const base = createInitialState('b5-sum');
+    const threshold = base.config.heat.CONCENTRATION_UNITS_THRESHOLD;
+    const state = seedHome(base, { inventory: { cocaine: threshold + 60 } });
+    const stepped = heatSourcesStep(state, 1);
+    expect(stepped.heat).toBeCloseTo(state.heat + passiveHeatPerHour(state), 6);
+  });
+});
+
+// --- B5.3 · repeated patterns -----------------------------------------------------
+
+describe('B5.3 — repeated patterns: reused ports surcharge heat AND odds, then decay', () => {
+  const ferryIntent = (qty: number): ShipIntent => ({
+    type: 'ship',
+    product: 'weed',
+    qty,
+    fromStashId: 'stash-home',
+    toStashId: 'stash-miami',
+    mode: 'ferry',
+  });
+
+  it('the third run from the same port costs more than the first — disclosed', () => {
+    let { state } = fixture('b5-pattern');
+    const intent = ferryIntent(5);
+    const firstQuote = quoteShipment(state, intent);
+    expect(firstQuote.patternOddsSurcharge).toBe(0);
+
+    // Two launches from the same origin port…
+    for (let i = 0; i < 2; i++) {
+      const launched = ship(state, intent);
+      expect(launched.ok).toBe(true);
+      state = seedHome(launched.state, { inventory: { weed: 40 } }); // restock to re-run
+    }
+
+    // …and the third quote carries the pattern surcharge in heat AND odds.
+    const thirdQuote = quoteShipment(state, intent);
+    expect(recentUseOf(state, portUseKey(home(state).countryId))).toBe(2);
+    expect(thirdQuote.patternOddsSurcharge).toBeCloseTo(
+      2 * state.config.heat.PATTERN_ODDS_PER_USE,
+      6,
+    );
+    expect(thirdQuote.interdictionChance).toBeGreaterThan(firstQuote.interdictionChance);
+    expect(thirdQuote.launchHeat).toBeGreaterThan(firstQuote.launchHeat);
+  });
+
+  it('the surcharge decays over active hours (the window closes)', () => {
+    let { state } = fixture('b5-decay');
+    const launched = ship(state, ferryIntent(5));
+    expect(launched.ok).toBe(true);
+    state = launched.state;
+    const key = portUseKey(home(state).countryId);
+    expect(recentUseOf(state, key)).toBe(1);
+
+    // Half the window: the counter has shed but not closed.
+    const halfway = heatSourcesStep(state, 24);
+    expect(recentUseOf(halfway, key)).toBeGreaterThan(0);
+    expect(recentUseOf(halfway, key)).toBeLessThan(1);
+
+    // Past the window: the port runs cold again (the entry is dropped).
+    const cold = heatSourcesStep(state, 72);
+    expect(recentUseOf(cold, key)).toBe(0);
+  });
+});
+
+// --- B5.4 · violence & flashy actions --------------------------------------------
+
+describe('B5.4 — flashy one-time bumps: survived raid, rival clash, conspicuous purchase', () => {
+  it('surviving a raid bumps heat once (they missed — and they are sore)', () => {
+    // Cash stays under GUARD_CASH_THRESHOLD: the floor stash's 0.9 seizure gets
+    // no unguarded penalty, so a miss (the survived raid) stays possible.
+    const base = seedHome(createInitialState('b5-raid'), {
+      cash: 0,
+      inventory: { cocaine: 100 },
+    });
+    const state: GameState = { ...base, heat: 60 };
+    let rngState = state.rngState;
+    for (let i = 0; i < 2_000; i++) {
+      const trial: GameState = { ...state, rngState };
+      const resolved = raidStep(trial, 500); // a wide window so the raid roll fires
+      rngState = resolved.rngState;
+      const scene = resolved.pendingChoices.at(-1);
+      if (scene?.kind !== 'raid') continue; // no raid this trial
+      if (scene.summary.includes('came up empty')) {
+        expect(resolved.heat).toBeCloseTo(
+          trial.heat + state.config.heat.RAID_SURVIVED_HEAT,
+          6,
+        );
+        return;
+      }
+    }
+    throw new Error('no survived raid observed in 2k trials');
+  });
+
+  it('a rival clash bumps heat once alongside the tension', () => {
+    const state = createInitialState('b5-rival');
+    const clashed = applyChaos(state, getChaosEvent('rival-move'));
+    expect(clashed.heat).toBeCloseTo(
+      state.heat + state.config.heat.RIVAL_CLASH_HEAT,
+      6,
+    );
+  });
+
+  it('a conspicuous purchase (real-estate class) bumps once; a quiet front does not', () => {
+    const state: GameState = { ...createInitialState('b5-buyf'), cleanCash: 10_000_000 };
+    const loud = buyFront(state, 'real-estate');
+    expect(loud.front).toBeTruthy();
+    expect(loud.state.heat).toBeCloseTo(
+      state.heat + state.config.heat.CONSPICUOUS_PURCHASE_HEAT,
+      6,
+    );
+    const quiet = buyFront(state, 'cash-front');
+    expect(quiet.front).toBeTruthy();
+    expect(quiet.state.heat).toBe(state.heat);
+  });
+});
+
+// --- B5.5 · the investigation window ----------------------------------------------
+
+describe('B5.5 — a MAJOR bust opens a disclosed investigation window', () => {
+  it('opens at the threshold, is disclosed, and expires on schedule', () => {
+    const state = createInitialState('b5-invest');
+    const cfg = state.config.heat;
+
+    const minor = maybeOpenInvestigation(state, cfg.INVESTIGATION_SPIKE_THRESHOLD - 1);
+    expect(minor).toBe(state); // small busts never open a file
+
+    const opened = maybeOpenInvestigation(state, cfg.INVESTIGATION_SPIKE_THRESHOLD);
+    expect(investigationActive(opened)).toBe(true);
+    expect(opened.investigationUntilHours).toBe(state.clock.hours + cfg.INVESTIGATION_HOURS);
+    expect(opened.pendingChoices.at(-1)?.kind).toBe('investigation');
+
+    // The window burns ACTIVE hours and closes on schedule.
+    const later: GameState = {
+      ...opened,
+      clock: { ...opened.clock, hours: opened.clock.hours + cfg.INVESTIGATION_HOURS },
+    };
+    expect(investigationActive(later)).toBe(false);
+  });
+
+  it('slows heat decay and raises raid chance while open — then both recover', () => {
+    const base: GameState = { ...createInitialState('b5-invest2'), heat: 50 };
+    const open: GameState = {
+      ...base,
+      investigationUntilHours: base.clock.hours + 72,
+    };
+
+    // Slower decay: after the same hour, the investigated run stays hotter.
+    expect(decayHeat(open, 5).heat).toBeGreaterThan(decayHeat(base, 5).heat);
+
+    // Raised raid odds, by exactly the disclosed multiplier (small-p regime).
+    const calm = raidChance(base, 1);
+    const watched = raidChance(open, 1);
+    expect(watched / calm).toBeCloseTo(base.config.heat.INVESTIGATION_RAID_MULTIPLIER, 2);
+  });
+});
+
+// --- B3 · marked enforcement --------------------------------------------------------
+
+describe('B3 — marked must mean something: telegraphed collector pressure on a clock', () => {
+  /** A marked, solvent borrower with cash to squeeze and a crew to lean on. */
+  function marked(seedKey: string): GameState {
+    let s = createInitialState(seedKey);
+    s = { ...s, reputation: { ...s.reputation, street: 100 } };
+    const borrowed = borrow(s, 'papa-cass', 500);
+    expect(borrowed.ok).toBe(true);
+    s = seedHome(borrowed.state, { cash: 100_000 });
+    return {
+      ...s,
+      crew: [spawnCrew('deon')],
+      flags: { ...s.flags, [DEBT_MARKED_FLAG]: true },
+    };
+  }
+
+  it('warns first (the visible clock), then lands the cash hit with its numbers', () => {
+    const s0 = marked('b3-clock');
+    const period = s0.config.lenders.MARKED_ENFORCEMENT_PERIOD_HOURS;
+
+    // Step 1: the warning card goes out — nothing is taken yet.
+    const warned = enforcementStep(s0, 1);
+    expect(warned.enforcement).toEqual({ stage: 0, nextAtHours: s0.clock.hours + period });
+    const warning = warned.pendingChoices.at(-1);
+    expect(warning?.kind).toBe(DEBT_COLLECTOR_CHOICE);
+    expect(warning?.summary).toContain("You're marked");
+    expect(home(warned).dirtyCash).toBe(100_000);
+
+    // Before the clock: nothing moves.
+    expect(enforcementStep(warned, 1)).toBe(warned);
+
+    // On the clock: the warned hit lands — a cut of the fattest stash's cash —
+    // with its dollars in the feed line, and the NEXT warning goes out.
+    const due: GameState = {
+      ...warned,
+      clock: { ...warned.clock, hours: warned.enforcement!.nextAtHours },
+    };
+    const hit = enforcementStep(due, 1);
+    const cut = Math.round(100_000 * s0.config.lenders.MARKED_CASH_CUT);
+    expect(home(hit).dirtyCash).toBe(100_000 - cut);
+    expect(hit.enforcement?.stage).toBe(1);
+    const lines = hit.pendingChoices.filter((c) => c.kind === DEBT_COLLECTOR_CHOICE);
+    expect(lines.some((l) => l.summary.includes(`$${cut.toLocaleString('en-US')}`))).toBe(true);
+    expect(lines.at(-1)?.summary).toContain('jump one of your loads'); // the next warning
+  });
+
+  it('escalates: shipment jumped, then a crew member leaned on (memory written)', () => {
+    let s = marked('b3-esc');
+    s = withStashIn(s, 'miami');
+    const launched = ship(seedHome(s, { inventory: { cocaine: 40 } }), {
+      type: 'ship',
+      product: 'cocaine',
+      qty: 10,
+      fromStashId: 'stash-home',
+      toStashId: 'stash-miami',
+      mode: 'ferry',
+    });
+    expect(launched.ok).toBe(true);
+    // Fast-forward to stage 1 (the shipment hit) with the clock due.
+    let state: GameState = {
+      ...launched.state,
+      enforcement: { stage: 1, nextAtHours: launched.state.clock.hours },
+    };
+    state = enforcementStep(state, 1);
+    expect(state.shipments).toHaveLength(0); // the load was jumped
+    expect(state.enforcement?.stage).toBe(2);
+
+    // Stage 2: lean on the crew — routed through loyaltyDelta (memory written).
+    const before = state.crew[0]!.loyalty;
+    state = enforcementStep(
+      { ...state, enforcement: { stage: 2, nextAtHours: state.clock.hours } },
+      1,
+    );
+    expect(state.crew[0]!.loyalty).toBeLessThan(before);
+    expect(state.crew[0]!.memoryLog.at(-1)?.kind).toBe('leanedOn');
+  });
+
+  it('repaying to zero clears the mark and the pressure instantly', () => {
+    let s = marked('b3-repay');
+    s = enforcementStep(s, 1); // pressure record exists
+    expect(s.enforcement).toBeDefined();
+    const owed = s.debt.principal + s.debt.accruedInterest;
+    const paid = repay({ ...s, cleanCash: owed }, owed);
+    expect(paid.clearedInFull).toBe(true);
+    expect(paid.state.flags[DEBT_MARKED_FLAG]).toBe(false);
+    expect(paid.state.enforcement).toBeUndefined();
+    // And the step never re-arms without the mark.
+    expect(enforcementStep(paid.state, 1).enforcement).toBeUndefined();
+  });
+
+  it('is ACTIVE-only — no collector moves while the player is away', () => {
+    const step = TICK_STEPS.find((s) => s.id === 'marked-enforcement');
+    expect(step?.modes).toEqual(['active']);
+    // The passive heat step is frozen offline too.
+    expect(TICK_STEPS.find((s) => s.id === 'heat-sources')?.modes).toEqual(['active']);
+  });
+});
+
+// --- B4 · self-run arrest -------------------------------------------------------------
+
+describe('B4 — a self-run interdiction is an arrest: bond or the run ends', () => {
+  /** Thread the RNG until a SOLO interdiction lands; returns the arrested state. */
+  function arrested(seedKey: string): GameState {
+    const { intent } = fixture(seedKey);
+    let { state } = fixture(seedKey);
+    state = { ...state, cleanCash: 2_000_000 };
+    const launched = ship(state, intent); // no couriers — you're driving
+    expect(launched.ok).toBe(true);
+    const dueClock = { ...launched.state.clock, hours: launched.shipment!.arrivesAtHours };
+    let rngState = launched.state.rngState;
+    for (let i = 0; i < 5_000; i++) {
+      const trial: GameState = { ...launched.state, clock: dueClock, rngState };
+      const resolved = travelStep(trial, 1);
+      if (resolved.pendingChoices.at(-1)?.kind === ARREST_CHOICE_KIND) return resolved;
+      rngState = resolved.rngState;
+    }
+    throw new Error('no solo interdiction in 5k trials');
+  }
+
+  it('the launch quote discloses the risk before commit', () => {
+    const { state, intent } = fixture('b4-quote');
+    const solo = quoteShipment(state, intent);
+    expect(solo.soloRun).toBe(true);
+    expect(solo.arrestBond).toBe(arrestBond(state));
+
+    const consigned = quoteShipment(
+      { ...state, crew: [spawnCrew('deon')] },
+      { ...intent, courierIds: ['crew-deon'] },
+    );
+    expect(consigned.soloRun).toBe(false);
+  });
+
+  it('always presents bond-or-run-end; the bond price is shown and charged exactly', () => {
+    const state = arrested('b4-bond');
+    const choice = state.pendingChoices.at(-1)!;
+    expect(choice.kind).toBe(ARREST_CHOICE_KIND);
+
+    const bond = arrestBond(state);
+    expect(bond).toBeGreaterThanOrEqual(state.config.transport.ARREST_BOND_MIN);
+    expect(bond).toBeGreaterThanOrEqual(
+      Math.round(netWorth(state) * state.config.transport.ARREST_BOND_FRACTION),
+    );
+
+    const posted = postBond(state, choice.id);
+    expect(posted.ok).toBe(true);
+    expect(posted.paid).toBe(bond);
+    expect(posted.state.cleanCash).toBe(state.cleanCash - bond);
+    expect(posted.state.heat).toBeCloseTo(
+      Math.min(100, state.heat + state.config.transport.ARREST_BOND_HEAT),
+      6,
+    );
+    expect(posted.state.pendingChoices.some((c) => c.kind === ARREST_CHOICE_KIND)).toBe(false);
+    expect(posted.state.runStatus).toBe('active'); // the run continues
+  });
+
+  it('rejects the bond without mutating when clean cash cannot cover it', () => {
+    const state = arrested('b4-broke');
+    const broke: GameState = { ...state, cleanCash: 0 };
+    const r = postBond(broke, broke.pendingChoices.at(-1)!.id);
+    expect(r.ok).toBe(false);
+    expect(r.rejected).toBe('insufficient-funds');
+    expect(r.state).toBe(broke);
+  });
+
+  it("surrendering ends the run with the 'arrested' cause through endRun", () => {
+    const state = arrested('b4-fall');
+    const ended = endRun(state, 'arrested');
+    expect(ended.cause).toBe('arrested');
+    expect(ended.sceneKey).toBe('runend.arrested');
+    expect(ended.state.runStatus).toBe('prison');
+    expect(ended.score).toBe(ended.state.highScore.peakNetWorth);
+  });
+
+  it('a consigned interdiction never fires the arrest (the courier takes the fall)', () => {
+    const { intent } = fixture('b4-consigned');
+    let { state } = fixture('b4-consigned');
+    state = { ...state, crew: [spawnCrew('deon')] };
+    const launched = ship(state, { ...intent, courierIds: ['crew-deon'] });
+    expect(launched.ok).toBe(true);
+    const dueClock = { ...launched.state.clock, hours: launched.shipment!.arrivesAtHours };
+    let rngState = launched.state.rngState;
+    for (let i = 0; i < 5_000; i++) {
+      const trial: GameState = { ...launched.state, clock: dueClock, rngState };
+      const resolved = travelStep(trial, 1);
+      const last = resolved.pendingChoices.at(-1)?.kind;
+      expect(last).not.toBe(ARREST_CHOICE_KIND);
+      if (last === 'shipment-seized') return;
+      rngState = resolved.rngState;
+    }
+    throw new Error('no consigned interdiction in 5k trials');
+  });
+});
+
+// --- Migration · v14 → v15 -------------------------------------------------------------
+
+describe('v14 → v15 migration — drops the transaction-heat knobs, seizes nothing', () => {
+  it('drops BUY_HEAT_FACTOR/arms knobs, backfills the new groups, seeds recentUse', () => {
+    const current = seedHome(createInitialState('migrate-44'), {
+      cash: 7_777,
+      inventory: { cocaine: 12 },
+    });
+    // Reconstruct a plausible v14 save: the old knobs present, the new absent.
+    const strip = <T extends object>(group: T, keys: readonly string[]): T => {
+      const copy = { ...(group as Record<string, unknown>) };
+      for (const k of keys) delete copy[k];
+      return copy as T;
+    };
+    const legacyState = {
+      ...current,
+      schemaVersion: 14,
+      config: {
+        ...current.config,
+        deals: { ...current.config.deals, BUY_HEAT_FACTOR: 0.5 },
+        arms: {
+          ...current.config.arms,
+          ARMS_BUY_HEAT_FACTOR: 0.5,
+          ARMS_CONFLICT_HEAT_MULT: 0.5,
+        },
+        heat: strip(current.config.heat, [
+          'SHIPMENT_LAUNCH_HEAT_FACTOR',
+          'CONCENTRATION_UNITS_THRESHOLD',
+          'PATTERN_ODDS_PER_USE',
+          'INVESTIGATION_HOURS',
+          'EMPIRE_HEAT_PER_SIZE_HOUR',
+        ]),
+        lenders: strip(current.config.lenders, [
+          'MARKED_ENFORCEMENT_PERIOD_HOURS',
+          'MARKED_CASH_CUT',
+        ]),
+        transport: strip(current.config.transport, [
+          'ARREST_BOND_FRACTION',
+          'ARREST_BOND_MIN',
+          'ARREST_BOND_HEAT',
+        ]),
+      },
+    } as unknown as GameState & { recentUse?: unknown };
+    delete (legacyState as { recentUse?: unknown }).recentUse;
+
+    const migrated = migrateEnvelope({
+      slot: 'test',
+      schemaVersion: 14,
+      savedAt: 0,
+      seed: legacyState.seed,
+      runStatus: legacyState.runStatus,
+      day: legacyState.clock.day,
+      state: legacyState,
+    });
+    expect(migrated).not.toBeNull();
+    const s = migrated!;
+
+    // Dropped knobs are gone; the new groups are whole.
+    expect('BUY_HEAT_FACTOR' in s.config.deals).toBe(false);
+    expect('ARMS_BUY_HEAT_FACTOR' in s.config.arms).toBe(false);
+    expect('ARMS_CONFLICT_HEAT_MULT' in s.config.arms).toBe(false);
+    expect(s.config.heat.SHIPMENT_LAUNCH_HEAT_FACTOR).toBeGreaterThan(0);
+    expect(s.config.heat.INVESTIGATION_HOURS).toBeGreaterThan(0);
+    expect(s.config.lenders.MARKED_CASH_CUT).toBeGreaterThan(0);
+    expect(s.config.transport.ARREST_BOND_MIN).toBeGreaterThan(0);
+    expect(s.config.crew.LOYALTY_EVENT_BASE.leanedOn).toBeLessThan(0);
+    expect(s.recentUse).toEqual({});
+
+    // Never a seizure: holdings and cash are untouched.
+    expect(home(s).dirtyCash).toBe(7_777);
+    expect(home(s).inventory.cocaine).toBe(12);
+    expect(s.rngState).toEqual(current.rngState);
+  });
+});
+
+// --- The heat-pressure band (design/13 B5 — realistic escalation) ----------------------
+
+describe('heat pressure: a sprawling operation runs measurably hotter than a mid-size one', () => {
+  it('the passive per-hour term separates the two bands', () => {
+    const base = createInitialState('band');
+    const threshold = base.config.heat.CONCENTRATION_UNITS_THRESHOLD;
+
+    // Mid-size: one modest stash under the line, a couple of hands.
+    const mid: GameState = {
+      ...seedHome(base, { inventory: { weed: Math.floor(threshold / 2) } }),
+      crew: [spawnCrew('deon')],
+    };
+
+    // Sprawling: a fat stash, a wide roster, fronts everywhere.
+    let sprawl = seedHome(base, { inventory: { cocaine: threshold + 200 } });
+    sprawl = withStashIn(sprawl, 'miami', { inventory: { cocaine: threshold + 50 } });
+    sprawl = {
+      ...sprawl,
+      crew: [spawnCrew('deon'), spawnCrew('marco'), spawnCrew('yolanda'), spawnCrew('tpopz')],
+      fronts: [
+        { id: 'front-cash-front', type: 'cash-front', level: 3 },
+        { id: 'front-crypto', type: 'crypto', level: 2 },
+        { id: 'front-real-estate', type: 'real-estate', level: 2 },
+      ],
+    };
+
+    expect(passiveHeatPerHour(sprawl)).toBeGreaterThan(passiveHeatPerHour(mid) * 3);
+  });
+});

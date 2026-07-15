@@ -275,6 +275,9 @@ export const LOYALTY_EVENT_BASE = {
   confronted: 6,
   /** Left idle/neglected while others worked. */
   neglected: -4,
+  /** A debt collector leaned on them over YOUR unpaid marker (design/13 B3;
+   * Prompt 44) — your problem became their problem, and they remember. */
+  leanedOn: -10,
 } as const;
 
 export type LoyaltyEventKind = keyof typeof LOYALTY_EVENT_BASE;

@@ -122,8 +122,16 @@ import type {
  *     rounds any existing fractional holding UP to the next whole unit — in the
  *     player's favor, never a seizure. Shared with Prompt 45, which extends the
  *     op shape in place.
+ * v15: the heat & consequence rework (design/13 B; Prompt 44) — `recentUse`
+ *     (per-port repeated-pattern counters, decaying over active hours),
+ *     `investigationUntilHours` (the post-major-bust investigation window), and
+ *     `enforcement` (the marked-debt collector clock). Migration seeds them
+ *     empty/absent and re-shapes the saved config: the transaction-heat knobs
+ *     (`BUY_HEAT_FACTOR`, `ARMS_BUY_HEAT_FACTOR`, `ARMS_CONFLICT_HEAT_MULT`) are
+ *     DROPPED and the six-source/enforcement/arrest knobs backfilled from the
+ *     default. Never player cash, holdings, or the RNG stream.
  */
-export const SCHEMA_VERSION = 14 as const;
+export const SCHEMA_VERSION = 15 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -495,6 +503,21 @@ export interface WashQueue {
 }
 
 /**
+ * The marked-debt collector clock (design/13 B3; Prompt 44). Present only while
+ * rung 5's `DEBT_MARKED_FLAG` is up: `stage` counts collector hits already landed
+ * (0 = the warning is out, nothing hit yet) and `nextAtHours` is the VISIBLE
+ * in-game hour the next move lands at. Every hit is preceded by its warning;
+ * repaying the loan to zero removes this whole record instantly. ACTIVE-only —
+ * the clock only advances on online ticks, so absence freezes the collectors.
+ */
+export interface MarkedEnforcement {
+  /** Collector hits already landed this mark (0 = warned, none landed). */
+  readonly stage: number;
+  /** In-game hours the next collector move lands at (the visible clock). */
+  readonly nextAtHours: number;
+}
+
+/**
  * Peak trackers. Score banks from PEAK values the instant a run ends, so a
  * late-game wipe still records the height climbed to (design/01 §7). Lives on
  * state but is what `endgame.ts` (Prompt 11) banks to the persistent leaderboard.
@@ -555,6 +578,27 @@ export interface GameState {
   readonly plugs: readonly string[];
   readonly reputation: Reputation;
   readonly heat: number;
+  /**
+   * Repeated-pattern counters (design/13 B5.3; Prompt 44): `port:<countryId>` →
+   * how recently/often that origin port has been run. Bumped on every shipment
+   * launch, decayed over ACTIVE hours (`heatSources.ts`); a reuse inside the
+   * window adds a DISCLOSED heat + interdiction-odds surcharge. Empty = no
+   * recent pattern anywhere.
+   */
+  readonly recentUse: Readonly<Record<string, number>>;
+  /**
+   * The investigation window (design/13 B5.5; Prompt 44): present after a MAJOR
+   * bust until this in-game hour. While open, heat decays slower and raid chance
+   * runs a config'd multiplier — both disclosed when the window opens and on the
+   * Heat screen. The clock only advances online, so the window burns ACTIVE
+   * hours only (absent = no investigation).
+   */
+  readonly investigationUntilHours?: number;
+  /**
+   * The marked-debt collector clock (design/13 B3; Prompt 44). Present only
+   * while `DEBT_MARKED_FLAG` is up; cleared instantly when the loan is repaid.
+   */
+  readonly enforcement?: MarkedEnforcement;
   /** "Lie low" mode: heat decays faster, laundering income slows (Prompt 05/07). */
   readonly lyingLow: boolean;
   /**
@@ -700,14 +744,26 @@ export function empireSize(state: GameState): number {
 }
 
 /**
+ * The `kind` of the self-run arrest interrupt (design/13 B4; Prompt 44), queued
+ * by `travel.ts` when a shipment YOU helmed is interdicted. It presents as a
+ * bond-or-run-end choice in the death-spiral style — consequential by nature.
+ */
+export const ARREST_CHOICE_KIND = 'arrest';
+
+/**
  * Whether dismissing this pending choice is CONSEQUENTIAL — it carries a story
- * card with real branches (`beatId`/`cardId`), so clearing it would silently pick
- * one. These present as interrupt scenes (Prompt 22), are excluded from the Money
+ * card with real branches (`beatId`/`cardId`), or it is the arrest interrupt
+ * (bond or run-end — design/13 B4), so clearing it would silently pick one.
+ * These present as interrupt scenes (Prompt 22), are excluded from the Money
  * feed, and survive `dismissAllPendingChoices` (design/13 A5 guardrail: Clear all
  * never silently picks a consequential branch).
  */
 export function isConsequentialChoice(choice: PendingChoice): boolean {
-  return choice.beatId !== undefined || choice.cardId !== undefined;
+  return (
+    choice.beatId !== undefined ||
+    choice.cardId !== undefined ||
+    choice.kind === ARREST_CHOICE_KIND
+  );
 }
 
 /**
@@ -780,6 +836,7 @@ export function createInitialState(
     plugs: [],
     reputation: { street: 0, business: 0, political: 0 },
     heat: country.heatBaseline,
+    recentUse: {},
     lyingLow: false,
     // Acknowledge the opening tier so the baseline never self-telegraphs on tick 1.
     leTierAck: tierForHeat(country.heatBaseline, config.heat.HEAT_TIERS),

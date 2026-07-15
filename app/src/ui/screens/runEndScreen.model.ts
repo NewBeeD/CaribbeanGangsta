@@ -32,6 +32,9 @@ const FALL_PROSE: Readonly<Record<RunEndCause, string>> = {
   prison:
     'They took you alive, and the ledger still reads like a legend. ' +
     'The score is banked; the story is not over.',
+  arrested:
+    'You drove it yourself and they were waiting on the water. No bond, no ' +
+    'walk — but the height you reached is banked, and the water is still out there.',
   retired:
     'You walked out on top, on your own terms. That number is banked — ' +
     'now it is the one to beat.',
@@ -50,9 +53,11 @@ export function causeStamp(cause: RunEndCause): string {
     ? 'KILLED'
     : cause === 'prison'
       ? 'TAKEN'
-      : cause === 'abandoned'
-        ? 'WALKED AWAY'
-        : 'WALKED';
+      : cause === 'arrested'
+        ? 'CUFFED'
+        : cause === 'abandoned'
+          ? 'WALKED AWAY'
+          : 'WALKED';
 }
 
 // --- Farthest act (design/07 §6 "Farthest act: III — Kingpin") -----------------

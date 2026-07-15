@@ -109,3 +109,59 @@ export const RAID_BASE_RATE_PER_HOUR: Readonly<Record<LeTier, number>> = {
 
 /** Each unit of empire size raises the raid rate by this fraction. */
 export const RAID_EMPIRE_FACTOR = 0.1;
+
+// --- The six-source heat model (design/13 B5; Prompt 44) ----------------------
+//
+// Transaction heat is GONE (B1): buying and selling cleanly adds zero heat.
+// These knobs are the redistribution that replaces it — six legible sources,
+// every one itemized on the Heat screen ("why is my heat rising"), every one
+// disclosed at the moment it lands (shown = applied).
+
+// (1) Shipment volume & route risk — launching/landing adds heat scaled by the
+// interdiction quote's OWN inputs: `heatPerUnit × qty × displayed odds × factor`.
+// Big moves on hot corridors run hot even when they succeed.
+export const SHIPMENT_LAUNCH_HEAT_FACTOR = 0.1;
+export const SHIPMENT_LANDING_HEAT_FACTOR = 0.1;
+
+// (2) Storage concentration — an ACTIVE-only passive term per stash holding
+// units above the threshold: `(units − threshold) × per-unit rate` heat/hour.
+// Fat stashes hum before they're raided; spreading out quiets them.
+export const CONCENTRATION_UNITS_THRESHOLD = 150;
+export const CONCENTRATION_HEAT_PER_UNIT_HOUR = 0.01;
+
+// (3) Repeated patterns — per-origin-port `recentUse` counters, decayed over
+// ACTIVE hours. Re-running the same port inside the window adds a DISCLOSED
+// heat and interdiction-odds surcharge per recent use. Vary your routes.
+/** Recent-use counter units shed per active hour (1 use fades in ~48h played). */
+export const PATTERN_DECAY_PER_HOUR = 1 / 48;
+/** Extra launch heat per recent use of the same origin port (disclosed on the quote). */
+export const PATTERN_HEAT_PER_USE = 3;
+/** Extra interdiction odds per recent use (inside the displayed number — shown = rolled). */
+export const PATTERN_ODDS_PER_USE = 0.04;
+
+// (4) Violence & flashy actions — one-time bumps: overt moves get noticed.
+/** Surviving a raid that came up empty (they know they missed — and they're sore). */
+export const RAID_SURVIVED_HEAT = 5;
+/** A rival conflict flaring (chaos rival-tension events — turf noise draws eyes). */
+export const RIVAL_CLASH_HEAT = 4;
+/** A conspicuous purchase (the vessel / real-estate class — loud money). */
+export const CONSPICUOUS_PURCHASE_HEAT = 6;
+/** Front types whose purchase is conspicuous. Owned vessels (Prompt 47) join this class. */
+export const CONSPICUOUS_FRONT_TYPES: readonly string[] = ['real-estate'];
+
+// (5) Failed deals & busts — the existing spike stays; a MAJOR bust (spike at or
+// above the threshold) additionally opens a disclosed INVESTIGATION WINDOW:
+// slower heat decay + a raid-chance multiplier for a fixed span of ACTIVE hours.
+export const INVESTIGATION_SPIKE_THRESHOLD = 30;
+export const INVESTIGATION_HOURS = 72;
+/** Heat decay rate multiplier while under investigation (<1 = decays slower). */
+export const INVESTIGATION_DECAY_MULTIPLIER = 0.5;
+/** Raid-chance multiplier while under investigation (>1 = they're looking). */
+export const INVESTIGATION_RAID_MULTIPLIER = 1.5;
+
+// (6) Empire size — a mild passive heat term (the RAID_EMPIRE_FACTOR idea
+// extended): bigger operations naturally attract more attention. The first
+// `EMPIRE_HEAT_FREE_SIZE` units are ambient (a home stash and a couple of
+// hands don't hum) — heat/hr = `(size − free) × per-size rate` past that.
+export const EMPIRE_HEAT_PER_SIZE_HOUR = 0.02;
+export const EMPIRE_HEAT_FREE_SIZE = 3;
