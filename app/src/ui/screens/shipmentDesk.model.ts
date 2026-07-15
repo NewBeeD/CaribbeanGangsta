@@ -74,10 +74,11 @@ export function originOptions(state: GameState): readonly OriginOption[] {
       countryName: countryName(s),
       cargo: (Object.entries(s.inventory) as [ProductId, number][])
         .filter(([, qty]) => qty > 0)
+        // Whole units only — floor to the shippable integer (the sub-unit remainder waits).
         .map(([id, qty]) => ({
           id,
           name: productDisplayName(state.world, id),
-          held: qty,
+          held: Math.floor(qty),
         })),
     }))
     .filter((o) => o.cargo.length > 0);
@@ -141,7 +142,7 @@ export function inFlightViews(state: GameState): readonly ShipmentView[] {
     route: shipmentRoute(state, s),
     modeName: getTransport(s.mode).name,
     productName: productDisplayName(state.world, s.product),
-    qty: s.qty,
+    qty: Math.floor(s.qty),
     etaHours: Math.max(0, Math.ceil(s.arrivesAtHours - state.clock.hours)),
     interdictionChance: s.interdictionChance,
     waiting: s.cleared === true,

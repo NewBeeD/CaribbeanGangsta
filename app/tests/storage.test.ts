@@ -298,3 +298,36 @@ describe('offline is safe — raids never resolve while away (GDD §6)', () => {
     }
   });
 });
+
+describe('a seized raid discloses its numbers in the scene (design/13 A6)', () => {
+  it('the raid feed line carries the dirty $ and the units taken', async () => {
+    const { raidStep } = await import('@/engine');
+    const base = createInitialState('raid-amounts');
+    const stocked = (s: GameState): GameState => ({
+      ...s,
+      heat: 95,
+      stashes: [
+        {
+          ...base.stashes[0]!,
+          dirtyCash: 12_400,
+          inventory: { ...base.stashes[0]!.inventory, weed: 40 },
+        },
+      ],
+    });
+
+    let s = stocked(base);
+    let scene: GameState['pendingChoices'][number] | undefined;
+    for (let i = 0; i < 2_000 && !scene; i++) {
+      s = raidStep(s, 24);
+      scene = s.pendingChoices.find(
+        (c) => c.kind === 'raid' && c.summary.includes('seized'),
+      );
+      if (!scene) s = stocked(s); // re-stock so the next roll has real stakes
+    }
+
+    expect(scene).toBeTruthy();
+    // Dirty cash never silently vanishes — the loss line names its numbers.
+    expect(scene!.summary).toContain('$12,400 dirty');
+    expect(scene!.summary).toContain('40 units seized');
+  });
+});

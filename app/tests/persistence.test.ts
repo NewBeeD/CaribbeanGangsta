@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { IDBFactory } from 'fake-indexeddb';
-import { createInitialState, rngFor, SCHEMA_VERSION, type GameState } from '@/engine';
+import {
+  createInitialState,
+  DEFAULT_GAME_CONFIG,
+  rngFor,
+  SCHEMA_VERSION,
+  type GameState,
+} from '@/engine';
 import {
   LocalSaveStore,
   CloudSaveStore,
@@ -162,6 +168,98 @@ describe('migrateEnvelope — schema version + migration hook', () => {
     expect(migrated?.rngState).toEqual(state.rngState);
   });
 
+  it('migrates a v11 save to the fixed 6-front roster (v12: remap + fold-by-max)', () => {
+    // A pre-Prompt-37 save on the old 4-type roster, holding a DUPLICATE bar
+    // (the exploit the single-buy rule kills) and a nightclub + crypto.
+    const legacy = {
+      ...state,
+      cleanCash: 42_000, // untouched by the migration
+      fronts: [
+        { id: 'front-bar-1', type: 'bar', level: 2 },
+        { id: 'front-bar-2', type: 'bar', level: 4 }, // duplicate → folds to max
+        { id: 'front-nightclub-1', type: 'nightclub', level: 1 },
+        { id: 'front-crypto-1', type: 'crypto', level: 3 },
+      ],
+    } as unknown as GameState;
+
+    const migrated = migrateEnvelope({
+      ...envelope,
+      schemaVersion: 11,
+      state: legacy,
+    });
+
+    expect(migrated).not.toBeNull();
+    // Remapped to the new technique ids, one per type, folded to the highest level.
+    expect(migrated?.fronts).toEqual([
+      { id: 'front-cash-front', type: 'cash-front', level: 4 }, // fold-by-max, no seizure
+      { id: 'front-shell-company', type: 'shell-company', level: 1 },
+      { id: 'front-crypto', type: 'crypto', level: 3 },
+    ]);
+    // Nothing the player earned changed: cash and the RNG stream are untouched.
+    expect(migrated?.cleanCash).toBe(42_000);
+    expect(migrated?.rngState).toEqual(state.rngState);
+  });
+
+  it('migrates a v12 save to the production layer (v13: empty ops + config group)', () => {
+    // A pre-Prompt-39 save: no production ops and a config without the group.
+    const { productionOps: _dropOps, config, ...rest } = state;
+    const { production: _dropCfg, ...configWithoutProduction } = config as typeof config & {
+      production?: unknown;
+    };
+    const legacy = {
+      ...rest,
+      cleanCash: 15_000, // untouched by the migration
+      config: configWithoutProduction,
+    } as unknown as GameState;
+
+    const migrated = migrateEnvelope({
+      ...envelope,
+      schemaVersion: 12,
+      state: legacy,
+    });
+
+    expect(migrated).not.toBeNull();
+    // A run that never produced comes back with an empty roster and the default group.
+    expect(migrated?.productionOps).toEqual([]);
+    expect(migrated?.config.production).toEqual(DEFAULT_GAME_CONFIG.production);
+    // Nothing the player earned changed: cash and the RNG stream are untouched.
+    expect(migrated?.cleanCash).toBe(15_000);
+    expect(migrated?.rngState).toEqual(state.rngState);
+  });
+
+  it('migrates a v13 save to integer inventory (v14: fractional holdings round UP)', () => {
+    // A pre-v14 save whose production deposited fractional units (design/13 A1).
+    const legacy = {
+      ...state,
+      inventory: { ...state.inventory, weed: 1.2 },
+      stashes: [
+        {
+          ...state.stashes[0]!,
+          inventory: {
+            ...state.stashes[0]!.inventory,
+            weed: 216.57861666666642, // the playtest save
+            cocaine: 3,
+          },
+        },
+      ],
+    } as unknown as GameState;
+
+    const migrated = migrateEnvelope({
+      ...envelope,
+      schemaVersion: 13,
+      state: legacy,
+    });
+
+    expect(migrated).not.toBeNull();
+    // Rounds UP in the player's favor — never seizes what was earned.
+    expect(migrated?.stashes[0]?.inventory.weed).toBe(217);
+    expect(migrated?.stashes[0]?.inventory.cocaine).toBe(3); // whole units untouched
+    expect(migrated?.inventory.weed).toBe(2);
+    // Cash and the RNG stream are untouched.
+    expect(migrated?.cleanCash).toBe(state.cleanCash);
+    expect(migrated?.rngState).toEqual(state.rngState);
+  });
+
   it('migrates a v2 save up to the heat engine (Prompt 05 fields defaulted)', () => {
     // A pre-Prompt-05 save: heat sitting in DEA range, no heat-engine fields.
     const legacy = { ...state, heat: 45 } as Record<string, unknown>;
@@ -205,6 +303,25 @@ describe('migrateEnvelope — schema version + migration hook', () => {
     expect(migrated?.markets['jamaica']?.weed).toBeDefined();
     // …while a country the save already knew keeps its live stock untouched.
     expect(migrated?.markets['san-cristo']?.cocaine.stock).toBe(knownStock);
+  });
+
+  it('backfills the territory config group on a save written before Prompt 41 (no schema bump)', () => {
+    // A v12 save from before meaningful territory: the `territory` config group is
+    // absent, and stashes carry no `openedAtHours` (established/controlled).
+    const legacyConfig = { ...state.config } as Record<string, unknown>;
+    delete legacyConfig.territory;
+    const legacy = { ...state, config: legacyConfig } as Record<string, unknown>;
+    const migrated = migrateEnvelope({
+      ...envelope,
+      state: legacy as unknown as GameState,
+    });
+
+    expect(migrated).not.toBeNull();
+    // The group is patched in from the default so the engine never reads undefined…
+    expect(migrated?.config.territory.CONSOLIDATION_HOURS).toBeGreaterThan(0);
+    expect(migrated?.config.territory.TERRITORY_REACH_GROWTH).toBeGreaterThan(1);
+    // …and legacy stashes stay established (absent openedAtHours = fully controlled).
+    expect(migrated?.stashes.every((s) => s.openedAtHours === undefined)).toBe(true);
   });
 });
 

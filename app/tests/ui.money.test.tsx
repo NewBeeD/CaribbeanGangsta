@@ -46,10 +46,10 @@ function mount(ui: JSX.Element) {
   };
 }
 
-/** A run with clean cash and a single Level-1 bar front. */
+/** A run with clean cash and a single Level-1 cash-intensive front. */
 function fundedRun(seed: string, clean: number): GameState {
-  const bar: Front = { id: 'front-bar-1', type: 'bar', level: 1 };
-  return { ...createInitialState(seed), cleanCash: clean, fronts: [bar] };
+  const front: Front = { id: 'front-cash-front', type: 'cash-front', level: 1 };
+  return { ...createInitialState(seed), cleanCash: clean, fronts: [front] };
 }
 
 beforeEach(() => {
@@ -64,17 +64,31 @@ describe('moneyScreen.model — priced fronts on the open-access curve', () => {
   it('upgrade cost matches buy_in × 1.15^level (the shown = charged fairness law)', () => {
     const state = fundedRun('money-cost', 0);
     const [row] = frontRows(state);
-    expect(row!.upgradeCost).toBe(frontUpgradeCost('bar', 1));
+    expect(row!.upgradeCost).toBe(frontUpgradeCost('cash-front', 1));
   });
 
   it('highlights the cheapest affordable upgrade, or nothing when broke', () => {
     expect(nextAffordableUpgradeId(fundedRun('money-broke', 0))).toBeNull();
-    expect(nextAffordableUpgradeId(fundedRun('money-rich', 1_000_000))).toBe('front-bar-1');
+    expect(nextAffordableUpgradeId(fundedRun('money-rich', 1_000_000))).toBe('front-cash-front');
   });
 
-  it('offers every front to buy from minute one (open access)', () => {
+  it('offers all six fixed fronts to buy from minute one (open access)', () => {
     const options = buyFrontOptions(createInitialState('money-open'));
-    expect(options.map((o) => o.type).sort()).toEqual(['bar', 'crypto', 'nightclub', 'resort']);
+    expect(options.map((o) => o.type).sort()).toEqual([
+      'cash-front',
+      'crypto',
+      'real-estate',
+      'shell-company',
+      'smurf-network',
+      'trade-front',
+    ]);
+  });
+
+  it('drops an owned technique from the buy list — single-buy, no duplicates', () => {
+    const owned = fundedRun('money-owned', 0); // owns cash-front
+    const types = buyFrontOptions(owned).map((o) => o.type);
+    expect(types).not.toContain('cash-front');
+    expect(types).toHaveLength(5);
   });
 });
 
@@ -91,14 +105,37 @@ describe('MoneyScreen — the return payoff (Prompt 18)', () => {
     view.unmount();
   });
 
-  it('offers no bulk dirty→clean converter — fronts are the only laundry (Item 12)', () => {
+  it('offers no INSTANT bulk converter — the removed peso exchange stays gone', () => {
     const state = fundedRun('money-nopeso', 0);
     useGameStore.setState({ state });
 
     const view = mount(<MoneyScreen />);
-    // The peso exchange was removed — its card/button no longer exists.
+    // The instant lump-sum peso exchange (with its haircut) was removed (Item 12).
     expect(view.container.querySelector('[data-testid="peso-exchange"]')).toBeNull();
     expect(view.container.textContent!.toLowerCase()).not.toContain('haircut');
+    view.unmount();
+  });
+
+  it('washes dirty cash through the mules in batches over time — not instantly', () => {
+    // Home stash holds starting dirty cash; the wash desk offers to send the mules.
+    const state = createInitialState('money-wash');
+    useGameStore.setState({ state });
+    const dirtyBefore = state.stashes.reduce((sum, s) => sum + s.dirtyCash, 0);
+    expect(dirtyBefore).toBeGreaterThan(0);
+
+    const view = mount(<MoneyScreen />);
+    const send = view.container.querySelector('[data-testid="wash-send"]')!;
+    expect(send).not.toBeNull();
+
+    // Max the amount, then send the mules.
+    view.click(view.container.querySelector('[data-testid="qty-max"]')!);
+    view.click(send);
+
+    const after = useGameStore.getState().state!;
+    // Dirty was committed to the queue — NOT instantly turned into clean cash.
+    expect(after.wash.queuedDirty).toBeGreaterThan(0);
+    expect(after.cleanCash).toBe(state.cleanCash);
+    expect(after.stashes.reduce((sum, s) => sum + s.dirtyCash, 0)).toBeLessThan(dirtyBefore);
     view.unmount();
   });
 
@@ -151,6 +188,74 @@ describe('MoneyScreen — the return payoff (Prompt 18)', () => {
     const view = mount(<MoneyScreen />);
     expect(view.container.querySelector('[data-testid="pending-decision"]')).not.toBeNull();
     expect(view.container.textContent).toContain('A buyer has been waiting.');
+    view.unmount();
+  });
+});
+
+describe('MoneyScreen — the notification feed is capped with Clear all (design/13 A5)', () => {
+  /** `n` dismissible hooks queued in order (oldest first, like the engine does). */
+  function hooks(n: number): GameState['pendingChoices'] {
+    return Array.from({ length: n }, (_, i) => ({
+      id: `hook-${i}`,
+      kind: 'buyer',
+      summary: `Hook number ${i}.`,
+      createdAtHours: i,
+    }));
+  }
+
+  it('with 12 pending choices, shows only the 5 newest plus "+7 older"', () => {
+    const state: GameState = { ...createInitialState('money-cap'), pendingChoices: hooks(12) };
+    useGameStore.setState({ state });
+
+    const view = mount(<MoneyScreen />);
+    const rendered = [...view.container.querySelectorAll('[data-testid="pending-decision"]')];
+    expect(rendered).toHaveLength(5);
+    // The NEWEST five (7..11), newest first — the older seven sit behind the count.
+    expect(rendered[0]!.textContent).toContain('Hook number 11.');
+    expect(rendered[4]!.textContent).toContain('Hook number 7.');
+    expect(view.container.textContent).not.toContain('Hook number 6.');
+    expect(view.container.querySelector('[data-testid="pending-older"]')!.textContent).toContain(
+      '+7 older',
+    );
+    view.unmount();
+  });
+
+  it('Clear all resolves every dismissible choice via the same safe default path', () => {
+    const state: GameState = { ...createInitialState('money-clear'), pendingChoices: hooks(12) };
+    useGameStore.setState({ state });
+
+    const view = mount(<MoneyScreen />);
+    view.click(view.container.querySelector('[data-testid="clear-pending"]')!);
+
+    expect(useGameStore.getState().state!.pendingChoices).toHaveLength(0);
+    // The card is gone — nothing waiting.
+    expect(view.container.querySelector('[data-testid="pending-decision"]')).toBeNull();
+    view.unmount();
+  });
+
+  it('consequential (card-bearing) choices survive Clear all and are labeled', () => {
+    const beatScene = {
+      id: 'beat-scene-1',
+      kind: 'beat',
+      summary: 'A big call is waiting.',
+      createdAtHours: 0,
+      beatId: 'beat.first-front',
+    };
+    const state: GameState = {
+      ...createInitialState('money-conseq'),
+      pendingChoices: [...hooks(3), beatScene],
+    };
+    useGameStore.setState({ state });
+
+    const view = mount(<MoneyScreen />);
+    // The consequential scene is labeled as excluded from Clear all.
+    expect(
+      view.container.querySelector('[data-testid="pending-consequential"]')!.textContent,
+    ).toContain('Clear all leaves them');
+
+    view.click(view.container.querySelector('[data-testid="clear-pending"]')!);
+    const after = useGameStore.getState().state!;
+    expect(after.pendingChoices).toEqual([beatScene]); // the big call survives
     view.unmount();
   });
 });

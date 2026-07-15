@@ -3,7 +3,8 @@
  * GDD §4.5). PURE read selectors that turn `GameState` into the tension surface:
  * the current LE tier + decaying heat gauge, the **telegraphed** warnings that a
  * crossing looms (or a task force has opened a file), the payroll raid tip-offs
- * that buy lead time, and the levers to cool it (lie low / bribe a cop).
+ * that buy lead time, and the levers to cool it (lie low / a beat cop on the
+ * payroll — the one-tap "bribe a cop" lever was removed, Ideas2 item 2).
  *
  * The design contract (design/07 §5, GDD §5.4): tension is **estimable** and every
  * escalation is **telegraphed BEFORE it lands** — no surprise LE. Heat is a meter,
@@ -21,7 +22,6 @@ import {
   RAID_TIPOFF_LOOKAHEAD_HOURS,
   RAID_TIPOFF_MIN_CHANCE,
   TIER_TELEGRAPH_MARGIN,
-  bribeCoolQuote,
   currentTier,
   hasRaidTipoff,
   raidChance,
@@ -144,22 +144,27 @@ export function lieLowLever(state: GameState): LieLowLever {
   };
 }
 
-/** The "bribe a cop" lever — its disclosed cost, heat drop, and affordability. */
-export interface BribeLever {
-  readonly cost: number;
-  readonly heatReduced: number;
-  readonly affordable: boolean;
-  /** No heat left to shed (bribing would waste the cash) — the lever goes inert. */
-  readonly noEffect: boolean;
+/**
+ * The cop-driven heat relief on the Heat screen (Ideas2 item 2). The one-tap
+ * "bribe a cop" lever is gone — a beat cop on the PAYROLL is now the only
+ * cop-driven cool-down (design/09 B.2's `raid-tipoff`: "cools local heat
+ * faster"). When one is on the take (loyal, not flipped — the same bar as
+ * `hasRaidTipoff`) their standing benefit line shows; otherwise a pointer routes
+ * to the Corruption screen to put one on the payroll. This authors no math —
+ * `onPayroll` mirrors the engine's own `decayHeat` beat-cop condition.
+ */
+export interface BeatCopRelief {
+  readonly onPayroll: boolean;
+  readonly text: string;
 }
 
-export function bribeLever(state: GameState): BribeLever {
-  const quote = bribeCoolQuote(state);
+export function beatCopRelief(state: GameState): BeatCopRelief {
+  const onPayroll = hasRaidTipoff(state);
   return {
-    cost: quote.cost,
-    heatReduced: quote.heatReduced,
-    affordable: state.cleanCash >= quote.cost,
-    noEffect: quote.heatReduced <= 0,
+    onPayroll,
+    text: onPayroll
+      ? 'Your beat cop is on the payroll — heat cools faster and they tip you off on raids.'
+      : 'Put a cop on the payroll to cool local heat faster.',
   };
 }
 

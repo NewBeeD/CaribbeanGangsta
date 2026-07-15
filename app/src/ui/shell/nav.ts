@@ -19,6 +19,7 @@ export type ScreenId =
   | 'corruption'
   | 'debt'
   | 'arms'
+  | 'production'
   | 'highscore';
 
 export interface ScreenNode {
@@ -111,6 +112,13 @@ export const SCREEN_NODES: readonly ScreenNode[] = [
     route: 'arms',
     inNav: false,
     tagline: 'The broker deals in war. Highest heat in the game.',
+  },
+  {
+    id: 'production',
+    label: 'Production',
+    route: 'production',
+    inNav: false,
+    tagline: 'Grow it, cook it, supply the whole island.',
   },
   {
     id: 'highscore',

@@ -4,7 +4,9 @@
  * a decaying `HeatDots` gauge, and — the core promise — **telegraphed** warnings
  * that a crossing looms or a task force has opened a file, always BEFORE the tier
  * actually escalates. Payroll raid tip-offs surface with lead time to move product.
- * Two in-fiction levers cool it: lie low (slower income) and bribe a cop (−$X).
+ * Cooling it is in-fiction: lie low (slower income), and keep a beat cop on the
+ * payroll (the standing "cools local heat faster" benefit — the one-tap
+ * "bribe a cop" lever was removed, Ideas2 item 2; the pointer routes to Corruption).
  *
  * The design contract (design/07 §5, GDD §5.4): no surprise LE — every escalation
  * is warned before it lands. Heat is a meter, not a currency (design/01 §1): the
@@ -17,14 +19,12 @@ import { useGameState, useGameStore } from '@/store';
 import { Button, Card, HeatDots, Panel, SceneText } from '@/ui/components';
 import { navigate } from '@/ui/shell/useHash';
 import {
-  bribeLever,
+  beatCopRelief,
   heatStatus,
   heatWarnings,
   lieLowLever,
   raidTipoff,
 } from './heatScreen.model';
-
-const money = (n: number): string => `$${Math.round(n).toLocaleString('en-US')}`;
 
 export function HeatScreen() {
   const state = useGameState();
@@ -36,10 +36,9 @@ export function HeatScreen() {
   const warnings = heatWarnings(state);
   const tipoff = raidTipoff(state);
   const lieLow = lieLowLever(state);
-  const bribe = bribeLever(state);
+  const copRelief = beatCopRelief(state);
 
   const setLieLow = (enabled: boolean) => useGameStore.getState().setLieLow(enabled);
-  const coolWithBribe = () => useGameStore.getState().coolWithBribe();
 
   return (
     <div>
@@ -131,26 +130,25 @@ export function HeatScreen() {
             </Button>
           </Panel>
 
-          <Panel heading="Bribe a cop">
+          <Panel heading="Cop on the payroll">
             <p className="cg-label" style={{ marginBottom: 10 }}>
-              Pay a beat cop off from clean cash to make some heat disappear.
+              {copRelief.text}
             </p>
-            <Button
-              variant="secondary"
-              fullWidth
-              disabled={!bribe.affordable || bribe.noEffect}
-              onClick={coolWithBribe}
-              data-testid="bribe-cop"
-            >
-              Bribe a cop
-              <small>
-                {bribe.noEffect
-                  ? 'no heat to cool'
-                  : bribe.affordable
-                    ? `−${money(bribe.cost)} · cools ${bribe.heatReduced} heat`
-                    : `${money(bribe.cost)} · short`}
-              </small>
-            </Button>
+            {copRelief.onPayroll ? (
+              <SceneText tone="win" who="Your cop:">
+                Local heat cools faster while I'm on the take.
+              </SceneText>
+            ) : (
+              <Button
+                variant="secondary"
+                fullWidth
+                onClick={() => navigate('corruption')}
+                data-testid="payroll-cop"
+              >
+                Put a cop on the payroll
+                <small>cools local heat faster</small>
+              </Button>
+            )}
           </Panel>
         </div>
       </Card>

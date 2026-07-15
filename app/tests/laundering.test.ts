@@ -26,15 +26,15 @@ function withFronts(state: GameState, fronts: Front[]): GameState {
   return { ...state, fronts };
 }
 
-const bar = (level = 1): Front => ({ id: `front-bar-${level}`, type: 'bar', level });
+const cashFront = (level = 1): Front => ({ id: 'front-cash-front', type: 'cash-front', level });
 
 describe('cleanCashRate — Σ(ratePerLevel × level) (design/01 §3)', () => {
   it('sums every front by its per-level rate', () => {
     const state = withFronts(createInitialState('rate'), [
-      bar(2), // 120 × 2 = 240
-      { id: 'front-nightclub-1', type: 'nightclub', level: 1 }, // 450 × 1
+      cashFront(2), // 120 × 2 = 240
+      { id: 'front-shell-company', type: 'shell-company', level: 1 }, // 700 × 1
     ]);
-    expect(cleanCashRate(state)).toBe(240 + 450);
+    expect(cleanCashRate(state)).toBe(240 + 700);
   });
 
   it('a run with no fronts earns nothing', () => {
@@ -44,7 +44,7 @@ describe('cleanCashRate — Σ(ratePerLevel × level) (design/01 §3)', () => {
   it('the crypto rate applies its live ±40% swing, deterministically', () => {
     const cfg = getFrontType('crypto');
     const state = withFronts(createInitialState('crypto'), [
-      { id: 'front-crypto-1', type: 'crypto', level: 1 },
+      { id: 'front-crypto', type: 'crypto', level: 1 },
     ]);
     const rate = cleanCashRate(state);
     // Within the ±40% band, and exactly base × the (pure) swing factor.
@@ -71,7 +71,7 @@ describe('offline accrual — piecewise curve (design/01 §3a)', () => {
   });
 
   it('settleOffline earns exactly the curve and banks it to clean cash', () => {
-    const state = withFronts(createInitialState('settle'), [bar(1)]);
+    const state = withFronts(createInitialState('settle'), [cashFront(1)]);
     const { state: after, report } = settleOffline(state, OFFLINE_SOFT_CAP_HOURS);
     expect(report.cleanEarned).toBe(1_440);
     expect(after.cleanCash).toBe(state.cleanCash + 1_440);
@@ -79,7 +79,7 @@ describe('offline accrual — piecewise curve (design/01 §3a)', () => {
   });
 
   it('never zeroes out — a very long absence keeps idling (never a hard loss)', () => {
-    const state = withFronts(createInitialState('long'), [bar(1)]);
+    const state = withFronts(createInitialState('long'), [cashFront(1)]);
     const short = settleOffline(state, 12).report.cleanEarned;
     const long = settleOffline(state, 10_000).report.cleanEarned;
     expect(long).toBeGreaterThan(short); // still accruing, just slower
@@ -89,7 +89,7 @@ describe('offline accrual — piecewise curve (design/01 §3a)', () => {
 describe('settleOffline — the ethical core: adds only, never seizes (GDD §6, §8)', () => {
   /** A rich run: fronts, dirty cash, active debt, some heat — everything to lose. */
   function richRun(seed: string): GameState {
-    const base = withFronts(createInitialState(seed), [bar(3)]);
+    const base = withFronts(createInitialState(seed), [cashFront(3)]);
     const stash: Stash = { ...(base.stashes[0] as Stash), dirtyCash: 250_000 };
     return {
       ...base,
@@ -146,7 +146,7 @@ describe('settleOffline — the ethical core: adds only, never seizes (GDD §6, 
 
 describe('golden hours — bonus-only, never a penalty (design/01 §3a)', () => {
   it('every spawned event is a bonus with a 5–15 min life; a null is a no-op', () => {
-    const state = withFronts(createInitialState('golden'), [bar(2)]);
+    const state = withFronts(createInitialState('golden'), [cashFront(2)]);
     let rngState = state.rngState;
     let spawns = 0;
     for (let i = 0; i < 5_000; i++) {
@@ -168,7 +168,7 @@ describe('golden hours — bonus-only, never a penalty (design/01 §3a)', () => 
 
   it('a golden hour in an offline report never reduces state (opportunity, not auto-loss)', () => {
     // Whether or not one spawns, offline clean cash only ever grows.
-    const state = withFronts(createInitialState('golden-safe'), [bar(1)]);
+    const state = withFronts(createInitialState('golden-safe'), [cashFront(1)]);
     const { state: after } = settleOffline(state, 20);
     expect(after.cleanCash).toBeGreaterThanOrEqual(state.cleanCash);
   });
@@ -176,25 +176,26 @@ describe('golden hours — bonus-only, never a penalty (design/01 §3a)', () => 
 
 describe('fronts — buy & upgrade curve (design/01 §3)', () => {
   it('buyFront costs the Lvl-1 buy-in from clean cash; rejects when broke', () => {
-    const cfg = getFrontType('nightclub');
+    const cfg = getFrontType('shell-company');
     const flush: GameState = { ...createInitialState('buy'), cleanCash: cfg.buyIn };
-    const bought = buyFront(flush, 'nightclub');
+    const bought = buyFront(flush, 'shell-company');
     expect(bought.rejected).toBeUndefined();
     expect(bought.front?.level).toBe(1);
+    expect(bought.front?.id).toBe('front-shell-company'); // stable, one-per-type id
     expect(bought.state.cleanCash).toBe(0);
     expect(bought.state.fronts).toHaveLength(1);
 
     const broke: GameState = { ...createInitialState('broke'), cleanCash: cfg.buyIn - 1 };
-    const failed = buyFront(broke, 'nightclub');
+    const failed = buyFront(broke, 'shell-company');
     expect(failed.rejected).toBe('insufficient-funds');
     expect(failed.state).toBe(broke); // no mutation
   });
 
   it('upgrade cost follows buy_in × 1.15^level, and there is always a next step', () => {
-    const cfg = getFrontType('bar');
+    const cfg = getFrontType('cash-front');
     let prev = 0;
     for (let level = 1; level < FRONT_MAX_LEVEL; level++) {
-      const cost = frontUpgradeCost('bar', level);
+      const cost = frontUpgradeCost('cash-front', level);
       expect(cost).toBe(Math.round(cfg.buyIn * Math.pow(FRONT_COST_GROWTH, level)));
       expect(cost).toBeGreaterThan(prev); // strictly climbing, but finite/reachable
       prev = cost;
@@ -204,10 +205,10 @@ describe('fronts — buy & upgrade curve (design/01 §3)', () => {
   it('upgradeFront deducts exactly the curve cost and advances the level', () => {
     const start = withFronts(
       { ...createInitialState('upg'), cleanCash: 1_000_000 },
-      [bar(1)],
+      [cashFront(1)],
     );
-    const cost = frontUpgradeCost('bar', 1);
-    const up = upgradeFront(start, 'front-bar-1');
+    const cost = frontUpgradeCost('cash-front', 1);
+    const up = upgradeFront(start, 'front-cash-front');
     expect(up.rejected).toBeUndefined();
     expect(up.front?.level).toBe(2);
     expect(up.state.cleanCash).toBe(1_000_000 - cost);
@@ -216,21 +217,39 @@ describe('fronts — buy & upgrade curve (design/01 §3)', () => {
   it('rejects an unknown front, a maxed level, and an unaffordable upgrade', () => {
     const maxed = withFronts(
       { ...createInitialState('max'), cleanCash: 1_000_000 },
-      [bar(FRONT_MAX_LEVEL)],
+      [cashFront(FRONT_MAX_LEVEL)],
     );
     expect(upgradeFront(maxed, 'nope').rejected).toBe('no-front');
-    expect(upgradeFront(maxed, `front-bar-${FRONT_MAX_LEVEL}`).rejected).toBe('max-level');
+    expect(upgradeFront(maxed, 'front-cash-front').rejected).toBe('max-level');
 
-    const poor = withFronts({ ...createInitialState('poor'), cleanCash: 0 }, [bar(1)]);
-    const failed = upgradeFront(poor, 'front-bar-1');
+    const poor = withFronts({ ...createInitialState('poor'), cleanCash: 0 }, [cashFront(1)]);
+    const failed = upgradeFront(poor, 'front-cash-front');
     expect(failed.rejected).toBe('insufficient-funds');
     expect(failed.state).toBe(poor);
+  });
+
+  it('is single-buy: a second buy of an owned type rejects without mutating', () => {
+    const rich: GameState = { ...createInitialState('single-buy'), cleanCash: 1_000_000 };
+    const first = buyFront(rich, 'cash-front');
+    expect(first.rejected).toBeUndefined();
+    expect(first.state.fronts).toHaveLength(1);
+
+    // Buying the SAME technique again is rejected — the roster is the cap.
+    const again = buyFront(first.state, 'cash-front');
+    expect(again.rejected).toBe('already-owned');
+    expect(again.state).toBe(first.state); // no mutation, no duplicate, no charge
+    expect(again.front).toBe(first.state.fronts[0]); // hands back the owned front
+
+    // A DIFFERENT technique still opens — money is the only gate.
+    const other = buyFront(first.state, 'crypto');
+    expect(other.rejected).toBeUndefined();
+    expect(other.state.fronts).toHaveLength(2);
   });
 });
 
 describe('accrue — active clean-cash step (design/01 §3)', () => {
   it('adds clean cash at the current rate over online hours', () => {
-    const state = withFronts(createInitialState('accrue'), [bar(1)]);
+    const state = withFronts(createInitialState('accrue'), [cashFront(1)]);
     const after = accrue(state, 5);
     expect(after.cleanCash).toBeCloseTo(state.cleanCash + 120 * 5, 6);
   });
@@ -238,7 +257,7 @@ describe('accrue — active clean-cash step (design/01 §3)', () => {
   it('is a no-op with no fronts or non-positive dt', () => {
     const none = createInitialState('accrue-none');
     expect(accrue(none, 5)).toBe(none);
-    const withF = withFronts(createInitialState('accrue-zero'), [bar(1)]);
+    const withF = withFronts(createInitialState('accrue-zero'), [cashFront(1)]);
     expect(accrue(withF, 0)).toBe(withF);
   });
 });

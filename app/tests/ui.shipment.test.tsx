@@ -144,3 +144,39 @@ describe('ShipmentDesk — fairness law on the manifest (GDD §8)', () => {
     view.unmount();
   });
 });
+
+describe('the launch button label never carries the disabled hint (design/13 A2)', () => {
+  it('renders "Fix the manifest first" as a helper line under the button, not in it', () => {
+    // 500 held > the go-fast cargo cap (400): maxing the qty blocks the launch
+    // with a non-funds rejection, which used to concatenate into the label.
+    const base = shippingState('ship-hint');
+    const state: GameState = {
+      ...base,
+      stashes: base.stashes.map((s, i) =>
+        i === 0 ? { ...s, inventory: { ...s.inventory, cocaine: 500 } } : s,
+      ),
+    };
+    useGameStore.setState({ state });
+    const view = mount(<ShipmentDesk />);
+
+    view.click(view.container.querySelector('[data-testid="qty-max"]')!);
+
+    const button = view.container.querySelector('[data-testid="launch-shipment"]')!;
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect(button.textContent).not.toContain('Fix the manifest');
+    const hint = view.container.querySelector('[data-testid="launch-hint"]')!;
+    expect(hint).not.toBeNull();
+    expect(hint.textContent).toContain('Fix the manifest first.');
+    view.unmount();
+  });
+
+  it('a launchable manifest shows the all-in price and no hint', () => {
+    useGameStore.setState({ state: shippingState('ship-nohint') });
+    const view = mount(<ShipmentDesk />);
+    const button = view.container.querySelector('[data-testid="launch-shipment"]')!;
+    expect(button.textContent).toContain('all-in');
+    expect(button.textContent).not.toContain('Fix the manifest');
+    expect(view.container.querySelector('[data-testid="launch-hint"]')).toBeNull();
+    view.unmount();
+  });
+});

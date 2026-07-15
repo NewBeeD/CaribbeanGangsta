@@ -134,7 +134,11 @@ describe('session + funnel instrumentation (Prompt 25; design/06 §1)', () => {
 
   it('the first front opened emits the funnel row alongside front_opened', () => {
     const front = FRONT_TYPES[0]!;
-    const state: GameState = { ...createInitialState('instr-front'), cleanCash: front.buyIn * 3 };
+    const second = FRONT_TYPES[1]!;
+    const state: GameState = {
+      ...createInitialState('instr-front'),
+      cleanCash: (front.buyIn + second.buyIn) * 3,
+    };
 
     const opened = buyFront(state, front.id);
     trackFront('opened', state, opened);
@@ -146,8 +150,8 @@ describe('session + funnel instrumentation (Prompt 25; design/06 §1)', () => {
     });
     expect(named('first_front_opened')).toHaveLength(1);
 
-    // A second front is not a second "first front".
-    const again = buyFront(opened.state, front.id);
+    // A second front (a DIFFERENT technique — single-buy) is not a second "first front".
+    const again = buyFront(opened.state, second.id);
     trackFront('opened', opened.state, again);
     expect(named('front_opened')).toHaveLength(2);
     expect(named('first_front_opened')).toHaveLength(1);

@@ -31,6 +31,7 @@ import {
   type LeTier,
 } from './config/heat';
 import type { GameState, PendingChoice, Stash } from './state';
+import { maxVulnerability } from './territory';
 
 export type { LeTier } from './config/heat';
 
@@ -43,12 +44,29 @@ function empireSizeOf(state: GameState): number {
   return state.stashes.length + state.fronts.length + state.crew.length;
 }
 
+/**
+ * Whether a beat cop is on the PAYROLL, loyal, and not flipped — the standing
+ * `raid-tipoff` benefit whose promise is "cools local heat faster" (design/09
+ * B.2). Inlined here (rather than importing `corruption.hasRaidTipoff`) because
+ * `corruption.ts` already imports `addHeat` from this module — reading the tie
+ * off `state` directly keeps `heat.ts` free of that import cycle. Uses the same
+ * loyal-enough bar (`BETRAYAL_PONR_LOYALTY`) as `hasRaidTipoff`.
+ */
+function hasLoyalBeatCop(state: GameState): boolean {
+  return state.corruption.officials.some(
+    (o) =>
+      o.officialId === 'beat-cop' &&
+      !o.isWire &&
+      o.loyalty >= state.config.crew.BETRAYAL_PONR_LOYALTY,
+  );
+}
+
 // --- Heat scalar -------------------------------------------------------------
 
 /**
  * Add (or, with a negative `amount`, subtract) heat, clamped to [0, 100]. The
- * single canonical mutator for the heat meter — the deal loop, bribes, and chaos
- * all route through here. `source` is a free-form tag for telemetry/beats.
+ * single canonical mutator for the heat meter — the deal loop, chaos, and wire
+ * heat all route through here. `source` is a free-form tag for telemetry/beats.
  */
 export function addHeat(state: GameState, amount: number, _source?: string): GameState {
   const heat = clamp(state.heat + amount, HEAT_MIN, HEAT_MAX);
@@ -58,76 +76,20 @@ export function addHeat(state: GameState, amount: number, _source?: string): Gam
 /**
  * Decay heat over `dtHours` of ONLINE time (design/01 §4). Exponential toward 0
  * at `~5%/hour`, so heat never goes negative and always cools when left alone.
- * Lying low multiplies the rate (cools faster); a larger empire divides it
+ * Lying low multiplies the rate (cools faster); a loyal beat cop on the payroll
+ * also multiplies it ("cools local heat faster" — design/09 B.2, the only
+ * cop-driven relief now the one-tap bribe is gone); a larger empire divides it
  * (cools slower). Registered as an active-only tick step — offline is frozen.
  */
 export function decayHeat(state: GameState, dtHours: number): GameState {
   if (dtHours <= 0 || state.heat <= HEAT_MIN) return state;
   const cfg = state.config.heat;
   const lieLowMult = state.lyingLow ? cfg.LIE_LOW_DECAY_MULTIPLIER : 1;
+  const copMult = hasLoyalBeatCop(state) ? cfg.PAYROLLED_COP_DECAY_MULTIPLIER : 1;
   const slowdown = 1 + empireSizeOf(state) * cfg.EMPIRE_DECAY_SLOWDOWN;
-  const rate = clamp((cfg.HEAT_DECAY_RATE_PER_HOUR * lieLowMult) / slowdown, 0, 1);
+  const rate = clamp((cfg.HEAT_DECAY_RATE_PER_HOUR * lieLowMult * copMult) / slowdown, 0, 1);
   const heat = state.heat * Math.pow(1 - rate, dtHours);
   return { ...state, heat: clamp(heat, HEAT_MIN, HEAT_MAX) };
-}
-
-/**
- * The heat reduction a bribe of `bribeDollars` buys (design/07 §5). This is ONLY
- * the heat side — the bribe's cash cost, official ties, and payroll are owned by
- * Prompt 09; callers there apply the economy and use this hook for the effect.
- */
-export function reduceHeatByBribe(state: GameState, bribeDollars: number): GameState {
-  if (bribeDollars <= 0) return state;
-  return addHeat(state, -bribeDollars * state.config.heat.BRIBE_HEAT_PER_DOLLAR, 'bribe');
-}
-
-/**
- * A DISCLOSED quote for the Heat screen's `[ Bribe a cop -$X ]` lever (design/07
- * §5): what a `dollars` bribe costs and exactly how much heat it removes (clamped
- * at the floor, so the shown drop is never more than there is to shed). Pure — the
- * number shown here is the number `bribeToCoolHeat` charges/removes (fairness law).
- */
-export interface BribeCoolQuote {
-  readonly cost: number;
-  readonly heatReduced: number;
-}
-
-export function bribeCoolQuote(state: GameState, dollars?: number): BribeCoolQuote {
-  const cfg = state.config.heat;
-  const cost = Math.max(0, Math.round(dollars ?? cfg.QUICK_BRIBE_DOLLARS));
-  const raw = cost * cfg.BRIBE_HEAT_PER_DOLLAR;
-  const heatReduced = Math.min(raw, state.heat - HEAT_MIN);
-  return { cost, heatReduced: Math.round(heatReduced * 10) / 10 };
-}
-
-export interface BribeCoolResult {
-  readonly state: GameState;
-  readonly ok: boolean;
-  /** Clean cash actually charged (== the quoted cost). */
-  readonly paid: number;
-  /** Heat actually shed (== the quoted `heatReduced`). */
-  readonly heatReduced: number;
-  readonly rejected?: 'insufficient-funds' | 'invalid-amount';
-}
-
-/**
- * Pay a cop off from CLEAN cash to cool heat (design/07 §5's reduce-heat lever).
- * An in-fiction lever, NOT a "buy heat" store: it charges the disclosed cost and
- * sheds the disclosed heat via `reduceHeatByBribe`. Rejects without mutating on an
- * invalid amount or insufficient funds. The full corruption negotiation & payroll
- * remain Prompt 09/20's domain; this is the quick, always-available option.
- */
-export function bribeToCoolHeat(state: GameState, dollars?: number): BribeCoolResult {
-  const quote = bribeCoolQuote(state, dollars ?? state.config.heat.QUICK_BRIBE_DOLLARS);
-  if (quote.cost <= 0) {
-    return { state, ok: false, paid: 0, heatReduced: 0, rejected: 'invalid-amount' };
-  }
-  if (state.cleanCash < quote.cost) {
-    return { state, ok: false, paid: 0, heatReduced: 0, rejected: 'insufficient-funds' };
-  }
-  const cooled = reduceHeatByBribe(state, quote.cost);
-  const next: GameState = { ...cooled, cleanCash: cooled.cleanCash - quote.cost };
-  return { state: next, ok: true, paid: quote.cost, heatReduced: state.heat - next.heat };
 }
 
 // --- Tiers -------------------------------------------------------------------
@@ -265,8 +227,11 @@ function stashValueAtRisk(stash: Stash): number {
 
 /**
  * The probability that a raid fires within a `dtHours` window: the tier base
- * rate scaled by heat (0..1 of the meter) and empire size, compounded over the
- * window so it rises with time but never exceeds 1 (design/01 §4).
+ * rate scaled by heat (0..1 of the meter) and empire size, then lifted by any
+ * freshly opened territory's fading VULNERABILITY surcharge (Ideas2 item 5 —
+ * over-expansion runs hot until it consolidates), compounded over the window so
+ * it rises with time but never exceeds 1 (design/01 §4). Active-only like the
+ * whole raid path, so absence never exposes a new foothold (offline is frozen).
  */
 export function raidChance(state: GameState, dtHours: number): number {
   if (dtHours <= 0) return 0;
@@ -274,7 +239,8 @@ export function raidChance(state: GameState, dtHours: number): number {
   const perHour =
     cfg.RAID_BASE_RATE_PER_HOUR[currentTier(state)] *
     (state.heat / HEAT_MAX) *
-    (1 + empireSizeOf(state) * cfg.RAID_EMPIRE_FACTOR);
+    (1 + empireSizeOf(state) * cfg.RAID_EMPIRE_FACTOR) *
+    (1 + maxVulnerability(state));
   return clamp(1 - Math.pow(1 - clamp(perHour, 0, 1), dtHours), 0, 1);
 }
 

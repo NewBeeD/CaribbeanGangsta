@@ -38,8 +38,11 @@ export function QtyInput({
   boundLabel,
   disabled = false,
 }: QtyInputProps) {
-  const usableMax = Math.max(min, max);
-  const canAct = !disabled && max >= min;
+  // Units are whole: floor the ceiling so the Max chip and the "Up to N" note
+  // never show a fraction, and an edit can never clamp to one (a stash holding
+  // 12.7 offers a Max of 12 — exactly what a deal/move/ship can actually execute).
+  const usableMax = Math.max(min, Math.floor(max));
+  const canAct = !disabled && Math.floor(max) >= min;
   const clamp = (q: number): number => Math.min(Math.max(min, Math.round(q)), usableMax);
   const set = (q: number) => onChange(clamp(q));
 

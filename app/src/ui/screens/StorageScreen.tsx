@@ -20,9 +20,11 @@ import { navigate } from '@/ui/shell/useHash';
 import type { ProductId } from '@/engine';
 import {
   buildOptions,
+  cashMoveRejectProse,
   diversificationCue,
   guardOptions,
   homeCountryId,
+  moveRejectProse,
   moveTargets,
   raidScenes,
   stashRows,
@@ -91,7 +93,18 @@ function StashCard({ row, others }: { readonly row: StashRow; readonly others: r
           : 'Moved — it’s in place.',
       );
     } else {
-      setFeedback('Couldn’t move that — check space and what’s held.');
+      // Each reject reason reads as its own line, with numbers (design/13 A4).
+      const s = useGameStore.getState().state;
+      setFeedback(
+        s && result?.rejected
+          ? moveRejectProse(s, result.rejected, {
+              fromId: row.id,
+              toId: moveTo,
+              product: moveProductId,
+              qty: moveQty,
+            })
+          : 'Couldn’t move that.',
+      );
     }
   };
 
@@ -104,7 +117,12 @@ function StashCard({ row, others }: { readonly row: StashRow; readonly others: r
         delay > 0 ? `Cash moved — ${delay}h in transit.` : 'Cash moved — it’s in place.',
       );
     } else {
-      setFeedback('Couldn’t move that cash — not enough here.');
+      const s = useGameStore.getState().state;
+      setFeedback(
+        s && result?.rejected
+          ? cashMoveRejectProse(s, result.rejected, { fromId: row.id, amount: cashAmt })
+          : 'Couldn’t move that cash.',
+      );
     }
   };
 
@@ -207,15 +225,25 @@ function StashCard({ row, others }: { readonly row: StashRow; readonly others: r
                 value={moveTo}
                 onChange={(e) => setMoveTo(e.target.value)}
               >
+                {/* The destination's remaining room is shown BEFORE committing
+                    (design/13 A4) — the outcome is predictable, never a surprise. */}
                 {others.map((o) => (
                   <option key={o.id} value={o.id}>
-                    → {o.name}
+                    → {o.name} · {Math.floor(o.capacityFree)} free
                   </option>
                 ))}
               </select>
               <Button variant="secondary" onClick={doMove} data-testid="move-product">
                 Move
               </Button>
+              {(() => {
+                const target = others.find((o) => o.id === moveTo) ?? others[0];
+                return target ? (
+                  <span className="cg-label" data-testid="move-room">
+                    Room at {target.name}: {Math.floor(target.capacityFree)} units
+                  </span>
+                ) : null;
+              })()}
             </div>
           ) : null}
 

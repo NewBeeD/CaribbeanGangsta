@@ -30,6 +30,7 @@ import {
   getFrontType,
   type FrontType,
 } from './config/fronts';
+import { netWorth } from './state';
 import type { Front, GameState, PendingChoice } from './state';
 
 export type { FrontType } from './config/fronts';
@@ -89,10 +90,11 @@ function frontHeatPerHour(state: GameState): number {
 
 /** Bank the clean-cash / net-worth peaks after clean cash grows (design/01 §7). */
 function bankCleanPeaks(state: GameState): GameState {
-  const dirty = state.stashes.reduce((sum, s) => sum + s.dirtyCash, 0);
   const { highScore } = state;
   const peakCleanCash = Math.max(highScore.peakCleanCash, state.cleanCash);
-  const peakNetWorth = Math.max(highScore.peakNetWorth, dirty + state.cleanCash);
+  // Net worth counts wash-queued dirty at face value (state.netWorth), so a big
+  // batch mid-flight still banks its height even though it hasn't landed yet.
+  const peakNetWorth = Math.max(highScore.peakNetWorth, netWorth(state));
   if (peakCleanCash === highScore.peakCleanCash && peakNetWorth === highScore.peakNetWorth) {
     return state;
   }
@@ -329,7 +331,8 @@ export type LaunderRejectReason =
   | 'invalid-amount'
   | 'no-front'
   | 'no-stash'
-  | 'max-level';
+  | 'max-level'
+  | 'already-owned';
 
 /** Result of buying/upgrading a front: the new state + the front, or a rejection. */
 export interface FrontResult {
@@ -339,16 +342,22 @@ export interface FrontResult {
 }
 
 /**
- * Buy a new Level-1 front of `type`, paid from CLEAN cash (fronts are a clean-cash
- * sink — design/01 §1). Rejects without mutating on insufficient funds.
+ * Buy the Level-1 front of `type`, paid from CLEAN cash (fronts are a clean-cash
+ * sink — design/01 §1). SINGLE-BUY (Ideas2 item 1): each technique is buyable
+ * exactly once, then upgrade-only — a second buy of an owned type rejects with
+ * `already-owned` **without mutating**. The id is the stable `front-${type}` (one
+ * per technique), so there is never a duplicate to disambiguate. Also rejects
+ * without mutating on insufficient funds.
  */
 export function buyFront(state: GameState, type: FrontType): FrontResult {
+  const existing = state.fronts.find((f) => f.type === type) ?? null;
+  if (existing) return { state, front: existing, rejected: 'already-owned' };
+
   const cfg = getFrontType(type, state.config.fronts.FRONT_TYPES);
   if (state.cleanCash < cfg.buyIn) {
     return { state, front: null, rejected: 'insufficient-funds' };
   }
-  const nOwned = state.fronts.filter((f) => f.type === type).length;
-  const front: Front = { id: `front-${type}-${nOwned + 1}`, type, level: 1 };
+  const front: Front = { id: `front-${type}`, type, level: 1 };
   return {
     state: { ...state, cleanCash: state.cleanCash - cfg.buyIn, fronts: [...state.fronts, front] },
     front,

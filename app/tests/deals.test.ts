@@ -390,3 +390,53 @@ describe('determinism (Prompt 04 acceptance)', () => {
     expect(run()).toEqual(run());
   });
 });
+
+describe('rejections carry per-reason scene keys (design/13 A1 — never success copy)', () => {
+  it('every reject reason lands its own scene key, distinct from every success key', () => {
+    const base = seed(createInitialState('reject-keys'), { cash: 0, inventory: {} });
+
+    const fractional = resolveDeal(base, { type: 'sell', product: 'weed', qty: 1.5 });
+    expect(fractional.rejected).toBe('invalid-qty');
+    expect(fractional.sceneKey).toBe('deal.reject.invalid-qty');
+
+    const shortInv = resolveDeal(base, { type: 'sell', product: 'weed', qty: 10 });
+    expect(shortInv.rejected).toBe('insufficient-inventory');
+    expect(shortInv.sceneKey).toBe('deal.reject.insufficient-inventory');
+
+    const broke = resolveDeal(base, { type: 'buy', product: 'weed', qty: 5 });
+    expect(broke.rejected).toBe('insufficient-funds');
+    expect(broke.sceneKey).toBe('deal.reject.insufficient-funds');
+
+    // Reject scene keys never collide with the success/bust keys.
+    for (const r of [fractional, shortInv, broke]) {
+      expect(r.sceneKey.startsWith('deal.reject.')).toBe(true);
+      expect(r.state).toBe(base); // rejections never mutate
+    }
+  });
+});
+
+describe('a bust discloses the seized dirty cash as a feed line (design/13 A6)', () => {
+  it('queues a cash-seized pending choice naming the stash and the dollars', () => {
+    // Force a bust exactly as the seizure test does: hot Miami, retry the roll.
+    const start = seed(createInitialState('bust-feed'), { heat: 50, cash: 0 });
+    const staged = withStashIn(start, 'miami', {
+      cash: 12_400,
+      inventory: { cocaine: 20 },
+    });
+    const intent = { type: 'sell', product: 'cocaine', qty: 10, stashId: 'stash-miami' } as const;
+
+    let rngState = staged.rngState;
+    let bust = resolveDeal(staged, intent);
+    for (let i = 0; i < 1000 && bust.outcome !== 'bust'; i++) {
+      const trial: GameState = { ...staged, rngState };
+      bust = resolveDeal(trial, intent);
+      rngState = bust.state.rngState;
+    }
+    expect(bust.outcome).toBe('bust');
+
+    const line = bust.state.pendingChoices.find((c) => c.kind === 'cash-seized');
+    expect(line).toBeTruthy();
+    expect(line!.summary).toContain('Bust at miami');
+    expect(line!.summary).toContain('$12,400');
+  });
+});

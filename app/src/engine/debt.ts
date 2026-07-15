@@ -38,6 +38,7 @@ import {
   findLender,
   getLender,
   type LadderRung,
+  type LenderConfig,
   type LenderId,
 } from './config/lenders';
 import {
@@ -219,7 +220,14 @@ export function borrow(
     ...(collateralRef !== undefined ? { collateralRef } : {}),
   };
   return {
-    state: { ...state, cleanCash: state.cleanCash + amount, debt },
+    // Bump the run's loan counter so the FIRST loan (loansTaken === 1) can bite
+    // sooner (design/10; Ideas2 item 4) — a behavioural signal, not a flag gate.
+    state: {
+      ...state,
+      cleanCash: state.cleanCash + amount,
+      debt,
+      loansTaken: state.loansTaken + 1,
+    },
     ok: true,
     quote,
   };
@@ -335,32 +343,64 @@ function stashValue(s: Stash): number {
   return s.dirtyCash;
 }
 
+/** What a collector's seizure actually took — the numbers for its feed line
+ * (design/13 A6: dirty cash never silently vanishes). Empty note = nothing taken. */
+interface SeizureOutcome {
+  readonly state: GameState;
+  readonly note: string;
+}
+
+const dollars = (n: number): string => `$${Math.round(n).toLocaleString('en-US')}`;
+
+/** "$12,400 dirty and 40 units" — what walked out of a stash, as prose. */
+function stashLossNote(s: Stash): string {
+  const units = Object.values(s.inventory).reduce((sum, v) => sum + v, 0);
+  const parts = [
+    s.dirtyCash > 0 ? `${dollars(s.dirtyCash)} dirty` : '',
+    units > 0 ? `${Math.floor(units)} units` : '',
+  ].filter(Boolean);
+  return parts.join(' and ');
+}
+
 /**
  * Seize exactly ONE asset for rung 3 (design/10 §5, anti-wipe). Prefer the pledged
  * collateral stash. Otherwise, if the player has more than one stash, the shark
  * takes the most valuable one (ties broken by `rng`) — but NEVER their last
  * location: with only one stash left, he takes a CUT of the cash there instead, so
- * you always keep a place to operate from.
+ * you always keep a place to operate from. Returns a `note` naming what was taken
+ * with its numbers (design/13 A6 — the loss is disclosed, never a silent drain).
  */
-function seizeOneStash(state: GameState, rng: Rng): GameState {
+function seizeOneStash(state: GameState, rng: Rng): SeizureOutcome {
   const collat = state.debt.collateralRef;
   const pledged = collat !== undefined ? state.stashes.find((s) => s.id === collat) : undefined;
   if (pledged) {
-    return { ...state, stashes: state.stashes.filter((s) => s.id !== pledged.id) };
+    const loss = stashLossNote(pledged);
+    return {
+      state: { ...state, stashes: state.stashes.filter((s) => s.id !== pledged.id) },
+      note: `${pledged.name} is theirs now${loss ? ` — ${loss} gone with it` : ''}.`,
+    };
   }
-  if (state.stashes.length === 0) return state;
+  if (state.stashes.length === 0) return { state, note: '' };
   if (state.stashes.length === 1) {
     const only = state.stashes[0]!;
+    const takenCash = only.dirtyCash - Math.round(only.dirtyCash * (1 - state.config.lenders.LADDER_INCOME_CUT));
     const cut: Stash = {
       ...only,
-      dirtyCash: Math.round(only.dirtyCash * (1 - state.config.lenders.LADDER_INCOME_CUT)),
+      dirtyCash: only.dirtyCash - takenCash,
     };
-    return { ...state, stashes: [cut] };
+    return {
+      state: { ...state, stashes: [cut] },
+      note: takenCash > 0 ? `They took ${dollars(takenCash)} dirty out of ${only.name}.` : '',
+    };
   }
   const maxVal = Math.max(...state.stashes.map(stashValue));
   const top = state.stashes.filter((s) => stashValue(s) === maxVal);
   const target = rng.pick(top);
-  return { ...state, stashes: state.stashes.filter((s) => s.id !== target.id) };
+  const loss = stashLossNote(target);
+  return {
+    state: { ...state, stashes: state.stashes.filter((s) => s.id !== target.id) },
+    note: `${target.name} is theirs now${loss ? ` — ${loss} gone with it` : ''}.`,
+  };
 }
 
 /**
@@ -384,6 +424,8 @@ function seizeOneFront(state: GameState, rng: Rng): GameState {
 /** Apply one rung's in-fiction effect and queue its telegraphed story beat. */
 function applyRung(state: GameState, rng: Rng, rung: LadderRung): GameState {
   let next: GameState = { ...state, debt: { ...state.debt, ladderRung: rung } };
+  // A collector's seizure carries its numbers in the scene (design/13 A6).
+  let note = '';
   switch (rung) {
     case 1: // vig — the shark quietly raises the rate (a warning felt in the balance).
       next = {
@@ -396,9 +438,12 @@ function applyRung(state: GameState, rng: Rng, rung: LadderRung): GameState {
       break;
     case 2: // a visit — a scare, explicitly HEAT-FREE (design/10 §5). No state effect.
       break;
-    case 3: // collateral / a stash taken — exactly one asset (anti-wipe).
-      next = seizeOneStash(next, rng);
+    case 3: { // collateral / a stash taken — exactly one asset (anti-wipe).
+      const seized = seizeOneStash(next, rng);
+      next = seized.state;
+      note = seized.note;
       break;
+    }
     case 4: // a front / corner taken — recoverable over time.
       next = seizeOneFront(next, rng);
       break;
@@ -410,29 +455,63 @@ function applyRung(state: GameState, rng: Rng, rung: LadderRung): GameState {
   const scene: PendingChoice = {
     id: `debt-default-${rung}-${state.clock.hours}`,
     kind: DEBT_DEFAULT_CHOICE,
-    summary: sign,
+    summary: note ? `${sign} ${note}` : sign,
     createdAtHours: state.clock.hours,
   };
   return { ...next, pendingChoices: [...next.pendingChoices, scene] };
 }
 
 /**
+ * ACTIVE in-game days the current loan has been on the books (borrow day → now).
+ * Derived from the soft due date, which is always `borrowDay + softDueDays` — and a
+ * partial payment (patience reset) re-anchors `dueDay` to now, so this correctly
+ * drops back to 0 after a good-faith payment. `lenderId` is non-null at call sites.
+ */
+function daysOnLoan(state: GameState, cfg: LenderConfig | undefined): number {
+  const soft = cfg?.softDueDays ?? 0;
+  return state.clock.day - (state.debt.dueDay - soft);
+}
+
+/**
+ * Whether the run's FIRST loan has reached its accelerated vig warning (rung 1)
+ * BEFORE the soft due date (Ideas2 item 4; Prompt 40 — stronger early pressure).
+ * Only the opening loan (`loansTaken <= 1`), only from good standing (rung 0), only
+ * once ~a played week has passed. A behavioural signal, never a progression flag;
+ * every later loan escalates on the normal overdue schedule below.
+ */
+function firstLoanVigDue(state: GameState, cfg: LenderConfig | undefined): boolean {
+  return (
+    state.loansTaken <= 1 &&
+    state.debt.ladderRung === 0 &&
+    daysOnLoan(state, cfg) >= state.config.lenders.FIRST_LOAN_VIG_DAYS
+  );
+}
+
+/**
  * Advance the default ladder AT MOST ONE readable rung toward the day-derived
- * target (design/10 §5; guarantee #3) — and only past the soft due date. The
- * target climbs one rung per in-game day overdue, capped at the lender's
- * consequence ceiling (the street shark stops at seizing a stash — MVP §7). Each
- * advance is a story beat with agency (pay / partial / negotiate / favor / remove).
- * A partial payment resets patience and pushes the due date out, dropping the
- * target back to 0 so escalation halts. NEVER a silent roll: the only randomness is
- * breaking ties when choosing which asset to seize.
+ * target (design/10 §5; guarantee #3) — and only past the soft due date, with ONE
+ * exception: the run's first loan pulls its vig warning (rung 1) forward to
+ * ~`FIRST_LOAN_VIG_DAYS` on the books (Ideas2 item 4 — the opening loan bites
+ * sooner). Otherwise the target climbs one rung per in-game day overdue, capped at
+ * the lender's consequence ceiling (the street shark stops at seizing a stash —
+ * MVP §7). Each advance is a story beat with agency (pay / partial / negotiate /
+ * favor / remove). A partial payment resets patience and pushes the due date out,
+ * dropping the target back to 0 so escalation halts. NEVER a silent roll: the only
+ * randomness is breaking ties when choosing which asset to seize.
  */
 export function defaultLadder(state: GameState, rng: Rng): GameState {
   if (!state.debt.active || state.debt.lenderId === null) return state;
-  const overdueDays = state.clock.day - state.debt.dueDay;
-  if (overdueDays <= 0) return state; // consequences begin only past the soft due date
-
   const L = state.config.lenders;
   const cfg = findLender(state.debt.lenderId, L.LENDERS);
+  const overdueDays = state.clock.day - state.debt.dueDay;
+
+  if (overdueDays <= 0) {
+    // Before the soft due date the ONLY escalation is the first loan's early vig —
+    // a single telegraphed rung; the heavier rungs still wait for the due date.
+    if (firstLoanVigDue(state, cfg)) return applyRung(state, rng, 1);
+    return state;
+  }
+
   const ceiling = cfg ? L.CEILING_MAX_RUNG[cfg.consequenceCeiling] : 3;
   const target = clamp(Math.floor(overdueDays / L.LADDER_DAYS_PER_RUNG), 1, ceiling) as LadderRung;
   if (state.debt.ladderRung >= target) return state;
@@ -452,7 +531,12 @@ export function defaultLadder(state: GameState, rng: Rng): GameState {
 export function debtStep(state: GameState, dtHours: number): GameState {
   if (!state.debt.active || state.debt.lenderId === null || dtHours <= 0) return state;
   let next = accrueInterest(state, dtHours / HOURS_PER_DAY);
-  if (next.clock.day - next.debt.dueDay > 0) {
+  // Run the ladder past the soft due date — OR early, if the first loan's
+  // accelerated vig warning is now due (Ideas2 item 4). Restoring the RNG is a
+  // no-op for the vig rung (no seizure draw), so the stream stays byte-identical.
+  const overdue = next.clock.day - next.debt.dueDay > 0;
+  const cfg = findLender(state.debt.lenderId, next.config.lenders.LENDERS);
+  if (overdue || firstLoanVigDue(next, cfg)) {
     const rng = restoreRng(next.rngState);
     next = { ...defaultLadder(next, rng), rngState: rng.getState() };
   }

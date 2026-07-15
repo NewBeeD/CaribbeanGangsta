@@ -27,7 +27,12 @@ import {
   frontLieutenantBonus,
   frontUpgradeCost,
   getFrontType,
+  isConsequentialChoice,
   totalDirtyCash,
+  washCleanRate,
+  washCut,
+  washEtaHours,
+  washRate,
   type Front,
   type FrontType,
   type GameState,
@@ -111,9 +116,16 @@ export interface BuyFrontOption {
   readonly affordable: boolean;
 }
 
-/** The whole front roster as buy options — every one live from minute one. */
+/**
+ * The buyable-once front roster (Ideas2 item 1). Every technique is offered from
+ * minute one (open access — money is the only gate), but each is **single-buy**:
+ * once owned it moves to the FRONTS upgrade list (`frontRows`) and drops out here,
+ * so there is never a "buy another" affordance or a duplicate. When all six are
+ * owned this is empty.
+ */
 export function buyFrontOptions(state: GameState): readonly BuyFrontOption[] {
-  return FRONT_TYPES.map((cfg) => ({
+  const owned = new Set(state.fronts.map((f) => f.type));
+  return FRONT_TYPES.filter((cfg) => !owned.has(cfg.id)).map((cfg) => ({
     type: cfg.id,
     name: cfg.name,
     buyIn: cfg.buyIn,
@@ -125,6 +137,43 @@ export function buyFrontOptions(state: GameState): readonly BuyFrontOption[] {
 /** Total dirty cash across all stashes — the "dirty vs clean" readout. */
 export function totalDirty(state: GameState): number {
   return totalDirtyCash(state);
+}
+
+/**
+ * The money-mule wash desk (the batched dirty→clean converter). A PURE read of
+ * the wash queue + its throughput: how much dirty is on hand to commit, how much
+ * is mid-deposit with the mules, the clean cash landing per hour, the cut they
+ * skim, and the ETA to clear. The screen shows these and dispatches `queueWash` /
+ * `cancelWash` — it authors no rate/cut/eta math (the ETA shown is `queued / rate`).
+ */
+export interface WashView {
+  /** Dirty cash sitting in stashes, available to send to the mules, $. */
+  readonly availableDirty: number;
+  /** Dirty cash mid-deposit with the mules right now, $ (0 = idle). */
+  readonly queuedDirty: number;
+  /** A batch is currently draining. */
+  readonly active: boolean;
+  /** Clean cash the queue lands per real hour while draining (throughput after cut). */
+  readonly cleanPerHour: number;
+  /** Dirty dollars the mules clear per hour (the drain rate). */
+  readonly ratePerHour: number;
+  /** The mules'/banks' skim as a fraction (0..1) — shown as the cost of laundering. */
+  readonly cut: number;
+  /** In-game hours to finish the current queue (0 when idle). */
+  readonly etaHours: number;
+}
+
+export function washView(state: GameState): WashView {
+  const queuedDirty = state.wash.queuedDirty;
+  return {
+    availableDirty: totalDirtyCash(state),
+    queuedDirty,
+    active: queuedDirty > 0,
+    cleanPerHour: washCleanRate(state),
+    ratePerHour: washRate(state),
+    cut: washCut(state),
+    etaHours: washEtaHours(state),
+  };
 }
 
 /**
@@ -145,9 +194,26 @@ export interface PendingDecision {
 function routeForKind(kind: string): string {
   switch (kind) {
     case 'crew':
+    case 'crew-betrayal':
       return 'crew';
     case 'rival':
+    case 'territory-exposed':
       return 'empire';
+    case 'raid':
+      return 'storage';
+    case 'official-flip':
+      return 'corruption';
+    case 'debt-default':
+    case 'debt-cleared':
+      return 'debt';
+    case 'shipment-arrived':
+    case 'shipment-seized':
+      return 'transport';
+    case 'wash-pickup':
+    case 'cash-seized':
+      return 'money';
+    case 'heat-escalation':
+      return 'heat';
     case 'buyer':
     default:
       return 'deals';
@@ -158,10 +224,43 @@ export function pendingDecisions(state: GameState): readonly PendingDecision[] {
   return state.pendingChoices
     // Card-bearing scenes (beats + chained cards) present as interrupt scenes, not
     // routed decisions — leave those to the story-card presenter (Prompt 22).
-    .filter((c) => c.beatId === undefined && c.cardId === undefined)
+    .filter((c) => !isConsequentialChoice(c))
     .map((c) => ({
       id: c.id,
       summary: c.summary,
       route: routeForKind(c.kind),
     }));
+}
+
+/** The Money feed shows at most this many notifications (design/13 A5). */
+export const PENDING_FEED_LIMIT = 5;
+
+/**
+ * The "Waiting on you" notification feed, capped (design/13 A5 — user addition 3):
+ * only the `PENDING_FEED_LIMIT` NEWEST dismissible decisions render, with a
+ * "+N older" count behind them, plus what Clear all would touch. Consequential
+ * choices (story cards with real branches) are counted separately — they present
+ * as interrupt scenes, are excluded from Clear all, and are labeled as such.
+ */
+export interface PendingFeed {
+  /** The newest dismissible decisions, newest first, capped at the limit. */
+  readonly latest: readonly PendingDecision[];
+  /** Dismissible decisions collapsed behind the cap. */
+  readonly olderCount: number;
+  /** Everything a Clear all would dismiss (the whole dismissible queue). */
+  readonly clearableCount: number;
+  /** Card-bearing choices Clear all leaves untouched (labeled on the card). */
+  readonly consequentialCount: number;
+}
+
+export function pendingFeed(state: GameState): PendingFeed {
+  const all = pendingDecisions(state);
+  // The queue is append-ordered, so the newest sit at the end — surface those.
+  const newestFirst = [...all].reverse();
+  return {
+    latest: newestFirst.slice(0, PENDING_FEED_LIMIT),
+    olderCount: Math.max(0, all.length - PENDING_FEED_LIMIT),
+    clearableCount: all.length,
+    consequentialCount: state.pendingChoices.filter(isConsequentialChoice).length,
+  };
 }

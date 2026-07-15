@@ -13,7 +13,12 @@ import {
 } from '@/engine';
 import { LocalSaveStore, useGameStore, type SaveStore } from '@/store';
 import { WorldMarketScreen } from '@/ui/screens/WorldMarketScreen';
-import { boardRows, widestSpread } from '@/ui/screens/worldMarket.model';
+import {
+  boardRows,
+  countryPriceSheet,
+  priceBook,
+  widestSpread,
+} from '@/ui/screens/worldMarket.model';
 import { openLoop } from '@/ui/shell/sessionEnd.model';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -69,6 +74,64 @@ describe('worldMarket.model — the board IS getMarketPrice (fairness spot-check
   });
 });
 
+describe('worldMarket.model — the country sheet is the SAME price, read sideways (Ideas2 §6)', () => {
+  it('countryPriceSheet(c) is byte-identical to getMarketPrice and to boardRows for every drug', () => {
+    const state = createInitialState('sheet-fair');
+    for (const c of COUNTRIES) {
+      const sheet = countryPriceSheet(state, c.id);
+      // Every DRUG, arms excluded — the drug menu, matching the Deal screen.
+      expect(sheet.map((r) => r.productId)).toEqual(
+        PRODUCTS.filter((p) => p.id !== 'arms').map((p) => p.id),
+      );
+      expect(sheet.some((r) => r.productId === 'arms')).toBe(false);
+      for (const row of sheet) {
+        const price = getMarketPrice(state, row.productId, c.id);
+        expect(row.price).toBe(price.price);
+        expect(row.stock).toBe(price.stock);
+        expect(row.trend).toBe(price.trend);
+        expect(row.traded).toBe(isTraded(c.id, row.productId));
+        // …and identical to the same cell read the other way (one price path).
+        const boardCell = boardRows(state, row.productId).find((b) => b.countryId === c.id)!;
+        expect(row.price).toBe(boardCell.price);
+        expect(row.plugGated).toBe(boardCell.plugGated);
+        expect(row.plugCost).toBe(boardCell.plugCost);
+      }
+    }
+  });
+
+  it('a plug-gated source shows contract price + intro cost; a non-traded drug is inert', () => {
+    const state = createInitialState('sheet-plug');
+    const colombia = countryPriceSheet(state, 'colombia');
+    const coke = colombia.find((r) => r.productId === 'cocaine')!;
+    expect(coke.plugGated).toBe(true);
+    expect(coke.plugCost).toBeGreaterThan(0);
+
+    const crescent = countryPriceSheet(state, 'golden-crescent');
+    const crescentCoke = crescent.find((r) => r.productId === 'cocaine')!;
+    expect(crescentCoke.traded).toBe(false);
+  });
+
+  it('an unknown country id yields an empty sheet (no throw)', () => {
+    const state = createInitialState('sheet-unknown');
+    expect(countryPriceSheet(state, 'atlantis')).toEqual([]);
+  });
+});
+
+describe('worldMarket.model — the price book (all drugs × all countries)', () => {
+  it('is a full drugs×countries grid sharing the boardRows price path, arms excluded', () => {
+    const state = createInitialState('book-grid');
+    const book = priceBook(state);
+    const drugs = PRODUCTS.filter((p) => p.id !== 'arms');
+    expect(book.products.map((p) => p.id)).toEqual(drugs.map((p) => p.id));
+    expect(book.countries.map((c) => c.id)).toEqual(COUNTRIES.map((c) => c.id));
+    book.products.forEach((p, i) => {
+      expect(book.rows[i]).toEqual(boardRows(state, p.id));
+    });
+    // The highlight pair is the board's widest spread, verbatim.
+    expect(book.spread).toEqual(widestSpread(state));
+  });
+});
+
 describe('WorldMarketScreen — every price, every island, from minute one', () => {
   it('shows the plug contract with its intro cost, and inert "no market" cells', () => {
     useGameStore.setState({ state: createInitialState('board-open') });
@@ -82,6 +145,43 @@ describe('WorldMarketScreen — every price, every island, from minute one', () 
     // …and the Golden Crescent has no cocaine market at all (Ideas2 §5).
     const crescent = view.container.querySelector('[data-testid="board-golden-crescent"]')!;
     expect(crescent.textContent).toContain('No market');
+    view.unmount();
+  });
+
+  it('By country view: pick a country, read every drug from minute one (no stash needed)', () => {
+    useGameStore.setState({ state: createInitialState('board-country') });
+    const view = mount(<WorldMarketScreen />);
+
+    // Switch to the location-centric view.
+    view.click(view.container.querySelector('[data-testid="view-country"]')!);
+
+    // Default sheet country is the first on the roster; its whole drug menu shows.
+    const first = COUNTRIES[0]!;
+    const drugs = PRODUCTS.filter((p) => p.id !== 'arms');
+    for (const p of drugs) {
+      expect(view.container.querySelector(`[data-testid="sheet-${p.id}"]`)).not.toBeNull();
+    }
+    // Arms never appear on the drug sheet.
+    expect(view.container.querySelector('[data-testid="sheet-arms"]')).toBeNull();
+
+    // Every cell equals the engine price for THIS country.
+    const state = useGameStore.getState().state!;
+    const coke = view.container.querySelector('[data-testid="sheet-cocaine"]')!;
+    const price = getMarketPrice(state, 'cocaine', first.id);
+    if (isTraded(first.id, 'cocaine')) {
+      expect(coke.textContent).toContain(`$${Math.round(price.price).toLocaleString('en-US')}`);
+    }
+
+    // Pick another country and the sheet re-reads there.
+    const other = COUNTRIES[1]!;
+    view.click(view.container.querySelector(`[data-testid="sheet-country-${other.id}"]`)!);
+    expect(view.container.textContent).toContain(`Every drug's price in ${other.name}`);
+
+    // And the Price book matrix renders a live cell.
+    view.click(view.container.querySelector('[data-testid="view-book"]')!);
+    expect(
+      view.container.querySelector(`[data-testid="book-cocaine-${first.id}"]`),
+    ).not.toBeNull();
     view.unmount();
   });
 

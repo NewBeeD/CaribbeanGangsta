@@ -286,7 +286,8 @@ describe('fairnessReport — displayed ≈ realized, in aggregate (design/01 §0
 describe('auditOfflineFreeze — absence never punishes (design/10 §6; GDD §6)', () => {
   it('a real settleOffline passes the audit, debt and all', () => {
     const base = createInitialState('freeze-audit');
-    const withLoan = borrow(base, LENDERS[0]!.id, 1_000).state;
+    // Within the day-1 cold-start cap (Prompt 40) so the loan actually opens.
+    const withLoan = borrow(base, LENDERS[0]!.id, 150).state;
     const { state: settled } = settleOffline(withLoan, 30);
     const audit = auditOfflineFreeze(withLoan, settled);
     expect(audit.violation).toBe(false);

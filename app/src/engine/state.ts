@@ -95,8 +95,35 @@ import type {
  *     older v11 save they default to empty/false (`normalizeState` in
  *     store/persistence.ts) — transient world data + a fresh-empty arsenal, never
  *     player cash or drug holdings.
+ * v12: the fixed 6-front laundering roster + single-buy rule (Ideas2 item 1;
+ *     Prompt 37). `Front.type` moves to the new 6-id union and each front is
+ *     buyable once with the stable id `front-${type}`. Migration remaps legacy
+ *     front ids (`bar → cash-front`, `nightclub → shell-company`, `resort →
+ *     real-estate`, `crypto → crypto`) and FOLDS any duplicate of a type to the
+ *     single highest-level survivor (migrations never seize — no cash/RNG change).
+ *
+ *     v12 is EXTENDED IN PLACE by Prompt 41 (Ideas2 item 5 — meaningful territory)
+ *     with NO further schema bump: `Stash.openedAtHours` (optional — absent = an
+ *     established, fully-controlled stash) and the `config.territory` group. Both
+ *     are absent-is-safe on an older v12/v11 save: legacy stashes read as
+ *     long-since consolidated, and `normalizeState` backfills the config group
+ *     from the default (store/persistence.ts) — never player cash or holdings.
+ * v13: the production layer — grow-ops, strains & drug factories (Ideas2 item 3;
+ *     Prompt 39). `productionOps` (shape mirrors `Front`) and the `config.production`
+ *     group are added; the `CrewAssignment` kind union gains `'production'` (crew
+ *     delegation reuses the front-lieutenant path). Migration seeds an empty
+ *     `productionOps` array and backfills `config.production` from the default —
+ *     never player cash, holdings, or the RNG stream (a pre-v13 run simply had no
+ *     production).
+ * v14: integer inventory (design/13 A1; Prompt 43) — product units are whole
+ *     numbers everywhere. `ProductionOp.pendingYield` carries each op's sub-unit
+ *     fractional accrual so `productionStep` deposits only whole units (nothing
+ *     fractional ever lands in an inventory, nothing produced is lost). Migration
+ *     rounds any existing fractional holding UP to the next whole unit — in the
+ *     player's favor, never a seizure. Shared with Prompt 45, which extends the
+ *     op shape in place.
  */
-export const SCHEMA_VERSION = 11 as const;
+export const SCHEMA_VERSION = 14 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -136,6 +163,16 @@ export interface Stash {
   readonly inventory: Inventory;
   /** Crew member guarding this stash (design/09 A.3a). Absent = unguarded. */
   readonly guardCrewId?: string;
+  /**
+   * In-game hours at which this foothold was OPENED as new territory (Ideas2 item
+   * 5; Prompt 41). Stamped only when `addStash` opens a stash in a country the run
+   * didn't already hold — it drives the raid-risk VULNERABILITY window and the
+   * CONSOLIDATION hold (engine/territory.ts). ABSENT means an ESTABLISHED stash —
+   * the home stash, a reinforcement in a country already held, or a legacy save —
+   * which is fully controlled and not exposed. Not a schema bump: absent-is-safe
+   * (a legacy stash simply reads as long-since consolidated).
+   */
+  readonly openedAtHours?: number;
 }
 
 /** A laundering front (idle engine). Prompt 07 owns rates and accrual. */
@@ -143,6 +180,29 @@ export interface Front {
   readonly id: string;
   readonly type: string;
   readonly level: number;
+}
+
+/**
+ * A production op — a grow-op or drug factory (Ideas2 item 3; Prompt 39). Shape
+ * mirrors `Front`: a stable per-type `id` (`prod-${type}`, single-buy), the config
+ * `type` (`ProductionOpId`), and a 1–5 `level`. It turns ACTIVE time into product
+ * units in the home stash (`production.ts`). Crew delegation is NOT stored here —
+ * it reuses the front-lieutenant path (`crew.assignment.kind === 'production'`), so
+ * the assigned crew is the single source of truth and an op never holds a dangling
+ * crew ref. A single array covers BOTH kinds; `kind` lives on the config, not the
+ * saved op (config/production.ts).
+ */
+export interface ProductionOp {
+  readonly id: string;
+  readonly type: string;
+  readonly level: number;
+  /**
+   * Sub-unit yield accrued but not yet deposited (design/13 A1; always `0 ≤ x < 1`).
+   * `productionStep` deposits only WHOLE units into inventories and carries the
+   * remainder here, so total yield over time equals the shown rate while nothing
+   * fractional ever lands in a stash. Absent (legacy save) reads as 0.
+   */
+  readonly pendingYield?: number;
 }
 
 /**
@@ -180,8 +240,16 @@ export interface BetrayalArc {
 
 /** What a crew member is currently doing (design/02 §5). `targetId` names the asset. */
 export interface CrewAssignment {
-  readonly kind: 'idle' | 'guard' | 'front' | 'territory' | 'deal-crew' | 'courier';
-  /** The stash/front/territory/shipment id this references, when applicable. */
+  readonly kind:
+    | 'idle'
+    | 'guard'
+    | 'front'
+    | 'territory'
+    | 'deal-crew'
+    | 'courier'
+    /** Running a grow-op / factory for a yield bonus (Ideas2 item 3; Prompt 39). */
+    | 'production';
+  /** The stash/front/territory/shipment/production-op id this references, when applicable. */
   readonly targetId?: string;
 }
 
@@ -406,6 +474,27 @@ export interface StreetStock {
 }
 
 /**
+ * The money-mule wash queue — the batched dirty→clean converter (the money mules
+ * who go bank to bank depositing under the $10k reporting threshold). Dirty cash
+ * the player commits to laundering is pulled OUT of stashes and held here "with
+ * the mules", who deposit it in sub-$10k batches over ONLINE time: the `wash-queue`
+ * tick (`wash.ts`) drains `queuedDirty` at the mule throughput and lands clean cash
+ * at `1 − WASH_CUT` (the mules/banks skim the rest). A bigger sum takes
+ * proportionally longer — more money, more time. Empty is `{ queuedDirty: 0 }`.
+ *
+ * Frozen while offline, like every other tick system: a batch never clears while
+ * the player is away, so absence neither launders nor loses (GDD §6). Queued cash
+ * is counted at FACE VALUE in `netWorth` (it hasn't been skimmed yet), so
+ * committing to the queue never reads as a loss — the cut is realized only as each
+ * batch lands. NOT a replacement for fronts: fronts still mint clean passively;
+ * the mules are the separate, dirty-consuming channel (they eat a cut for it).
+ */
+export interface WashQueue {
+  /** Dirty cash pulled from stashes and mid-deposit with the mules, $. */
+  readonly queuedDirty: number;
+}
+
+/**
  * Peak trackers. Score banks from PEAK values the instant a run ends, so a
  * late-game wipe still records the height climbed to (design/01 §7). Lives on
  * state but is what `endgame.ts` (Prompt 11) banks to the persistent leaderboard.
@@ -454,6 +543,12 @@ export interface GameState {
   /** Safe, launderable money (design/01 §1). Dirty cash lives in `stashes`. */
   readonly cleanCash: number;
   /**
+   * The money-mule wash queue (the batched dirty→clean converter). Dirty cash
+   * committed to laundering, draining to clean over ONLINE time (wash.ts). Empty
+   * on a fresh run and after a full wash. Frozen while away (GDD §6).
+   */
+  readonly wash: WashQueue;
+  /**
    * Countries whose TRUE-SOURCE plug has been bought (Ideas2 §2; plugs.ts).
    * A pure money gate — never a time lock or progression flag (Ideas.md).
    */
@@ -477,9 +572,24 @@ export interface GameState {
    */
   readonly shipments: readonly Shipment[];
   readonly fronts: readonly Front[];
+  /**
+   * Grow-ops and drug factories — the production layer (Ideas2 item 3; Prompt 39).
+   * Each turns ACTIVE time into product units in the home stash (`production.ts`).
+   * A single array covers both kinds (the `kind` is on the config). Empty on a
+   * fresh run and on a migrated pre-v13 save.
+   */
+  readonly productionOps: readonly ProductionOp[];
   readonly crew: readonly CrewMember[];
   readonly corruption: Corruption;
   readonly debt: Debt;
+  /**
+   * How many loans this RUN has taken (design/10; Ideas2 item 4; Prompt 40). A
+   * monotonic counter bumped by `borrow`, so the FIRST loan is the one live while
+   * `loansTaken === 1` — used to bite the opening loan sooner (`FIRST_LOAN_VIG_DAYS`)
+   * without a progression flag. Survives repayment (unlike `debt`, which resets),
+   * so a second loan escalates on the normal, slower schedule.
+   */
+  readonly loansTaken: number;
   readonly rivals: readonly RivalState[];
   /** Progression / onboarding gates, keyed by name. */
   readonly flags: Readonly<Record<string, boolean>>;
@@ -507,6 +617,11 @@ export function emptyInventory(): Inventory {
 /** No rocks on the corners — the run's starting (and fully-sold-through) street pool. */
 export function emptyStreetStock(): StreetStock {
   return { units: 0, bookedUnitPrice: 0 };
+}
+
+/** An idle wash queue — the run's starting (and fully-cleared) mule queue. */
+export function emptyWash(): WashQueue {
+  return { queuedDirty: 0 };
 }
 
 /** An empty arsenal — the run's starting (and fully-sold-through) armory. */
@@ -569,14 +684,43 @@ export function splitCharge(
   return { fromDirty, fromClean: cost - fromDirty };
 }
 
-/** Net worth = all dirty cash + clean cash. Basis of the peak high score. */
+/**
+ * Net worth = all dirty cash (in stashes) + clean cash + dirty in the wash queue.
+ * Basis of the peak high score. Queued cash counts at FACE VALUE — it's committed
+ * but not yet skimmed — so sending the mules never dents net worth on its own; the
+ * `WASH_CUT` is realized only as each batch lands (wash.ts).
+ */
 export function netWorth(state: GameState): number {
-  return totalDirtyCash(state) + state.cleanCash;
+  return totalDirtyCash(state) + state.cleanCash + state.wash.queuedDirty;
 }
 
 /** A rough empire-size composite (design/01 §7). Expanded in Prompt 11. */
 export function empireSize(state: GameState): number {
   return state.stashes.length + state.fronts.length + state.crew.length;
+}
+
+/**
+ * Whether dismissing this pending choice is CONSEQUENTIAL — it carries a story
+ * card with real branches (`beatId`/`cardId`), so clearing it would silently pick
+ * one. These present as interrupt scenes (Prompt 22), are excluded from the Money
+ * feed, and survive `dismissAllPendingChoices` (design/13 A5 guardrail: Clear all
+ * never silently picks a consequential branch).
+ */
+export function isConsequentialChoice(choice: PendingChoice): boolean {
+  return choice.beatId !== undefined || choice.cardId !== undefined;
+}
+
+/**
+ * Dismiss every SAFELY-dismissible pending choice at once (design/13 A5 — the
+ * Money feed's "Clear all"). Pure; mirrors the single-dismiss default path exactly
+ * (dismissal = the no-action default, a plain removal from the queue). Choices
+ * whose dismissal is consequential (`isConsequentialChoice`) are kept untouched —
+ * they resolve only through the story-card presenter's explicit choice.
+ */
+export function dismissAllPendingChoices(state: GameState): GameState {
+  const kept = state.pendingChoices.filter(isConsequentialChoice);
+  if (kept.length === state.pendingChoices.length) return state;
+  return { ...state, pendingChoices: kept };
 }
 
 /**
@@ -632,6 +776,7 @@ export function createInitialState(
     armsMarkets: createInitialArmsMarkets(rng.fork('arms-markets'), config.arms),
     armory: emptyArmory(),
     cleanCash: 0,
+    wash: emptyWash(),
     plugs: [],
     reputation: { street: 0, business: 0, political: 0 },
     heat: country.heatBaseline,
@@ -642,9 +787,11 @@ export function createInitialState(
     stashes: [homeStash],
     shipments: [],
     fronts: [],
+    productionOps: [],
     crew: [],
     corruption: { officials: [], payrollPerWeek: 0, paidPorts: [], lastPayrollWeek: 1 },
     debt: emptyDebt(),
+    loansTaken: 0,
     rivals,
     flags: {},
     beatsFired: [],

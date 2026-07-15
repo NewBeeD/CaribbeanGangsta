@@ -26,6 +26,7 @@
 
 import { judgeCanDismiss } from './corruption';
 import { isDebtMarked, lifelineOffer } from './debt';
+import { isCountryConsolidated } from './territory';
 import { PRESTIGE_UNLOCKS } from './config/prestige';
 import {
   debtOwed,
@@ -54,10 +55,15 @@ export function actReached(state: GameState): number {
  * one more front — matching the design's intent for what "getting big" means.
  */
 export function empireComposite(state: GameState): number {
-  const countries = new Set(state.stashes.map((s) => s.countryId));
-  const districts = countries.size;
+  // Only FULLY CONTROLLED countries count toward reach (Ideas2 item 5; Prompt 41):
+  // a freshly opened district is CONTESTED and doesn't count until it's been held
+  // through the consolidation hold (territory.ts). Because `bankPeaks` ratchets,
+  // this temporary reach dip while consolidating never lowers a banked peak.
+  const countries = [...new Set(state.stashes.map((s) => s.countryId))];
   const homeCountry = state.world.startingCountry.id;
-  const routes = [...countries].filter((c) => c !== homeCountry).length;
+  const controlled = countries.filter((c) => isCountryConsolidated(state, c));
+  const districts = controlled.length;
+  const routes = controlled.filter((c) => c !== homeCountry).length;
   const w = state.config.prestige.EMPIRE_WEIGHTS;
   return (
     w.district * districts +

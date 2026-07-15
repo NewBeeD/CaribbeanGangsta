@@ -89,12 +89,22 @@ function isPortStanding(state: GameState, countryId: string): boolean {
   );
 }
 
+/** "day 12, 08:00" — an absolute in-game hour count as a readable timestamp. */
+function gameTimeLabel(hours: number): string {
+  const day = Math.floor(hours / 24) + 1;
+  const hour = Math.floor(hours % 24);
+  return `day ${day}, ${String(hour).padStart(2, '0')}:00`;
+}
+
 /** One port's bribe negotiation — everything shown BEFORE committing (design/09 B.1). */
 export interface PortRow {
   /** The port id == the country id (a container stash routes through it). */
   readonly portId: string;
   readonly name: string;
   readonly shipmentValue: number;
+  /** There is REAL value staged through this port (a quote only renders against
+   * a real manifest — design/13 A3; never a hypothetical shipment). */
+  readonly hasStaged: boolean;
   /** The asking price, $ — exactly what `payBribe` charges (shown == charged). */
   readonly ask: number;
   /** Seizure % if you DON'T pay, and the floor once you do — both as whole percents. */
@@ -102,6 +112,8 @@ export interface PortRow {
   readonly paidSeizurePctLabel: string;
   readonly paid: boolean;
   readonly standing: boolean;
+  /** When a one-off protection lapses, as prose ("day 12, 08:00"); null = standing/unpaid. */
+  readonly paidUntilLabel: string | null;
   readonly containerNames: readonly string[];
 }
 
@@ -109,22 +121,33 @@ export interface PortRow {
  * A port row per country that holds a container stash (the only place a port bribe
  * has a visible effect). Empty when no container stash exists yet — the screen then
  * points the player to build one.
+ *
+ * The unpaid/paid seizure labels read from CONFIG, not the quote (design/13 A3):
+ * `quoteBribe` reports a paid port's floor as its "base", so a lapsed-but-listed
+ * `paidPorts` entry could render the phantom "3% → 3%" card. Base vs floor from
+ * config can never collapse into each other.
  */
 export function portRows(state: GameState): readonly PortRow[] {
+  const cfg = state.config.corruption;
   const countryIds = [...new Set(portStashes(state).map((s) => s.countryId))];
   return countryIds.map((countryId) => {
     const value = shipmentValueAt(state, countryId);
     const quote = quoteBribe(state, countryId, value);
     const here = portStashes(state).filter((s) => s.countryId === countryId);
+    const until = state.corruption.paidPorts.find(
+      (p) => p.portId === countryId && p.paidUntilHours !== undefined && p.paidUntilHours > state.clock.hours,
+    )?.paidUntilHours;
     return {
       portId: countryId,
       name: `${countryName(countryId)} port`,
       shipmentValue: value,
+      hasStaged: value > 0,
       ask: quote.ask,
-      unpaidSeizurePctLabel: `${Math.round(quote.baseSeizurePct * 100)}%`,
-      paidSeizurePctLabel: `${Math.round(quote.resultingSeizurePct * 100)}%`,
+      unpaidSeizurePctLabel: `${Math.round(cfg.PORT_BASE_SEIZURE * 100)}%`,
+      paidSeizurePctLabel: `${Math.round(cfg.PORT_PAID_SEIZURE * 100)}%`,
       paid: isPortPaid(state, countryId),
       standing: isPortStanding(state, countryId),
+      paidUntilLabel: until !== undefined ? gameTimeLabel(until) : null,
       containerNames: here.map((s) => s.name),
     };
   });

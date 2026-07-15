@@ -89,11 +89,18 @@ export function hasFirstMove(state: GameState): boolean {
   });
 }
 
-/** The cheapest front the policy saves toward (idle engine on = longer runs). */
-function cheapestFront(state: GameState): { readonly type: FrontType; readonly buyIn: number } {
-  const best = state.config.fronts.FRONT_TYPES.reduce((a, b) =>
-    b.buyIn < a.buyIn ? b : a,
-  );
+/**
+ * The cheapest front the policy still needs to open (idle engine on = longer
+ * runs). Single-buy (Ideas2 item 1) means each technique is bought at most once,
+ * so owned types are excluded; `null` once the whole roster is in play.
+ */
+function cheapestFront(
+  state: GameState,
+): { readonly type: FrontType; readonly buyIn: number } | null {
+  const owned = new Set(state.fronts.map((f) => f.type));
+  const candidates = state.config.fronts.FRONT_TYPES.filter((f) => !owned.has(f.id));
+  if (candidates.length === 0) return null;
+  const best = candidates.reduce((a, b) => (b.buyIn < a.buyIn ? b : a));
   return { type: best.id, buyIn: best.buyIn };
 }
 
@@ -133,7 +140,7 @@ function policyStep(state: GameState): GameState {
   // 12). Clean cash here comes from front accrual + golden hours, so a front
   // compounds the clean side once one is affordable.
   const front = cheapestFront(next);
-  if (next.cleanCash >= front.buyIn * 1.5) {
+  if (front && next.cleanCash >= front.buyIn * 1.5) {
     next = buyFront(next, front.type).state;
   }
 

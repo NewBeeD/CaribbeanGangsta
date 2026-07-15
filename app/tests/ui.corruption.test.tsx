@@ -185,3 +185,71 @@ describe('CorruptionScreen — buying your way to safety (Prompt 20)', () => {
     view.unmount();
   });
 });
+
+describe('the phantom bribe card is gone (design/13 A3)', () => {
+  /** Mark the container's port paid, expiring at `untilHours` (in-game). */
+  function paidAt(state: GameState, untilHours: number | undefined): GameState {
+    const portId = state.stashes.find((s) => s.type === 'container')!.countryId;
+    return {
+      ...state,
+      corruption: {
+        ...state.corruption,
+        paidPorts: [
+          {
+            portId,
+            seizurePct: 0.03,
+            paidAtHours: 0,
+            ...(untilHours !== undefined ? { paidUntilHours: untilHours } : {}),
+          },
+        ],
+      },
+    };
+  }
+
+  it('a paid port renders a protection status line — no quote, no pay button', () => {
+    const state = paidAt(withPort('corr-protected', 1_000_000, 50_000), 72);
+    useGameStore.setState({ state });
+    const view = mount(<CorruptionScreen />);
+
+    const status = view.container.querySelector('[data-testid="port-paid"]')!;
+    expect(status.textContent).toContain('Protected');
+    expect(status.textContent).toContain('3%');
+    expect(status.textContent).toContain('until day 4'); // 72h → day 4
+    expect(view.container.querySelector('[data-testid="pay-bribe"]')).toBeNull();
+    expect(view.container.querySelector('[data-testid="port-seizure"]')).toBeNull();
+    view.unmount();
+  });
+
+  it('a LAPSED paid entry re-offers the real 30% → 3% drop — "3% → 3%" can never render', () => {
+    // The playtest bug: the expired entry stayed on paidPorts, and the quote's
+    // "base" collapsed to the paid floor. Labels now come from config.
+    const lapsed = {
+      ...paidAt(withPort('corr-lapsed', 1_000_000, 50_000), 5),
+      clock: { hours: 10, day: 1, week: 1 }, // past the 5h expiry
+    };
+    const row = portRows(lapsed)[0]!;
+    expect(row.paid).toBe(false);
+    expect(row.unpaidSeizurePctLabel).toBe('30%');
+    expect(row.paidSeizurePctLabel).toBe('3%');
+    expect(row.unpaidSeizurePctLabel).not.toBe(row.paidSeizurePctLabel);
+
+    useGameStore.setState({ state: lapsed });
+    const view = mount(<CorruptionScreen />);
+    expect(view.container.querySelector('[data-testid="port-seizure"]')!.textContent).toBe(
+      '30% → 3%',
+    );
+    view.unmount();
+  });
+
+  it('an empty container gets guidance, never a quote against a hypothetical shipment', () => {
+    const state = withPort('corr-empty', 1_000_000, 0);
+    useGameStore.setState({ state });
+    const view = mount(<CorruptionScreen />);
+
+    expect(view.container.querySelector('[data-testid="port-nothing-staged"]')).not.toBeNull();
+    expect(view.container.querySelector('[data-testid="pay-bribe"]')).toBeNull();
+    expect(view.container.querySelector('[data-testid="port-seizure"]')).toBeNull();
+    expect(view.container.textContent).not.toContain('Staged here ~$0');
+    view.unmount();
+  });
+});

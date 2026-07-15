@@ -79,19 +79,19 @@ afterEach(() => {
 describe('debtScreen.model — terms, timing & the ladder (Prompt 21)', () => {
   it('borrowQuote exposes full terms BEFORE confirming (principal, rate, total-to-repay)', () => {
     const s = borrower('quote');
-    const view = borrowQuote(s, 'papa-cass', 1_500);
-    const engine = quoteLoan(s, 'papa-cass', 1_500);
+    const view = borrowQuote(s, 'papa-cass', 800);
+    const engine = quoteLoan(s, 'papa-cass', 800);
 
-    expect(view.principal).toBe(1_500);
+    expect(view.principal).toBe(800);
     expect(view.weeklyRatePct).toBe(Math.round(getLender('papa-cass').weeklyRate * 100));
     // The disclosed balloon-free total is exactly the engine's — shown == committed.
     expect(view.totalToRepayAtDue).toBe(engine.totalToRepayAtDue);
-    expect(view.interestAtDue).toBe(engine.totalToRepayAtDue - 1_500);
+    expect(view.interestAtDue).toBe(engine.totalToRepayAtDue - 800);
     expect(view.withinCap).toBe(true);
   });
 
   it('activeLoan states the due-day in IN-GAME played time, not real time', () => {
-    const s = borrow(borrower('due'), 'papa-cass', 1_000).state;
+    const s = borrow(borrower('due'), 'papa-cass', 800).state;
     const loan = activeLoan(s)!;
     const cfg = getLender('papa-cass');
     // Borrowed on day 2 → due `softDueDays` in-game days later; countdown is that gap.
@@ -101,8 +101,8 @@ describe('debtScreen.model — terms, timing & the ladder (Prompt 21)', () => {
   });
 
   it('repayPlan allows a free full payoff and a patience-buying partial', () => {
-    // Borrow 1,000 (clean → 1,000), then top up so a full payoff is affordable.
-    const borrowed = borrow(borrower('repay'), 'papa-cass', 1_000).state;
+    // Borrow 800 (clean → 800), then top up so a full payoff is affordable.
+    const borrowed = borrow(borrower('repay'), 'papa-cass', 800).state;
     const s: GameState = { ...borrowed, cleanCash: borrowed.cleanCash + 5_000 };
     const plan = repayPlan(s);
 
@@ -154,13 +154,13 @@ describe('DebtScreen — full disclosure, no real-time pressure (Prompt 21)', ()
     const after = useGameStore.getState().state!;
     expect(after.debt.active).toBe(true);
     expect(after.debt.lenderId).toBe('papa-cass');
-    // Principal (50% of a 2,000 cap at full rep) landed in clean cash.
-    expect(after.cleanCash).toBe(1_000);
+    // Principal (50% of the $900 cap at full rep — Prompt 40) landed in clean cash.
+    expect(after.cleanCash).toBe(450);
     view.unmount();
   });
 
   it('repaying in full clears the loan and spends clean cash', () => {
-    const borrowed = borrow(borrower('ui-repay'), 'papa-cass', 1_000).state;
+    const borrowed = borrow(borrower('ui-repay'), 'papa-cass', 800).state;
     useGameStore.setState({ state: borrowed });
     const owed = Math.round(debtOwed(borrowed.debt));
 
@@ -189,7 +189,7 @@ describe('DebtScreen — full disclosure, no real-time pressure (Prompt 21)', ()
   });
 
   it('surfaces a default-ladder rung as a scene with intervention actions', () => {
-    const borrowed = borrow(borrower('ui-default'), 'papa-cass', 1_000).state;
+    const borrowed = borrow(borrower('ui-default'), 'papa-cass', 800).state;
     const scene: PendingChoice = {
       id: 'debt-default-2-48',
       kind: 'debt-default',

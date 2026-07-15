@@ -53,8 +53,7 @@ import {
   LIE_LOW_DECAY_MULTIPLIER,
   EMPIRE_DECAY_SLOWDOWN,
   LIE_LOW_INCOME_MULTIPLIER,
-  BRIBE_HEAT_PER_DOLLAR,
-  QUICK_BRIBE_DOLLARS,
+  PAYROLLED_COP_DECAY_MULTIPLIER,
   TIER_TELEGRAPH_MARGIN,
   RAID_TIPOFF_LOOKAHEAD_HOURS,
   RAID_TIPOFF_MIN_CHANCE,
@@ -87,6 +86,9 @@ import {
   GOLDEN_HOUR_MAX_MINUTES,
   GOLDEN_HOUR_BONUS_HOURS,
   GOLDEN_HOUR_MIN_BONUS,
+  WASH_MAX_DEPOSIT,
+  WASH_DEPOSITS_PER_DAY,
+  WASH_CUT,
   type FrontTypeConfig,
 } from './fronts';
 import {
@@ -136,6 +138,7 @@ import {
   CAP_COLLATERAL_FRACTION,
   INTEREST_DAYS_PER_WEEK,
   LADDER_VIG_RATE_INCREASE,
+  FIRST_LOAN_VIG_DAYS,
   LADDER_INCOME_CUT,
   LADDER_DAYS_PER_RUNG,
   CEILING_MAX_RUNG,
@@ -194,6 +197,12 @@ import {
 } from './transport';
 import { CONVERSION_RECIPES, type ConversionRecipe } from './conversions';
 import {
+  PRODUCTION_OPS,
+  PRODUCTION_MAX_LEVEL,
+  PRODUCTION_COST_GROWTH,
+  type ProductionOpConfig,
+} from './production';
+import {
   STOCK_SEED_BAND,
   PLUG_STOCK_MULTIPLIER,
   RESTOCK_PER_DAY,
@@ -206,6 +215,15 @@ import {
   STREET_HEAT_PER_UNIT,
 } from './street';
 import { PLUG_MEETING_HEAT } from './plugs';
+import {
+  TERRITORY_REACH_GROWTH,
+  TERRITORY_NEW_REGION_JUMP,
+  TERRITORY_TAKEOVER_HEAT,
+  VULNERABILITY_WINDOW_HOURS,
+  VULNERABILITY_RAID_MULTIPLIER,
+  CONSOLIDATION_HOURS,
+  TERRITORY_LT_REQUIRED_AFTER,
+} from './territory';
 import {
   WEAPON_TIERS,
   ARMS_BROKER_COST,
@@ -279,8 +297,7 @@ export interface HeatTuning {
   readonly LIE_LOW_DECAY_MULTIPLIER: number;
   readonly EMPIRE_DECAY_SLOWDOWN: number;
   readonly LIE_LOW_INCOME_MULTIPLIER: number;
-  readonly BRIBE_HEAT_PER_DOLLAR: number;
-  readonly QUICK_BRIBE_DOLLARS: number;
+  readonly PAYROLLED_COP_DECAY_MULTIPLIER: number;
   readonly TIER_TELEGRAPH_MARGIN: number;
   readonly RAID_TIPOFF_LOOKAHEAD_HOURS: number;
   readonly RAID_TIPOFF_MIN_CHANCE: number;
@@ -314,6 +331,10 @@ export interface FrontsTuning {
   readonly GOLDEN_HOUR_MAX_MINUTES: number;
   readonly GOLDEN_HOUR_BONUS_HOURS: number;
   readonly GOLDEN_HOUR_MIN_BONUS: number;
+  /** Money-mule wash queue — the batched dirty→clean converter (config/fronts.ts). */
+  readonly WASH_MAX_DEPOSIT: number;
+  readonly WASH_DEPOSITS_PER_DAY: number;
+  readonly WASH_CUT: number;
 }
 
 /** Crew loyalty / betrayal / development (design/02 §4–§5). */
@@ -368,6 +389,7 @@ export interface LendersTuning {
   readonly CAP_COLLATERAL_FRACTION: number;
   readonly INTEREST_DAYS_PER_WEEK: number;
   readonly LADDER_VIG_RATE_INCREASE: number;
+  readonly FIRST_LOAN_VIG_DAYS: number;
   readonly LADDER_INCOME_CUT: number;
   readonly LADDER_DAYS_PER_RUNG: number;
   readonly CEILING_MAX_RUNG: Readonly<Record<ConsequenceCeiling, LadderRung>>;
@@ -432,6 +454,13 @@ export interface ConversionsTuning {
   readonly CONVERSION_RECIPES: readonly ConversionRecipe[];
 }
 
+/** Production layer — grow-ops, strains & drug factories (Ideas2 item 3; Prompt 39). */
+export interface ProductionTuning {
+  readonly PRODUCTION_OPS: readonly ProductionOpConfig[];
+  readonly PRODUCTION_MAX_LEVEL: number;
+  readonly PRODUCTION_COST_GROWTH: number;
+}
+
 /** Market stock pools & scarcity pricing (design/12 Item 10; Prompt 32). */
 export interface MarketsTuning {
   readonly STOCK_SEED_BAND: Band;
@@ -451,6 +480,18 @@ export interface StreetTuning {
 /** Plug scalars (Ideas2 §2) — per-source costs live on the country roster. */
 export interface PlugsTuning {
   readonly PLUG_MEETING_HEAT: number;
+}
+
+/** Meaningful territory expansion — reach cost, exposure, hold, crew gate
+ * (Ideas2 item 5; Prompt 41). The last two relax open access for territory. */
+export interface TerritoryTuning {
+  readonly TERRITORY_REACH_GROWTH: number;
+  readonly TERRITORY_NEW_REGION_JUMP: number;
+  readonly TERRITORY_TAKEOVER_HEAT: number;
+  readonly VULNERABILITY_WINDOW_HOURS: number;
+  readonly VULNERABILITY_RAID_MULTIPLIER: number;
+  readonly CONSOLIDATION_HOURS: number;
+  readonly TERRITORY_LT_REQUIRED_AFTER: number;
 }
 
 /** Arms trade — weapon tiers, the broker intro, conflict-driven demand
@@ -507,9 +548,11 @@ export interface GameConfig {
   readonly prestige: PrestigeTuning;
   readonly transport: TransportTuning;
   readonly conversions: ConversionsTuning;
+  readonly production: ProductionTuning;
   readonly markets: MarketsTuning;
   readonly street: StreetTuning;
   readonly plugs: PlugsTuning;
+  readonly territory: TerritoryTuning;
   readonly arms: ArmsTuning;
   readonly onboarding: OnboardingTuning;
 }
@@ -547,8 +590,7 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     LIE_LOW_DECAY_MULTIPLIER,
     EMPIRE_DECAY_SLOWDOWN,
     LIE_LOW_INCOME_MULTIPLIER,
-    BRIBE_HEAT_PER_DOLLAR,
-    QUICK_BRIBE_DOLLARS,
+    PAYROLLED_COP_DECAY_MULTIPLIER,
     TIER_TELEGRAPH_MARGIN,
     RAID_TIPOFF_LOOKAHEAD_HOURS,
     RAID_TIPOFF_MIN_CHANCE,
@@ -578,6 +620,9 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     GOLDEN_HOUR_MAX_MINUTES,
     GOLDEN_HOUR_BONUS_HOURS,
     GOLDEN_HOUR_MIN_BONUS,
+    WASH_MAX_DEPOSIT,
+    WASH_DEPOSITS_PER_DAY,
+    WASH_CUT,
   },
   crew: {
     LOYALTY_EVENT_BASE,
@@ -624,6 +669,7 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     CAP_COLLATERAL_FRACTION,
     INTEREST_DAYS_PER_WEEK,
     LADDER_VIG_RATE_INCREASE,
+    FIRST_LOAN_VIG_DAYS,
     LADDER_INCOME_CUT,
     LADDER_DAYS_PER_RUNG,
     CEILING_MAX_RUNG,
@@ -676,6 +722,11 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     CONSIGNED_BUST_HEAT_FACTOR,
   },
   conversions: { CONVERSION_RECIPES },
+  production: {
+    PRODUCTION_OPS,
+    PRODUCTION_MAX_LEVEL,
+    PRODUCTION_COST_GROWTH,
+  },
   markets: {
     STOCK_SEED_BAND,
     PLUG_STOCK_MULTIPLIER,
@@ -689,6 +740,15 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     STREET_HEAT_PER_UNIT,
   },
   plugs: { PLUG_MEETING_HEAT },
+  territory: {
+    TERRITORY_REACH_GROWTH,
+    TERRITORY_NEW_REGION_JUMP,
+    TERRITORY_TAKEOVER_HEAT,
+    VULNERABILITY_WINDOW_HOURS,
+    VULNERABILITY_RAID_MULTIPLIER,
+    CONSOLIDATION_HOURS,
+    TERRITORY_LT_REQUIRED_AFTER,
+  },
   arms: {
     WEAPON_TIERS,
     ARMS_BROKER_COST,

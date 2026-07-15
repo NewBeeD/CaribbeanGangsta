@@ -22,6 +22,7 @@ import {
   productDisplayName,
   requiresPlug,
   stashUnits,
+  type CountryConfig,
   type GameState,
   type PlugQuote,
   type PriceTrend,
@@ -61,26 +62,91 @@ export function boardProducts(state: GameState): readonly { id: ProductId; name:
 }
 
 /**
+ * The drug roster minus `arms` — the price board and its by-country / price-book
+ * mirrors are the DRUG menu (the Deal screen filters `arms` out the same way).
+ * Arms trade through their own screen, never on the drug board.
+ */
+const DRUG_PRODUCTS: readonly ProductId[] = PRODUCTS.filter((p) => p.id !== 'arms').map((p) => p.id);
+
+/**
+ * ONE (product, country) cell — the single price path every board view shares.
+ * `boardRows`, `countryPriceSheet`, and `priceBook` all funnel through here, so a
+ * price is `getMarketPrice` verbatim no matter which way you read the board.
+ */
+function priceRow(state: GameState, product: ProductId, c: CountryConfig): BoardRow {
+  const price = getMarketPrice(state, product, c.id);
+  const gatedProduct = requiresPlug(c.id, product);
+  return {
+    countryId: c.id,
+    countryName: c.name,
+    price: price.price,
+    stock: price.stock,
+    trend: price.trend,
+    traded: isTraded(c.id, product),
+    plugGated: gatedProduct && !hasPlug(state, c.id),
+    plugPriced: price.plugPriced,
+    plugCost: gatedProduct ? (plugQuote(state, c.id)?.cost ?? 0) : 0,
+    presence: state.stashes.filter((s) => s.countryId === c.id).length,
+  };
+}
+
+/**
  * The world board for one product: every country's live price, in roster order
  * — numbers identical to `getMarketPrice` (the fairness spot-check anchor).
  */
 export function boardRows(state: GameState, product: ProductId): readonly BoardRow[] {
-  return COUNTRIES.map((c) => {
-    const price = getMarketPrice(state, product, c.id);
-    const gatedProduct = requiresPlug(c.id, product);
-    return {
-      countryId: c.id,
-      countryName: c.name,
-      price: price.price,
-      stock: price.stock,
-      trend: price.trend,
-      traded: isTraded(c.id, product),
-      plugGated: gatedProduct && !hasPlug(state, c.id),
-      plugPriced: price.plugPriced,
-      plugCost: gatedProduct ? (plugQuote(state, c.id)?.cost ?? 0) : 0,
-      presence: state.stashes.filter((s) => s.countryId === c.id).length,
-    };
-  });
+  return COUNTRIES.map((c) => priceRow(state, product, c));
+}
+
+/**
+ * One country's full price sheet — the location-centric mirror of `boardRows`:
+ * every DRUG's live price in a single country, the Drug-Lord-2 "stand in a city,
+ * read the whole menu" view. Extends `BoardRow` (same price/stock/trend/plug/
+ * presence fields, so the row renderer is shared) with the product identity each
+ * row is for. Numbers are `priceRow` verbatim — byte-identical to the
+ * corresponding `boardRows(product)` entry for this country. Arms are excluded
+ * (the drug menu, matching the Deal screen); a non-traded product renders inert
+ * ("no market"), from minute one, without holding a stash here (open access).
+ */
+export interface CountrySheetRow extends BoardRow {
+  readonly productId: ProductId;
+  readonly productName: string;
+}
+
+export function countryPriceSheet(state: GameState, countryId: string): readonly CountrySheetRow[] {
+  const c = COUNTRIES.find((x) => x.id === countryId);
+  if (!c) return [];
+  return DRUG_PRODUCTS.map((id) => ({
+    ...priceRow(state, id, c),
+    productId: id,
+    productName: productName(state, id),
+  }));
+}
+
+/**
+ * The whole price book at a glance — a drugs × countries matrix (the DL2
+ * "see everything at once" payoff). `rows[i]` is `boardRows(products[i].id)`, so
+ * every cell is the same single price path; `spread` is `widestSpread` for a
+ * subtle "hottest pair" highlight. Arms are excluded (drug menu). Pure read; no
+ * engine math authored here.
+ */
+export interface PriceBook {
+  readonly products: readonly { id: ProductId; name: string }[];
+  readonly countries: readonly { id: string; name: string }[];
+  /** Row-major: `rows[productIndex][countryIndex]`, aligned to `products`/`countries`. */
+  readonly rows: readonly (readonly BoardRow[])[];
+  /** The widest cross-country spread, for highlighting the hottest cells. */
+  readonly spread: MarketSpread | null;
+}
+
+export function priceBook(state: GameState): PriceBook {
+  const products = DRUG_PRODUCTS.map((id) => ({ id, name: productName(state, id) }));
+  return {
+    products,
+    countries: COUNTRIES.map((c) => ({ id: c.id, name: c.name })),
+    rows: products.map((p) => boardRows(state, p.id)),
+    spread: widestSpread(state),
+  };
 }
 
 /** The selected country's detail: culture, risk, presence, and its plug quote. */

@@ -23,11 +23,13 @@ import {
   FRONT_TYPES,
   TRAIN_COST,
   describeLoyalty,
+  getProductionOp,
   shipmentRoute,
   type CrewMember,
   type CrewRole,
   type CrewSkill,
   type GameState,
+  type ProductionOpId,
 } from '@/engine';
 
 /** Pips shown per skill — the "light stats only" dot track (design/07 §3). */
@@ -126,6 +128,12 @@ export function assignmentLabel(state: GameState, member: CrewMember): string {
     case 'courier': {
       const shipment = state.shipments.find((s) => s.id === a.targetId);
       return shipment ? `Riding a shipment (${shipmentRoute(state, shipment)})` : 'Riding a shipment';
+    }
+    case 'production': {
+      const op = state.productionOps.find((o) => o.id === a.targetId);
+      return op
+        ? `Running ${getProductionOp(op.type as ProductionOpId, state.config.production.PRODUCTION_OPS).name}`
+        : 'Running a grow';
     }
   }
 }

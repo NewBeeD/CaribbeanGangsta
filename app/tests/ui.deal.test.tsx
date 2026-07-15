@@ -279,3 +279,41 @@ describe('DealOutcome — success and bust both render scene text', () => {
     expect(html).not.toContain('error');
   });
 });
+
+describe('a rejected deal never renders success copy (design/13 A1)', () => {
+  it('maps every reject reason to its own line — none fall through to a success read', async () => {
+    const { sceneFor, DEAL_SCENES } = await import('@/ui/screens/dealScreen.model');
+    const reasons = [
+      'invalid-qty',
+      'insufficient-funds',
+      'insufficient-inventory',
+      'insufficient-capacity',
+      'no-stash',
+      'not-traded',
+      'no-plug',
+      'no-supply',
+    ] as const;
+
+    for (const reason of reasons) {
+      const key = `deal.reject.${reason}`;
+      expect(DEAL_SCENES[key], `missing scene for ${key}`).toBeTruthy();
+      const scene = sceneFor(key);
+      expect(scene.text).toContain('No deal');
+      expect(scene.text).not.toContain('The deal is done');
+      expect(scene.tone).not.toBe('win');
+    }
+
+    // Even an UNKNOWN key reads as nothing-happened, never as a closed deal.
+    expect(sceneFor('deal.reject.some-future-reason').text).not.toContain('The deal is done');
+  });
+
+  it('the engine keys every rejection into that map (sell max of a fractional holding)', async () => {
+    const { resolveDeal, createInitialState } = await import('@/engine');
+    const base = createInitialState('reject-render');
+    // The playtest repro: a fractional "max" — rejected, and the copy says so.
+    const r = resolveDeal(base, { type: 'sell', product: 'weed', qty: 216.578 });
+    expect(r.outcome).toBe('rejected');
+    const { sceneFor } = await import('@/ui/screens/dealScreen.model');
+    expect(sceneFor(r.sceneKey).text).toContain('No deal');
+  });
+});

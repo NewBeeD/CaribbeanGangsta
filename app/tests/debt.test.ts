@@ -10,6 +10,7 @@ import {
   getLender,
   INTEREST_DAYS_PER_WEEK,
   LADDER_VIG_RATE_INCREASE,
+  FIRST_LOAN_VIG_DAYS,
   LIFELINE_MIN_REPUTATION,
   // debt — engine
   borrowCap,
@@ -55,8 +56,9 @@ describe('debt is opt-in — nothing auto-enrolls the player (guarantee #1)', ()
 
   it('every lender is open from day one — the borrow cap is the limiter (Ideas.md)', () => {
     const day1 = createInitialState('gate');
-    // No flag or day gate: a fresh player can knock on any door…
-    expect(borrow(day1, 'papa-cass', 500).ok).toBe(true);
+    // No flag or day gate: a fresh player can knock on any door… (amounts within
+    // each cold-start cap — the street shark's is deliberately small now, Prompt 40).
+    expect(borrow(day1, 'papa-cass', 150).ok).toBe(true);
     expect(borrow(day1, 'money-man', 500).ok).toBe(true);
     // …but the reputation-scaled cap keeps the big lines out of reach.
     expect(borrowCap(day1, 'financier')).toBeLessThan(getLender('financier').maxPrincipal);
@@ -69,25 +71,25 @@ describe('terms are computed and exposed before the player confirms (guarantee #
   it('quoteLoan discloses the total-to-repay at the soft due date (no hidden balloon)', () => {
     const s = borrower('quote');
     const cfg = getLender('papa-cass');
-    const q = quoteLoan(s, 'papa-cass', 1_500);
+    const q = quoteLoan(s, 'papa-cass', 800);
 
     expect(q.weeklyRate).toBe(cfg.weeklyRate);
     expect(q.dueDay).toBe(s.clock.day + cfg.softDueDays);
     const expected = Math.round(
-      1_500 * Math.pow(1 + cfg.weeklyRate / INTEREST_DAYS_PER_WEEK, cfg.softDueDays),
+      800 * Math.pow(1 + cfg.weeklyRate / INTEREST_DAYS_PER_WEEK, cfg.softDueDays),
     );
     expect(q.totalToRepayAtDue).toBe(expected);
   });
 
   it('borrow commits EXACTLY the quoted terms and adds principal to CLEAN cash', () => {
     const s = borrower('borrow');
-    const q = quoteLoan(s, 'papa-cass', 1_500);
-    const r = borrow(s, 'papa-cass', 1_500);
+    const q = quoteLoan(s, 'papa-cass', 800);
+    const r = borrow(s, 'papa-cass', 800);
 
     expect(r.ok).toBe(true);
-    expect(r.state.cleanCash).toBe(s.cleanCash + 1_500); // capital SOURCE
+    expect(r.state.cleanCash).toBe(s.cleanCash + 800); // capital SOURCE
     expect(r.state.debt.lenderId).toBe('papa-cass');
-    expect(r.state.debt.principal).toBe(1_500);
+    expect(r.state.debt.principal).toBe(800);
     expect(r.state.debt.rate).toBe(q.weeklyRate);
     expect(r.state.debt.dueDay).toBe(q.dueDay);
     expect(r.state.debt.active).toBe(true);
@@ -98,7 +100,7 @@ describe('terms are computed and exposed before the player confirms (guarantee #
     expect(borrow(s, 'papa-cass', 0).rejected).toBe('invalid-amount');
     expect(borrow(s, 'papa-cass', borrowCap(s, 'papa-cass') + 1).rejected).toBe('exceeds-cap');
 
-    const withLoan = borrow(s, 'papa-cass', 1_000).state;
+    const withLoan = borrow(s, 'papa-cass', 800).state;
     expect(borrow(withLoan, 'papa-cass', 500).rejected).toBe('loan-active');
   });
 
@@ -115,24 +117,24 @@ describe('terms are computed and exposed before the player confirms (guarantee #
 // --- Interest curve: per active in-game day at rate/7 (design/10 §3) ---------
 
 describe('interest compounds per ACTIVE in-game day at rate/7 (design/10 §3)', () => {
-  it('matches the worked example: $1,500 @20%/wk → ~$1,800 after a week, ~$2,600 after three', () => {
-    const loan = borrow(borrower('curve'), 'papa-cass', 1_500).state;
+  it('follows the compound curve: $800 @20%/wk → ~$974 after a week, ~$1,445 after three', () => {
+    const loan = borrow(borrower('curve'), 'papa-cass', 800).state;
 
     const afterOneWeek = accrueInterest(loan, 7);
-    expect(debtOwed(afterOneWeek.debt)).toBeGreaterThan(1_790);
-    expect(debtOwed(afterOneWeek.debt)).toBeLessThan(1_850); // ~$1,827
+    expect(debtOwed(afterOneWeek.debt)).toBeGreaterThan(965);
+    expect(debtOwed(afterOneWeek.debt)).toBeLessThan(985); // ~$974
 
     const afterThreeWeeks = accrueInterest(loan, 21);
-    expect(debtOwed(afterThreeWeeks.debt)).toBeGreaterThan(2_600);
-    expect(debtOwed(afterThreeWeeks.debt)).toBeLessThan(2_780); // ~$2,710
+    expect(debtOwed(afterThreeWeeks.debt)).toBeGreaterThan(1_435);
+    expect(debtOwed(afterThreeWeeks.debt)).toBeLessThan(1_460); // ~$1,445
 
     // Principal stays a clean floor; growth lands in accruedInterest.
-    expect(afterOneWeek.debt.principal).toBe(1_500);
+    expect(afterOneWeek.debt.principal).toBe(800);
     expect(afterOneWeek.debt.accruedInterest).toBeGreaterThan(0);
   });
 
   it('active play accrues interest via the tick pipeline', () => {
-    const loan = borrow(borrower('active'), 'papa-cass', 1_500).state;
+    const loan = borrow(borrower('active'), 'papa-cass', 800).state;
     const owedBefore = debtOwed(loan.debt);
     const afterPlay = tick(loan, 24 * 3); // three in-game days played
     expect(debtOwed(afterPlay.debt)).toBeGreaterThan(owedBefore);
@@ -144,7 +146,7 @@ describe('interest compounds per ACTIVE in-game day at rate/7 (design/10 §3)', 
 describe('Guarantee #2: absence never changes the owed balance or the ladder', () => {
   it('settleOffline leaves debt byte-identical for ANY hours away (property test)', () => {
     // A loan already past its soft due date and mid-accrual — everything at stake.
-    let s = borrow(borrower('freeze'), 'papa-cass', 1_500).state;
+    let s = borrow(borrower('freeze'), 'papa-cass', 800).state;
     s = accrueInterest(s, 5); // some interest on the books
     s = { ...s, debt: { ...s.debt, dueDay: s.clock.day - 3, ladderRung: 2 } }; // overdue, mid-ladder
     const before = s;
@@ -162,7 +164,7 @@ describe('Guarantee #2: absence never changes the owed balance or the ladder', (
 
 describe('repayment is always free and resets the shark’s patience (guarantee #4)', () => {
   it('a partial payment reduces owed exactly and pushes the soft due date back out', () => {
-    let s = borrow(borrower('partial'), 'papa-cass', 1_500).state;
+    let s = borrow(borrower('partial'), 'papa-cass', 800).state;
     s = accrueInterest(s, 3);
     s = setDay(s, 10); // time has passed toward the due date
     const owedBefore = debtOwed(s.debt);
@@ -179,7 +181,7 @@ describe('repayment is always free and resets the shark’s patience (guarantee 
   });
 
   it('early full repayment carries NO penalty (charges only what is owed) and clears the ledger', () => {
-    let s = borrow(borrower('full'), 'papa-cass', 1_500).state;
+    let s = borrow(borrower('full'), 'papa-cass', 800).state;
     s = accrueInterest(s, 2);
     s = { ...s, cleanCash: s.cleanCash + 5_000 }; // margin sold into profit — funds the payoff
     const owed = debtOwed(s.debt);
@@ -199,7 +201,7 @@ describe('repayment is always free and resets the shark’s patience (guarantee 
     const noLoan = borrower('noloan');
     expect(repay(noLoan, 100).rejected).toBe('no-loan');
 
-    const broke = { ...borrow(borrower('broke'), 'papa-cass', 1_000).state, cleanCash: 0 };
+    const broke = { ...borrow(borrower('broke'), 'papa-cass', 800).state, cleanCash: 0 };
     expect(repay(broke, 100).rejected).toBe('insufficient-funds');
     expect(repay(broke, 0).rejected).toBe('invalid-amount');
   });
@@ -209,7 +211,7 @@ describe('repayment is always free and resets the shark’s patience (guarantee 
 
 describe('default ladder advances one readable rung past due, each a beat (guarantee #3)', () => {
   it('walks vig → visit → stash seizure, one per step, capped at the street shark’s ceiling', () => {
-    let s = borrow(borrower('ladder'), 'papa-cass', 1_500).state;
+    let s = borrow(borrower('ladder'), 'papa-cass', 800).state;
     // Add a second stash so a seizure has a clear "one asset" to take.
     s = { ...s, cleanCash: s.cleanCash + 100_000 };
     s = addStash(s, 'buried').state;
@@ -251,7 +253,7 @@ describe('default ladder advances one readable rung past due, each a beat (guara
     s = addStash(s, 'buried').state; // a second, un-pledged stash
     const otherId = s.stashes.find((st) => st.id !== homeId)!.id;
 
-    s = borrow(s, 'papa-cass', 1_000, homeId).state;
+    s = borrow(s, 'papa-cass', 800, homeId).state;
     expect(s.debt.collateralRef).toBe(homeId);
     s = { ...s, debt: { ...s.debt, dueDay: 2 } };
 
@@ -267,8 +269,30 @@ describe('default ladder advances one readable rung past due, each a beat (guara
     expect(s.stashes.some((st) => st.id === otherId)).toBe(true);
   });
 
+  it('a rung-3 seizure discloses WHAT was taken, with numbers (design/13 A6)', () => {
+    let s = borrower('seizure-note');
+    const home = s.stashes[0]!; // holds the starting dirty cash
+    expect(home.dirtyCash).toBeGreaterThan(0);
+    s = borrow(s, 'papa-cass', 800, home.id).state; // pledged → rung 3 takes it
+    s = { ...s, debt: { ...s.debt, dueDay: 2 } };
+
+    for (let day = 3; day <= 5; day++) {
+      s = setDay(s, day);
+      const rng = restoreRng(s.rngState);
+      s = { ...defaultLadder(s, rng), rngState: rng.getState() };
+    }
+    expect(s.debt.ladderRung).toBe(3);
+
+    const scene = s.pendingChoices.find((c) => c.id.startsWith('debt-default-3'))!;
+    expect(scene).toBeTruthy();
+    // The collector's take is never a silent drain — the scene names the stash
+    // and the dirty dollars that went with it.
+    expect(scene.summary).toContain(home.name);
+    expect(scene.summary).toContain(`$${Math.round(home.dirtyCash).toLocaleString('en-US')}`);
+  });
+
   it('a partial payment before the ladder starts halts escalation (patience)', () => {
-    let s = borrow(borrower('halt'), 'papa-cass', 1_500).state;
+    let s = borrow(borrower('halt'), 'papa-cass', 800).state;
     s = { ...s, debt: { ...s.debt, dueDay: 2 } };
     s = setDay(s, 5); // 3 days overdue
 
@@ -280,11 +304,70 @@ describe('default ladder advances one readable rung past due, each a beat (guara
   });
 
   it('debtStep advances at most one rung per call (never a silent multi-rung jump)', () => {
-    let s = borrow(borrower('one-per'), 'papa-cass', 1_500).state;
+    let s = borrow(borrower('one-per'), 'papa-cass', 800).state;
     s = { ...s, debt: { ...s.debt, dueDay: 2 } };
     s = setDay(s, 10); // 8 days overdue — would be rung 5 if it jumped
     s = debtStep(s, 24);
     expect(s.debt.ladderRung).toBe(1); // one rung only
+  });
+});
+
+// --- Early-loan rebalance (Ideas2 item 4; Prompt 40) -------------------------
+
+describe('early loans stay small-timer until reputation grows (Prompt 40)', () => {
+  it('a day-1, rep-0, no-collateral player draws only a small-timer stake (~$150–250)', () => {
+    const day1 = createInitialState('cold-start'); // street rep 0, no collateral
+    const cap = borrowCap(day1, 'papa-cass');
+    expect(cap).toBeGreaterThanOrEqual(150);
+    expect(cap).toBeLessThanOrEqual(250);
+    // NOT the old too-generous $1,500+ opening line.
+    expect(cap).toBeLessThan(1_000);
+  });
+
+  it('the cap climbs the existing rep curve toward the shark’s max — no flag unlock', () => {
+    const base = createInitialState('ramp');
+    const capAt = (street: number) =>
+      borrowCap({ ...base, reputation: { ...base.reputation, street } }, 'papa-cass');
+
+    expect(capAt(50)).toBeGreaterThan(capAt(0)); // paying up grows the line…
+    expect(capAt(100)).toBeGreaterThan(capAt(50));
+    // …up to the shark's visible ceiling (his max), reached by rep, not a flag.
+    expect(capAt(100)).toBe(getLender('papa-cass').maxPrincipal);
+    // A little rep already reaches the mid-hundreds band the feedback wants.
+    expect(capAt(50)).toBeGreaterThanOrEqual(500);
+  });
+});
+
+describe('the run’s first loan bites sooner than a later one (Prompt 40)', () => {
+  it('the opening loan’s vig warning fires before its soft due date; a later loan waits', () => {
+    // FIRST loan: bumps the run counter to 1.
+    let first = borrow(borrower('first-loan'), 'papa-cass', 500).state;
+    expect(first.loansTaken).toBe(1);
+    const dueDay = first.debt.dueDay; // borrowDay(2) + softDueDays(10) = 12
+    // Advance ~a played week — still BEFORE the soft due date.
+    first = setDay(first, first.clock.day + FIRST_LOAN_VIG_DAYS);
+    expect(first.clock.day).toBeLessThan(dueDay); // not overdue yet
+    const rateBefore = first.debt.rate;
+    first = debtStep(first, 24);
+    expect(first.debt.ladderRung).toBe(1); // early vig fired
+    expect(first.debt.rate).toBeCloseTo(rateBefore + LADDER_VIG_RATE_INCREASE, 5);
+
+    // A LATER loan (loansTaken ≥ 2) under identical timing does NOT warn early.
+    let later = { ...borrower('later-loan'), loansTaken: 1 }; // one loan already behind them
+    later = borrow(later, 'papa-cass', 500).state;
+    expect(later.loansTaken).toBe(2);
+    later = setDay(later, later.clock.day + FIRST_LOAN_VIG_DAYS);
+    later = debtStep(later, 24);
+    expect(later.debt.ladderRung).toBe(0); // silent until the soft due date
+  });
+
+  it('the accelerated vig is ACTIVE-only — offline never advances it (guarantee #2)', () => {
+    let s = borrow(borrower('first-freeze'), 'papa-cass', 500).state;
+    s = setDay(s, s.clock.day + FIRST_LOAN_VIG_DAYS + 3); // well past the early-vig point
+    const before = s.debt;
+    const { state: after } = settleOffline(s, 100_000);
+    expect(after.debt).toEqual(before); // frozen — no rung, no rate bump while away
+    expect(after.debt.ladderRung).toBe(0);
   });
 });
 
@@ -312,7 +395,7 @@ describe('lifelineOffer surfaces when wiped IF reputation warrants (design/10 §
     const solvent = borrower('solvent', 50); // holds starting dirty cash
     expect(lifelineOffer(solvent)).toBeNull();
 
-    const withLoan = borrow(borrower('life-loan', 50), 'papa-cass', 1_000).state;
+    const withLoan = borrow(borrower('life-loan', 50), 'papa-cass', 400).state;
     expect(lifelineOffer({ ...withLoan, cleanCash: 0 })).toBeNull();
   });
 });

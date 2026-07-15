@@ -47,7 +47,14 @@ import { DEFAULT_GAME_CONFIG, type MarketsTuning } from './config';
 import { basePriceAt } from './world';
 import { addHeat } from './heat';
 import { effectiveCapacity } from './storage';
-import { splitCharge, type GameState, type Inventory, type MarketEvent, type Stash } from './state';
+import {
+  splitCharge,
+  type GameState,
+  type Inventory,
+  type MarketEvent,
+  type PendingChoice,
+  type Stash,
+} from './state';
 
 // --- Live market state (drifts each active tick) -----------------------------
 
@@ -467,7 +474,9 @@ function reject(state: GameState, reason: RejectReason): DealResult {
     displayedBustProb: 0,
     rolledValue: Number.NaN,
     cashDelta: 0,
-    sceneKey: 'deal.reject',
+    // Per-reason scene key (design/13 A1): a rejection must never fall through to
+    // copy that reads like success — the narrative layer maps each reason.
+    sceneKey: `deal.reject.${reason}`,
     rejected: reason,
   };
 }
@@ -565,6 +574,18 @@ function resolveSell(state: GameState, intent: SellIntent): DealResult {
     };
     let next = withStash(rolled, bustedStash);
     next = addHeat(next, cfg.heatPerUnit * qty * cfg.bustHeatMultiplier, 'deal.bust');
+    // No silent cash movement (design/13 A6): the seized dirty cash gets a feed
+    // line with its number, so the loss never reads as money vanishing. (The
+    // bust-seizure MODEL — stop zeroing stored cash — is Prompt 44.)
+    if (seizedCash > 0) {
+      const line: PendingChoice = {
+        id: `cash-seized-${stash.id}-${state.clock.hours}`,
+        kind: 'cash-seized',
+        summary: `Bust at ${stash.name} — $${Math.round(seizedCash).toLocaleString('en-US')} dirty seized with the product.`,
+        createdAtHours: state.clock.hours,
+      };
+      next = { ...next, pendingChoices: [...next.pendingChoices, line] };
+    }
     next = bankPeaks(next);
     return {
       state: next,

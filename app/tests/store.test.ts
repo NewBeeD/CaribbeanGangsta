@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IDBFactory } from 'fake-indexeddb';
 import { createInitialState, type GameState } from '@/engine';
 import { LocalSaveStore, type SaveStore } from '@/store';
-import { AUTOSAVE_SLOT, useGameStore } from '@/store/gameStore';
+import { AUTOSAVE_SLOT, gameHoursForElapsedMs, useGameStore } from '@/store/gameStore';
 
 const MS_PER_HOUR = 3_600_000;
 
@@ -43,6 +43,60 @@ describe('gameStore — the engine⇄React bridge (Prompt 14)', () => {
     expect(useGameStore.getState().state?.clock.hours).toBe(0);
     store.tickBy(3);
     expect(useGameStore.getState().state?.clock.hours).toBeGreaterThan(0);
+  });
+
+  it('paces the live clock at 30 real seconds = 1 in-game hour', () => {
+    expect(gameHoursForElapsedMs(30_000)).toBeCloseTo(1);
+    expect(gameHoursForElapsedMs(15_000)).toBeCloseTo(0.5);
+    expect(gameHoursForElapsedMs(0)).toBe(0);
+    // Never runs time backwards on a clock skew.
+    expect(gameHoursForElapsedMs(-5_000)).toBe(0);
+  });
+
+  describe('the live clock loop (Ideas2 §6)', () => {
+    afterEach(() => {
+      useGameStore.getState().stopClock();
+      vi.useRealTimers();
+    });
+
+    it('advances the sim on real time, without any player action', () => {
+      vi.useFakeTimers();
+      const store = useGameStore.getState();
+      store.newGame('store-seed');
+      expect(useGameStore.getState().state?.clock.hours).toBe(0);
+
+      store.startClock();
+      // 60 real seconds of wall time → 2 in-game hours at the 30s = 1h pacing.
+      vi.advanceTimersByTime(60_000);
+
+      expect(useGameStore.getState().state?.clock.hours).toBeCloseTo(2, 1);
+    });
+
+    it('startClock is idempotent — a second call does not double-tick', () => {
+      vi.useFakeTimers();
+      const store = useGameStore.getState();
+      store.newGame('store-seed');
+
+      store.startClock();
+      store.startClock(); // no second interval
+      vi.advanceTimersByTime(30_000);
+
+      expect(useGameStore.getState().state?.clock.hours).toBeCloseTo(1, 1);
+    });
+
+    it('stopClock freezes in-game time', () => {
+      vi.useFakeTimers();
+      const store = useGameStore.getState();
+      store.newGame('store-seed');
+
+      store.startClock();
+      vi.advanceTimersByTime(30_000);
+      const frozen = useGameStore.getState().state?.clock.hours ?? 0;
+      store.stopClock();
+      vi.advanceTimersByTime(60_000);
+
+      expect(useGameStore.getState().state?.clock.hours).toBe(frozen);
+    });
   });
 
   it('settles offline exactly once on open and surfaces the report as a reward', async () => {

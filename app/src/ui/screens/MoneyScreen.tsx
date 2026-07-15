@@ -14,17 +14,19 @@
  * store; the screen authors no rate/cost/haircut math.
  */
 
+import { useState } from 'react';
 import { useGameState, useGameStore, useOfflineReport } from '@/store';
-import { Button, Card, Panel, SceneText, Stat } from '@/ui/components';
+import { Button, Card, Panel, QtyInput, SceneText, Stat } from '@/ui/components';
 import { SessionEndHook } from '@/ui/shell/SessionEndHook';
 import { navigate } from '@/ui/shell/useHash';
 import {
   buyFrontOptions,
   frontRows,
   nextAffordableUpgradeId,
-  pendingDecisions,
+  pendingFeed,
   totalCleanRate,
   totalDirty,
+  washView,
   type FrontRow,
 } from './moneyScreen.model';
 
@@ -107,6 +109,96 @@ function FrontCard({
   );
 }
 
+/**
+ * The money-mule wash desk (the batched dirty→clean converter). Commit dirty cash
+ * and the mules deposit it in sub-$10k batches over time, landing clean at
+ * `1 − cut` — the opposite of an instant bulk converter, so it complements fronts
+ * instead of trivializing them. Never a loss surface: queued cash is money working,
+ * and "call it off" returns anything not yet deposited. Owns only the pending-amount
+ * input; every number comes from `washView` and actions dispatch through the store.
+ */
+function WashCard({ state }: { readonly state: NonNullable<ReturnType<typeof useGameState>> }) {
+  const w = washView(state);
+  const [amount, setAmount] = useState(0);
+  const cutPct = Math.round(w.cut * 100);
+
+  const send = () => {
+    const amt = Math.min(amount, w.availableDirty);
+    if (amt <= 0) return;
+    useGameStore.getState().queueWash(amt);
+    setAmount(0);
+  };
+
+  const pending = Math.min(Math.max(0, amount), w.availableDirty);
+  const pendingEta = w.ratePerHour > 0 ? pending / w.ratePerHour : 0;
+
+  return (
+    <Card heading="Wash dirty cash · send the mules">
+      {w.active ? (
+        <Panel
+          heading={
+            <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+              <span>Mules on their rounds</span>
+              <span className="cg-tone-green">+{money(w.cleanPerHour)}/h clean</span>
+            </span>
+          }
+          style={{ marginBottom: 12 }}
+        >
+          <Stat label="Still with the mules" value={money(w.queuedDirty)} tone="default" big />
+          <p className="cg-label" style={{ marginTop: 8 }}>
+            Depositing under $10k a run — clears in ~{formatAway(w.etaHours)} · {cutPct}% cut.
+          </p>
+          <Button
+            variant="ghost"
+            fullWidth
+            onClick={() => useGameStore.getState().cancelWash()}
+            data-testid="wash-cancel"
+          >
+            Call the mules off
+            <small>returns {money(w.queuedDirty)} dirty</small>
+          </Button>
+        </Panel>
+      ) : null}
+
+      {w.availableDirty > 0 ? (
+        <>
+          <p className="cg-label" style={{ marginBottom: 4 }}>
+            Money mules deposit dirty cash in sub-$10k batches — it turns clean over
+            time, minus a {cutPct}% cut. More money, more time.
+          </p>
+          <QtyInput
+            value={pending}
+            max={w.availableDirty}
+            min={1}
+            onChange={setAmount}
+            unit="dirty $"
+            ariaLabel="Dirty cash to launder"
+            boundLabel="all dirty cash on hand"
+          />
+          <Button
+            variant="secondary"
+            fullWidth
+            disabled={pending <= 0}
+            onClick={send}
+            data-testid="wash-send"
+          >
+            Send the mules
+            <small>
+              {pending > 0
+                ? `~${money(pending * (1 - w.cut))} clean over ~${formatAway(pendingEta)}`
+                : 'pick an amount'}
+            </small>
+          </Button>
+        </>
+      ) : w.active ? null : (
+        <p className="cg-label">
+          No dirty cash to launder yet — sell some product, then send the mules.
+        </p>
+      )}
+    </Card>
+  );
+}
+
 export function MoneyScreen() {
   const state = useGameState();
   // The offline settlement, if it hasn't been acknowledged yet — read as gains.
@@ -118,7 +210,7 @@ export function MoneyScreen() {
   const rows = frontRows(state);
   const highlightId = nextAffordableUpgradeId(state);
   const buyOptions = buyFrontOptions(state);
-  const decisions = pendingDecisions(state);
+  const feed = pendingFeed(state);
   const rate = totalCleanRate(state);
   const cleanCash = state.cleanCash;
   const dirty = totalDirty(state);
@@ -161,10 +253,13 @@ export function MoneyScreen() {
         </Card>
       ) : null}
 
-      {decisions.length > 0 ? (
+      {feed.latest.length > 0 ? (
         <Card heading="Waiting on you">
+          {/* Only the 5 newest render (design/13 A5) — the rest sit behind the
+              "+N older" count, and Clear all resolves every dismissible one via
+              the same safe default a single dismiss uses. */}
           <div style={{ display: 'grid', gap: 10 }}>
-            {decisions.map((d) => (
+            {feed.latest.map((d) => (
               <Button
                 key={d.id}
                 variant="secondary"
@@ -181,6 +276,31 @@ export function MoneyScreen() {
               </Button>
             ))}
           </div>
+          {feed.olderCount > 0 ? (
+            <p className="cg-label" style={{ marginTop: 8 }} data-testid="pending-older">
+              +{feed.olderCount} older
+            </p>
+          ) : null}
+          <div style={{ marginTop: 10 }}>
+            <Button
+              variant="ghost"
+              fullWidth
+              onClick={() => useGameStore.getState().clearPendingChoices()}
+              data-testid="clear-pending"
+            >
+              Clear all
+              <small>
+                {feed.clearableCount} noted · nothing else happens
+              </small>
+            </Button>
+            {feed.consequentialCount > 0 ? (
+              <p className="cg-label" style={{ marginTop: 6 }} data-testid="pending-consequential">
+                {feed.consequentialCount} bigger call{feed.consequentialCount > 1 ? 's' : ''} need
+                {feed.consequentialCount > 1 ? '' : 's'} a real decision — they come to you as
+                scenes, and Clear all leaves them.
+              </p>
+            ) : null}
+          </div>
         </Card>
       ) : null}
 
@@ -195,6 +315,8 @@ export function MoneyScreen() {
             : 'No dirty cash yet — sell some product, then let the fronts wash it.'}
         </p>
       </Card>
+
+      <WashCard state={state} />
 
       <Card heading="Fronts">
         {rows.length === 0 ? (
@@ -216,6 +338,12 @@ export function MoneyScreen() {
       </Card>
 
       <Card heading="Open a new front">
+        {buyOptions.length === 0 ? (
+          <p className="cg-label">
+            Every laundering front is in play — upgrade the ones you own to keep the
+            clean side growing.
+          </p>
+        ) : (
         <div style={{ display: 'grid', gap: 8 }}>
           {buyOptions.map((o) => (
             <Panel
@@ -239,6 +367,7 @@ export function MoneyScreen() {
             </Panel>
           ))}
         </div>
+        )}
       </Card>
 
       {/* Never leave clean — the open loop that pulls the next session (GDD §11). */}

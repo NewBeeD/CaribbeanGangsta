@@ -123,7 +123,9 @@ function productRow(state: GameState, product: ProductId, stash: Stash): Product
     price: price.price,
     trend: price.trend,
     stock: price.stock,
-    held: stash.inventory[product] ?? 0,
+    // Whole units only — a fractional holding (from idle production) floors to the
+    // sellable integer, so "You hold N" matches what a sell can actually move.
+    held: Math.floor(stash.inventory[product] ?? 0),
     plugGated,
     plugCost: plugGated ? (plugQuote(state, countryId)?.cost ?? 0) : 0,
   };
@@ -165,9 +167,10 @@ export function maxBuyQty(state: GameState, product: ProductId, stash: Stash): n
   return Math.max(0, Math.min(affordable, capacityLeft, price.stock));
 }
 
-/** Most units of `product` the stash can SELL: exactly what it holds. */
+/** Most units of `product` the stash can SELL: exactly what it holds, floored to
+ * whole units (you can't sell a fractional kilo — the sub-unit remainder waits). */
 export function maxSellQty(product: ProductId, stash: Stash): number {
-  return stash.inventory[product] ?? 0;
+  return Math.floor(stash.inventory[product] ?? 0);
 }
 
 /**
@@ -261,11 +264,49 @@ export const DEAL_SCENES: Readonly<Record<string, DealScene>> = {
     tone: 'default',
     text: 'The package changes hands in a doorway. It’s yours now — and so is the risk.',
   },
+  // Rejections (design/13 A1): every `RejectReason` maps to its OWN line — a
+  // rejected deal must never fall through to copy that reads like success.
+  'deal.reject.invalid-qty': {
+    tone: 'default',
+    text: 'No deal — that’s not a number anyone counts in. Whole units only.',
+  },
+  'deal.reject.insufficient-funds': {
+    tone: 'default',
+    text: 'No deal — you can’t cover it. The cash on hand doesn’t reach the price.',
+  },
+  'deal.reject.insufficient-inventory': {
+    tone: 'default',
+    text: 'No deal — you don’t hold that much here. Nothing changed hands.',
+  },
+  'deal.reject.insufficient-capacity': {
+    tone: 'default',
+    text: 'No deal — this stash can’t hold the load. Make room or move some weight first.',
+  },
+  'deal.reject.no-stash': {
+    tone: 'default',
+    text: 'No deal — nowhere to work out of. You need a stash on this ground.',
+  },
+  'deal.reject.not-traded': {
+    tone: 'default',
+    text: 'No deal — nobody moves that product on these corners. Wrong market.',
+  },
+  'deal.reject.no-plug': {
+    tone: 'default',
+    text: 'No deal — the source doesn’t sell to strangers. Buy the introduction first.',
+  },
+  'deal.reject.no-supply': {
+    tone: 'default',
+    text: 'No deal — the street can’t supply that many right now. Wait for the re-up.',
+  },
 };
 
-/** Resolve outcome prose for a scene key, with a neutral fallback. */
+/**
+ * Resolve outcome prose for a scene key. The fallback is explicitly a
+ * NOTHING-HAPPENED line (design/13 A1): an unmapped key must never render as if
+ * the deal closed.
+ */
 export function sceneFor(sceneKey: string): DealScene {
-  return DEAL_SCENES[sceneKey] ?? { tone: 'default', text: 'The deal is done.' };
+  return DEAL_SCENES[sceneKey] ?? { tone: 'default', text: 'Nothing changed hands.' };
 }
 
 // --- Conversions — cook crack / press hash (Prompt 31; Ideas2 §4) --------------

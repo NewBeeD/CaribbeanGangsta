@@ -11,8 +11,10 @@
  * number the tiers classify and the raid math reads.
  *
  * Heat is a **tension meter, not a currency you spend** (design/01 §1): it is a
- * scalar with decay, never a wallet. Bribes/lying-low reduce it; they don't
- * "buy" from a balance.
+ * scalar with decay, never a wallet. Lying low and a beat cop on the payroll
+ * cool it faster; they don't "buy" it down from a balance. (The one-tap
+ * "bribe a cop to lower heat" lever was removed — Ideas2 item 2 — leaving the
+ * payroll Beat Cop as the only cop-driven relief; see `PAYROLLED_COP_DECAY_MULTIPLIER`.)
  */
 
 /** The law-enforcement attention tier a run currently sits under. */
@@ -54,6 +56,15 @@ export const HEAT_DECAY_RATE_PER_HOUR = 0.05;
 /** Lying low multiplies the decay rate (heat sheds faster while you stay quiet). */
 export const LIE_LOW_DECAY_MULTIPLIER = 2;
 /**
+ * A loyal beat cop on the PAYROLL (design/09 B.2 `raid-tipoff`) multiplies the
+ * decay rate — "cools local heat faster," the standing benefit's promise made
+ * real (Ideas2 item 2). This is the ONLY cop-driven heat relief now that the
+ * one-tap bribe lever is gone; it's a deterministic active-only effect on
+ * `decayHeat`, so heat still never moves while offline. Milder than lying low
+ * (which also cuts income) — a passive perk of the relationship you maintain.
+ */
+export const PAYROLLED_COP_DECAY_MULTIPLIER = 1.5;
+/**
  * A bigger empire cools SLOWER: the effective decay rate is divided by
  * `1 + empireSize × EMPIRE_DECAY_SLOWDOWN`. More territory = more exposure that
  * lingers (design/01 §4).
@@ -65,21 +76,6 @@ export const EMPIRE_DECAY_SLOWDOWN = 0.04;
  * reads `state.lyingLow` and scales accrual by this. Lower heat, lower income.
  */
 export const LIE_LOW_INCOME_MULTIPLIER = 0.5;
-
-/**
- * Heat reduced per bribe dollar (design/07 §5: a ~$5,000 bribe ⇒ ~15 heat). This
- * is ONLY the heat side of a bribe; the bribe economy proper (cash, official
- * ties, payroll) is owned by Prompt 09.
- */
-export const BRIBE_HEAT_PER_DOLLAR = 0.003;
-
-/**
- * The standard "bribe a cop" lever offered on the Heat screen (design/07 §5's
- * `[ Bribe a cop -$X ]`): a fixed clean-cash spend that cools heat by
- * `× BRIBE_HEAT_PER_DOLLAR` (~$5,000 ⇒ ~15 heat). An in-fiction reduce-heat lever,
- * NOT a "buy heat" store — the number shown is the number charged/removed.
- */
-export const QUICK_BRIBE_DOLLARS = 5_000;
 
 // --- Telegraphing (design/07 §5: every escalation warned BEFORE it lands) -----
 

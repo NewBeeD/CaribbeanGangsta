@@ -59,10 +59,16 @@ export const LENDERS: readonly LenderConfig[] = [
   {
     id: 'papa-cass',
     name: 'Papa Cass',
+    // The small-timer's first line, deliberately TIGHT (Ideas2 item 4; Prompt 40).
+    // A day-1 unknown (street rep 0, no collateral) draws only
+    // `maxPrincipal × CAP_REPUTATION_FLOOR = 900 × 0.20 ≈ $180` — a small-timer
+    // stake, not a run-funding windfall. The early-game sweat is the point; the
+    // line still grows the whole way to `maxPrincipal` as rep/repayments climb the
+    // existing cap curve (no flag unlock — Ideas.md open access).
     title: 'a street shark',
-    maxPrincipal: 2_000,
+    maxPrincipal: 900,
     weeklyRate: 0.2,
-    softDueDays: 14, // ~2 in-game weeks (design/10 §3)
+    softDueDays: 10, // ~1½ in-game weeks — the first loan bites sooner (Ideas2 item 4)
     consequenceCeiling: 'seize-stash',
     greed: 1.1,
     startingLoyalty: 55,
@@ -126,8 +132,16 @@ export function findLender(
  * "history of paying up keeps the door open" term (design/10 §1). At 0 rep you can
  * only draw `CAP_REPUTATION_FLOOR` of the max; at `CAP_REPUTATION_SCALE` rep you
  * can draw the whole line.
+ *
+ * The floor is deliberately LOW (Ideas2 item 4; Prompt 40): a cold-start,
+ * no-collateral player draws only a fifth of a lender's max — for the street
+ * shark that's `900 × 0.20 ≈ $180`, a small-timer stake rather than an early-game
+ * windfall. Worked ramp on Papa Cass ($900 max): rep 0 → ~$180; rep 50 → `900 ×
+ * (0.20 + 0.80×0.50) = $540`; rep 100 → the full $900. The offer shown is the
+ * offer given (fairness law) — this is a visible economic curve you grow, never a
+ * locked menu (Ideas.md open access).
  */
-export const CAP_REPUTATION_FLOOR = 0.35;
+export const CAP_REPUTATION_FLOOR = 0.2;
 export const CAP_REPUTATION_SCALE = 100;
 
 /**
@@ -175,6 +189,19 @@ export const LADDER_SIGNS: Readonly<Record<Exclude<LadderRung, 0>, string>> = {
  * §5). A warning felt in the balance, walked back the moment you pay down.
  */
 export const LADDER_VIG_RATE_INCREASE = 0.05;
+
+/**
+ * The run's FIRST loan bites sooner (Ideas2 item 4; Prompt 40): its vig warning
+ * (rung 1) fires after this many ACTIVE in-game days on the books, even BEFORE the
+ * soft due date — stronger early pressure while the player is learning the loop.
+ * Only the vig rung is pulled forward; the heavier rungs still wait for the soft
+ * due date. Behavioural signal only (`state.loansTaken <= 1`), never a progression
+ * flag — every later loan escalates on the normal, slower overdue schedule. Set
+ * below `papa-cass.softDueDays` (10) so the warning actually lands inside the
+ * opening window. ACTIVE-only, telegraphed, one rung — the design/10 §4 guarantees
+ * hold verbatim (absence never advances it).
+ */
+export const FIRST_LOAN_VIG_DAYS = 7;
 
 /**
  * When rung 3 (stash seizure) can't take a whole location without wiping you — you

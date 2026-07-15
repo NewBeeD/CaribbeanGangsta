@@ -98,7 +98,7 @@ describe('score banks from PEAK values — a late wipe still records the height'
     let s = createInitialState('empire');
     s = { ...s, cleanCash: 500_000 };
     const before = empireComposite(s);
-    s = buyFront(s, 'bar').state; // one more front
+    s = buyFront(s, 'cash-front').state; // one more front
     expect(empireComposite(s)).toBeGreaterThan(before);
   });
 });
@@ -137,7 +137,7 @@ describe('evaluateSpiral exposes each rung; terminal only with no exit', () => {
         },
       }),
     );
-    s = buyFront({ ...s, cleanCash: 5_000 }, 'bar').state; // an exit: liquidate
+    s = buyFront({ ...s, cleanCash: 5_000 }, 'cash-front').state; // an exit: liquidate
     s = { ...s, cleanCash: 0 }; // spend back down to wiped, keep the front
 
     const withExit = evaluateSpiral(s);

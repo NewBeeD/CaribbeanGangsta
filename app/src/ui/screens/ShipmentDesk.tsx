@@ -256,6 +256,9 @@ export function ShipmentDesk() {
                   ) : null}
                 </div>
                 <div style={{ marginTop: 12 }}>
+                  {/* The label only ever carries the price — a disabled-state hint
+                      renders as its OWN helper line below, never concatenated into
+                      the button (design/13 A2). */}
                   <Button
                     variant="primary"
                     fullWidth
@@ -265,13 +268,15 @@ export function ShipmentDesk() {
                   >
                     Launch
                     <small>
-                      {quote.ok
-                        ? `${money(quote.totalCost)} all-in`
-                        : quote.rejected === 'insufficient-funds'
-                          ? `${money(quote.totalCost)} all-in · short`
-                          : 'Fix the manifest first'}
+                      {money(quote.totalCost)} all-in
+                      {!quote.ok && quote.rejected === 'insufficient-funds' ? ' · short' : ''}
                     </small>
                   </Button>
+                  {!quote.ok && quote.rejected !== 'insufficient-funds' ? (
+                    <p className="cg-label" data-testid="launch-hint" style={{ marginTop: 6 }}>
+                      Fix the manifest first.
+                    </p>
+                  ) : null}
                 </div>
               </Panel>
             ) : null}

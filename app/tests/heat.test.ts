@@ -7,7 +7,7 @@ import {
   rngFor,
   addHeat,
   decayHeat,
-  reduceHeatByBribe,
+  hire,
   currentTier,
   tierForHeat,
   tierDots,
@@ -57,6 +57,17 @@ describe('decayHeat — deterministic exponential cool-down (design/01 §4)', ()
     expect(lyingLow).toBeLessThan(normal);
   });
 
+  it('a beat cop on the payroll cools FASTER than none (Ideas2 item 2; design/09 B.2)', () => {
+    // A loyal beat cop's `raid-tipoff` benefit is "cools local heat faster" —
+    // the only cop-driven relief now the one-tap bribe lever is gone. Hiring adds
+    // no stash/front/crew, so empire slowdown is identical: the cop is isolated.
+    const funded = { ...atHeat(createInitialState('cop-decay'), 80), cleanCash: 100_000 };
+    const withCop = hire(funded, 'beat-cop').state;
+    const normal = decayHeat(funded, 4).heat;
+    const cooled = decayHeat(withCop, 4).heat;
+    expect(cooled).toBeLessThan(normal);
+  });
+
   it('exposes lyingLow as a flag the laundering engine can read', () => {
     const base = createInitialState('lielow-flag');
     expect(base.lyingLow).toBe(false);
@@ -64,14 +75,6 @@ describe('decayHeat — deterministic exponential cool-down (design/01 §4)', ()
     expect(on.lyingLow).toBe(true);
     const off = applyIntent(on, { type: 'lieLow', enabled: false });
     expect(off.lyingLow).toBe(false);
-  });
-});
-
-describe('reduceHeatByBribe — heat-only hook (bribe economy is Prompt 09)', () => {
-  it('lowers heat proportionally to the bribe and never below 0', () => {
-    const base = atHeat(createInitialState('bribe'), 40);
-    expect(reduceHeatByBribe(base, 5000).heat).toBeCloseTo(40 - 5000 * 0.003, 6);
-    expect(reduceHeatByBribe(atHeat(base, 5), 1_000_000).heat).toBe(HEAT_MIN);
   });
 });
 

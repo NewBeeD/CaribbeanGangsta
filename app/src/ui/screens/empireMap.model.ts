@@ -11,17 +11,32 @@
  * routes ≈ those beyond home**. So the map treats the `COUNTRIES` roster as the
  * districts: your home country is the seat you control, and every other country is
  * a route you OPEN by planting a foothold there (`addStash({ countryId })`, paid
- * from clean cash). Money is the only gate — the price is shown and the option is
- * live the moment you can pay, never behind a progression flag.
+ * from clean cash).
+ *
+ * Territory expansion is now MEANINGFUL (Ideas2 item 5; Prompt 41): the open price
+ * scales with reach + region distance, a fresh foothold is EXPOSED (raid-risk
+ * window) and CONTESTED (a consolidation hold before it counts toward reach), and
+ * past a couple of countries opening another needs a lieutenant to run it. Money is
+ * still the primary gate — every price is shown and live the moment you can pay —
+ * but the consolidation hold and the lieutenant requirement deliberately relax the
+ * pure open-access rule FOR TERRITORY (an explicit product decision, user sign-off).
+ * All numbers/gates come from the engine (`footholdCost`, `isCountryConsolidated`,
+ * `crewGateBlocksOpen`); this model authors none of them.
  */
 
 import {
   COUNTRIES,
   cleanCashRate,
+  consolidationProgress,
+  crewGateBlocksOpen,
   effectiveCapacity,
   empireComposite,
-  stashCost,
+  footholdCost,
+  hasAvailableLieutenant,
+  isCountryConsolidated,
+  requiresLieutenant,
   stashUnits,
+  stashVulnerability,
   type GameState,
   type StashType,
 } from '@/engine';
@@ -54,21 +69,48 @@ export interface DistrictView {
   readonly fill: number;
   /** Shown-to-player opening hooks (flavour for an unopened route). */
   readonly hooks: readonly string[];
+  /**
+   * Cost, $, of the next foothold here — the reach-and-region OPEN price when
+   * unowned, the plain reinforce step when held. Exactly what `addStash` charges
+   * (fairness law: shown = paid), so each district prices its own step (Prompt 41).
+   */
+  readonly openCost: number;
+  /**
+   * Held but not yet FULLY CONTROLLED — a freshly opened district still inside its
+   * consolidation hold (Ideas2 item 5). Doesn't count toward empire reach yet.
+   * Always false for an unowned or established (home) district.
+   */
+  readonly contested: boolean;
+  /** Progress through the consolidation hold, 0..1 (1 = controlled). */
+  readonly consolidationPct: number;
+  /** A stash here is inside its raid-risk VULNERABILITY window (runs hot). */
+  readonly exposed: boolean;
+  /**
+   * Unowned AND the crew gate blocks opening it — reach past the free tier with
+   * no lieutenant to run it (Prompt 41). The price still shows; the action is
+   * held until a lieutenant is on the crew (the one non-money gate for territory).
+   */
+  readonly blockedByCrew: boolean;
 }
 
 /**
- * Cost of the next foothold, $ — `stashCost(EXPANSION_TYPE, nOwned)` where `nOwned`
- * is how many `floor` stashes already exist. Computed EXACTLY as the engine's
- * `addStash` charges it (design/09 A.5 upgrade curve), so the price shown is the
- * price paid. The curve depends on the count, not the destination, so every route
- * costs the same next step wherever you plant it.
+ * Cost of the next foothold in `countryId`, $ — the reach-and-region OPEN price
+ * for a new country, or the plain reinforce step for one already held. Computed
+ * by the engine's `footholdCost`, EXACTLY as `addStash` charges it (fairness law:
+ * shown = paid). Unlike the old flat curve, the price now depends on the
+ * destination (reach + region distance), so a far new region costs more than a
+ * neighbour (Ideas2 item 5). `countryId` omitted resolves against the FIRST
+ * unowned country in roster order — the representative "next open" price.
  */
-export function expansionCost(state: GameState): number {
-  const nOwned = state.stashes.filter((s) => s.type === EXPANSION_TYPE).length;
-  return stashCost(EXPANSION_TYPE, nOwned);
+export function expansionCost(state: GameState, countryId?: string): number {
+  const target =
+    countryId ??
+    COUNTRIES.find((c) => !state.stashes.some((s) => s.countryId === c.id))?.id ??
+    state.world.startingCountry.id;
+  return footholdCost(state, EXPANSION_TYPE, target);
 }
 
-/** Whether the run's clean cash covers the next foothold (money is the only gate). */
+/** Whether the run's clean cash covers the next foothold (money is the primary gate). */
 export function canAffordExpansion(state: GameState): boolean {
   return state.cleanCash >= expansionCost(state);
 }
@@ -85,18 +127,30 @@ export function districtViews(state: GameState): readonly DistrictView[] {
     );
     const capacityUsed = here.reduce((sum, s) => sum + stashUnits(s), 0);
     const isHome = c.id === homeId;
-    const status: DistrictStatus =
-      here.length > 0 ? (isHome ? 'home' : 'route') : 'unowned';
+    const owned = here.length > 0;
+    const status: DistrictStatus = owned ? (isHome ? 'home' : 'route') : 'unowned';
+    const contested = owned && !isCountryConsolidated(state, c.id);
+    // How close the district is to full control — the furthest-along stash leads
+    // (a country consolidates when ANY of its stashes does).
+    const consolidationPct = owned
+      ? Math.max(...here.map((s) => consolidationProgress(state, s)))
+      : 0;
     return {
       countryId: c.id,
       name: c.name,
       isHome,
       status,
       stashCount: here.length,
-      capacityUsed,
-      capacityTotal,
+      // Shown as whole units (fill keeps the exact ratio for a smooth bar).
+      capacityUsed: Math.floor(capacityUsed),
+      capacityTotal: Math.floor(capacityTotal),
       fill: capacityTotal > 0 ? capacityUsed / capacityTotal : 0,
       hooks: c.openingHooks,
+      openCost: footholdCost(state, EXPANSION_TYPE, c.id),
+      contested,
+      consolidationPct,
+      exposed: here.some((s) => stashVulnerability(state, s) > 0),
+      blockedByCrew: !owned && crewGateBlocksOpen(state, c.id),
     };
   });
 }
@@ -105,24 +159,34 @@ export function districtViews(state: GameState): readonly DistrictView[] {
 export interface EmpireSummary {
   readonly fronts: number;
   readonly crew: number;
-  /** Distinct countries held beyond home — the smuggling reach (`empireComposite`). */
+  /** Distinct countries held beyond home — the total smuggling reach (footprint). */
   readonly routes: number;
+  /** Held countries still consolidating (contested — not yet counting toward reach). */
+  readonly contested: number;
   /** Rivals still standing (untoppled). */
   readonly rivals: number;
-  /** The weighted empire-size composite (design/01 §7). */
+  /** The weighted empire-size composite (design/01 §7) — CONSOLIDATED reach only. */
   readonly composite: number;
+  /** Opening another new country now needs a lieutenant (reach past the free tier). */
+  readonly lieutenantRequired: boolean;
+  /** A non-wire lieutenant is on the crew to run a new district. */
+  readonly lieutenantReady: boolean;
 }
 
 export function empireSummary(state: GameState): EmpireSummary {
   const homeId = state.world.startingCountry.id;
-  const countries = new Set(state.stashes.map((s) => s.countryId));
-  const routes = [...countries].filter((c) => c !== homeId).length;
+  const countries = [...new Set(state.stashes.map((s) => s.countryId))];
+  const routes = countries.filter((c) => c !== homeId).length;
+  const contested = countries.filter((c) => !isCountryConsolidated(state, c)).length;
   return {
     fronts: state.fronts.length,
     crew: state.crew.length,
     routes,
+    contested,
     rivals: state.rivals.filter((r) => !r.toppled).length,
     composite: empireComposite(state),
+    lieutenantRequired: requiresLieutenant(state),
+    lieutenantReady: hasAvailableLieutenant(state),
   };
 }
 
@@ -141,19 +205,26 @@ export interface NextStep {
 
 /**
  * The next affordable step given current cash — the "one more day" lever. Prefer
- * OPENING a new route (the biggest `empireComposite` gain); if every country is
- * already held, reinforce the one with the most room to grow. `null` when the next
- * foothold is out of reach (nothing is highlighted, but every option still shows
- * its price — money is the gate, not a hidden menu).
+ * OPENING the cheapest affordable new route that isn't crew-gated (the biggest
+ * `empireComposite` gain); if none can be opened, reinforce the affordable held
+ * district with the most room to grow. `null` when nothing is in reach (nothing is
+ * highlighted, but every option still shows its price + any gate — never a hidden
+ * menu). A crew-gated open is NOT a next step until a lieutenant is on the crew.
  */
 export function nextAffordableStep(state: GameState): NextStep | null {
-  const cost = expansionCost(state);
-  if (state.cleanCash < cost) return null;
-
   const districts = districtViews(state);
-  const unowned = districts.find((d) => d.status === 'unowned');
-  if (unowned) return { countryId: unowned.countryId, kind: 'open', cost };
 
-  const emptiest = [...districts].sort((a, b) => a.fill - b.fill)[0];
-  return emptiest ? { countryId: emptiest.countryId, kind: 'reinforce', cost } : null;
+  const openable = districts
+    .filter((d) => d.status === 'unowned' && !d.blockedByCrew && state.cleanCash >= d.openCost)
+    .sort((a, b) => a.openCost - b.openCost)[0];
+  if (openable) {
+    return { countryId: openable.countryId, kind: 'open', cost: openable.openCost };
+  }
+
+  const reinforce = districts
+    .filter((d) => d.status !== 'unowned' && state.cleanCash >= d.openCost)
+    .sort((a, b) => a.fill - b.fill)[0];
+  return reinforce
+    ? { countryId: reinforce.countryId, kind: 'reinforce', cost: reinforce.openCost }
+    : null;
 }

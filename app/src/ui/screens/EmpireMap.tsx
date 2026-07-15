@@ -19,7 +19,6 @@ import {
   cleanRate,
   districtViews,
   empireSummary,
-  expansionCost,
   nextAffordableStep,
   type DistrictView,
 } from './empireMap.model';
@@ -28,9 +27,10 @@ const money = (n: number): string => `$${Math.round(n).toLocaleString('en-US')}`
 
 /** Short badge copy for a district's control state. */
 function statusLabel(d: DistrictView): string {
+  if (d.status === 'unowned') return 'No presence';
+  if (d.contested) return 'Contested';
   if (d.status === 'home') return 'Home turf';
-  if (d.status === 'route') return 'Route open';
-  return 'No presence';
+  return 'Route open';
 }
 
 export function EmpireMap() {
@@ -41,7 +41,6 @@ export function EmpireMap() {
   const districts = districtViews(state);
   const summary = empireSummary(state);
   const rate = cleanRate(state);
-  const cost = expansionCost(state);
   const next = nextAffordableStep(state);
   const cleanCash = state.cleanCash;
 
@@ -71,9 +70,16 @@ export function EmpireMap() {
         <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
           {districts.map((d) => {
             const highlighted = next?.countryId === d.countryId;
-            const affordable = cleanCash >= cost;
             const isOpen = d.status === 'unowned';
+            const blocked = d.blockedByCrew;
+            const affordable = cleanCash >= d.openCost;
+            const canAct = affordable && !blocked;
             const actionLabel = isOpen ? 'Open route' : 'Reinforce';
+            const costNote = !affordable
+              ? `${money(d.openCost)} · short`
+              : blocked
+                ? `${money(d.openCost)} · needs a lieutenant`
+                : money(d.openCost);
 
             return (
               <Panel
@@ -89,11 +95,13 @@ export function EmpireMap() {
                     <span>{d.name}</span>
                     <span
                       className={
-                        d.status === 'unowned' ? 'cg-tone-dim' : 'cg-tone-green'
+                        isOpen ? 'cg-tone-dim' : d.contested ? 'cg-tone-amber' : 'cg-tone-green'
                       }
                       data-status={d.status}
+                      data-control={d.contested ? 'contested' : d.status === 'unowned' ? 'none' : 'controlled'}
                     >
                       {statusLabel(d)}
+                      {d.exposed ? ' · exposed' : ''}
                     </span>
                   </span>
                 }
@@ -104,9 +112,16 @@ export function EmpireMap() {
                 }
               >
                 {isOpen ? (
-                  <p className="cg-label" style={{ margin: '2px 0 12px' }}>
-                    {d.hooks[0] ?? 'An untapped market — plant a foothold to open it.'}
-                  </p>
+                  <>
+                    <p className="cg-label" style={{ margin: '2px 0 12px' }}>
+                      {d.hooks[0] ?? 'An untapped market — plant a foothold to open it.'}
+                    </p>
+                    {blocked ? (
+                      <p className="cg-label cg-tone-amber" style={{ margin: '0 0 12px' }}>
+                        Reach past your grip — promote a lieutenant to run new turf.
+                      </p>
+                    ) : null}
+                  </>
                 ) : (
                   <>
                     <div className="cg-label" style={{ marginBottom: 6 }}>
@@ -125,7 +140,7 @@ export function EmpireMap() {
                         borderRadius: 3,
                         background: 'var(--cg-ink-750)',
                         overflow: 'hidden',
-                        marginBottom: 12,
+                        marginBottom: d.contested ? 6 : 12,
                       }}
                     >
                       <i
@@ -137,17 +152,23 @@ export function EmpireMap() {
                         }}
                       />
                     </div>
+                    {d.contested ? (
+                      <p className="cg-label cg-tone-amber" style={{ margin: '0 0 12px' }}>
+                        Consolidating control · {Math.round(d.consolidationPct * 100)}%
+                        {d.exposed ? ' · running hot' : ''}
+                      </p>
+                    ) : null}
                   </>
                 )}
 
                 <Button
                   variant={highlighted ? 'primary' : 'secondary'}
                   fullWidth
-                  disabled={!affordable}
+                  disabled={!canAct}
                   onClick={() => build(d.countryId)}
                 >
                   {actionLabel}
-                  <small>{affordable ? money(cost) : `${money(cost)} · short`}</small>
+                  <small>{costNote}</small>
                 </Button>
               </Panel>
             );
@@ -175,6 +196,22 @@ export function EmpireMap() {
           Fronts {summary.fronts} · Crew {summary.crew} · Routes {summary.routes} ·
           Rivals {summary.rivals}
         </div>
+        {summary.contested > 0 ? (
+          <div className="cg-label cg-tone-amber" style={{ marginTop: 6 }}>
+            {summary.contested} district{summary.contested === 1 ? '' : 's'} still
+            consolidating — hold to lock in reach.
+          </div>
+        ) : null}
+        {summary.lieutenantRequired && !summary.lieutenantReady ? (
+          <>
+            <div className="cg-label cg-tone-amber" style={{ margin: '6px 0 8px' }}>
+              New turf now needs a lieutenant to run it.
+            </div>
+            <Button variant="secondary" onClick={() => navigate('crew')}>
+              Promote a lieutenant on the Crew screen →
+            </Button>
+          </>
+        ) : null}
       </Panel>
     </div>
   );

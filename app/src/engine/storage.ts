@@ -22,11 +22,11 @@ import { PRODUCT_IDS, type ProductId } from './config/countries';
 import {
   STASH_TYPES,
   getStashType,
-  stashCost,
   type StashType,
   type StashTypeConfig,
 } from './config/stashes';
-import { rollRaid, type RaidEvent } from './heat';
+import { addHeat, rollRaid, type RaidEvent } from './heat';
+import { countryName, crewGateBlocksOpen, footholdCost, isHeldCountry } from './territory';
 import {
   emptyInventory,
   totalDirtyCash,
@@ -189,7 +189,13 @@ export type StorageRejectReason =
   | 'insufficient-capacity'
   | 'insufficient-funds'
   /** Cross-country product moves route through shipments (travel.ts, Prompt 30). */
-  | 'cross-country';
+  | 'cross-country'
+  /**
+   * Opening a NEW country past the free reach tier needs a lieutenant to run it
+   * (Ideas2 item 5 crew gate; territory.ts). The one rejection that is NOT a money
+   * gate — territory alone relaxes open access (user sign-off).
+   */
+  | 'needs-lieutenant';
 
 /** Result of building a stash: the new state + the created stash, or a rejection. */
 export interface AddStashResult {
@@ -200,9 +206,18 @@ export interface AddStashResult {
 
 /**
  * Build a new stash of `type`, paid from CLEAN cash (storage is a clean-cash sink
- * — design/09 Integration/Economy). Cost follows the upgrade curve `base × 1.15^n`
- * where `n` is how many of that type already exist (design/09 A.5). Rejects
- * without mutating on insufficient funds. New stashes start empty.
+ * — design/09 Integration/Economy). Cost comes from `footholdCost` (territory.ts):
+ * REINFORCING a country already held (or the home country) pays the plain upgrade
+ * curve `base × 1.15^n`; OPENING a NEW country pays the reach-and-region surcharge
+ * (Ideas2 item 5; Prompt 41). Rejects without mutating on insufficient funds — or,
+ * when opening past the free reach tier with no lieutenant to run it, on the crew
+ * gate (`needs-lieutenant`). New stashes start empty.
+ *
+ * Opening a new country also (a) stamps `openedAtHours` so the foothold reads as
+ * EXPOSED (raid-risk window) and CONTESTED (consolidation hold) — territory.ts;
+ * (b) adds a one-time takeover HEAT bump; and (c) queues a telegraphed "new
+ * territory is exposed" return-hook. Reinforcing/home builds do none of that
+ * (storage-screen behavior is unchanged).
  */
 export function addStash(
   state: GameState,
@@ -211,7 +226,15 @@ export function addStash(
 ): AddStashResult {
   const cfg = getStashType(type, state.config.stashes.STASH_TYPES);
   const nOwned = state.stashes.filter((s) => s.type === type).length;
-  const cost = stashCost(type, nOwned, state.config.stashes);
+  const target = opts.countryId ?? state.world.startingCountry.id;
+  const opening = !isHeldCountry(state, target);
+
+  // The crew gate is the one non-money rejection (territory relaxes open access).
+  if (opening && crewGateBlocksOpen(state, target)) {
+    return { state, stash: null, rejected: 'needs-lieutenant' };
+  }
+
+  const cost = footholdCost(state, type, target);
   if (state.cleanCash < cost) {
     return { state, stash: null, rejected: 'insufficient-funds' };
   }
@@ -219,16 +242,32 @@ export function addStash(
   const stash: Stash = {
     id: `stash-${type}-${nOwned + 1}`,
     name: opts.name ?? cfg.name,
-    countryId: opts.countryId ?? state.world.startingCountry.id,
+    countryId: target,
     type,
     dirtyCash: 0,
     inventory: emptyInventory(),
+    // A fresh foothold is dated so it reads as exposed + contested; reinforcing an
+    // already-held country leaves it established (undefined).
+    ...(opening ? { openedAtHours: state.clock.hours } : {}),
   };
-  const next: GameState = {
+  let next: GameState = {
     ...state,
     cleanCash: state.cleanCash - cost,
     stashes: [...state.stashes, stash],
   };
+
+  if (opening) {
+    // Expansion draws attention (one-time heat) and telegraphs the exposure.
+    next = addHeat(next, state.config.territory.TERRITORY_TAKEOVER_HEAT, 'territory-open');
+    const exposed: PendingChoice = {
+      id: `territory-exposed-${stash.id}-${state.clock.hours}`,
+      kind: 'territory-exposed',
+      summary: `Word's out you moved into ${countryName(target)} — fresh turf runs hot until you lock it down.`,
+      createdAtHours: state.clock.hours,
+    };
+    next = { ...next, pendingChoices: [...next.pendingChoices, exposed] };
+  }
+
   return { state: next, stash };
 }
 
@@ -443,8 +482,20 @@ export function raidStep(state: GameState, dtHours: number): GameState {
   const result = resolveRaid(state, raid, rng);
   const stash = findStash(state, raid.targetStashId);
   const where = stash?.name ?? 'a stash';
+  // The loss carries its numbers (design/13 A6): seized dirty cash never reads
+  // as money silently vanishing.
+  const taken = [
+    result.dirtyCashLost > 0
+      ? `$${Math.round(result.dirtyCashLost).toLocaleString('en-US')} dirty`
+      : '',
+    result.productUnitsLost > 0
+      ? `${Math.floor(result.productUnitsLost)} units`
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' and ');
   const summary = result.seized
-    ? `They raided ${where} and took what was there.`
+    ? `They raided ${where} and took what was there${taken ? ` — ${taken} seized` : ''}.`
     : `Law enforcement hit ${where} — and came up empty.`;
   const scene: PendingChoice = {
     id: `raid-${raid.targetStashId}-${state.clock.hours}`,

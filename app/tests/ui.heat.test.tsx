@@ -4,7 +4,6 @@ import { createRoot, type Root } from 'react-dom/client';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
-  bribeCoolQuote,
   createInitialState,
   hire,
   tierForHeat,
@@ -14,7 +13,7 @@ import {
 import { LocalSaveStore, useGameStore, type SaveStore } from '@/store';
 import { HeatScreen } from '@/ui/screens/HeatScreen';
 import {
-  bribeLever,
+  beatCopRelief,
   heatStatus,
   heatWarnings,
   lieLowLever,
@@ -93,13 +92,16 @@ describe('heatScreen.model — tension made estimable (Prompt 19)', () => {
     expect(opened[0]!.text).toContain('opened a file');
   });
 
-  it('bribe lever discloses the exact cost and heat shed (shown == charged)', () => {
-    const state = runAtHeat('heat-bribe', 40, 1_000_000);
-    const quote = bribeCoolQuote(state);
-    const lever = bribeLever(state);
-    expect(lever.cost).toBe(quote.cost);
-    expect(lever.heatReduced).toBe(quote.heatReduced);
-    expect(lever.affordable).toBe(true);
+  it('beat-cop relief points to Corruption with no cop, shows the benefit with one', () => {
+    // No cop on payroll ⇒ a pointer to put one there (the bribe lever is gone).
+    const none = beatCopRelief(runAtHeat('cop-none', 40));
+    expect(none.onPayroll).toBe(false);
+    expect(none.text.toLowerCase()).toContain('payroll');
+    // A loyal beat cop hired ⇒ the standing "cools faster" benefit line.
+    const hired = hire(runAtHeat('cop-on', 40, 100_000), 'beat-cop').state;
+    const relief = beatCopRelief(hired);
+    expect(relief.onPayroll).toBe(true);
+    expect(relief.text.toLowerCase()).toContain('cool');
   });
 
   it('lie-low lever reports the income it trades away', () => {
@@ -139,17 +141,24 @@ describe('HeatScreen — the reduce-heat levers (Prompt 19)', () => {
     view.unmount();
   });
 
-  it('bribing a cop spends clean cash and cools heat by the shown amount', () => {
-    const state = runAtHeat('heat-bribe-ui', 40, 100_000);
-    useGameStore.setState({ state });
-    const quote = bribeCoolQuote(state);
-
+  it('offers a payroll pointer (not a bribe lever) when no cop is on the take', () => {
+    useGameStore.setState({ state: runAtHeat('heat-nocop-ui', 40, 100_000) });
     const view = mount(<HeatScreen />);
-    view.click(view.container.querySelector('[data-testid="bribe-cop"]')!);
+    // The removed one-tap bribe control is gone…
+    expect(view.container.querySelector('[data-testid="bribe-cop"]')).toBeNull();
+    expect(view.container.textContent!.toLowerCase()).not.toContain('bribe a cop');
+    // …replaced by a pointer to put a cop on the payroll.
+    expect(view.container.querySelector('[data-testid="payroll-cop"]')).not.toBeNull();
+    view.unmount();
+  });
 
-    const after = useGameStore.getState().state!;
-    expect(after.cleanCash).toBe(state.cleanCash - quote.cost);
-    expect(state.heat - after.heat).toBeCloseTo(quote.heatReduced, 5);
+  it('shows the standing benefit line (no pointer) when a beat cop is on payroll', () => {
+    const hired = hire(runAtHeat('heat-cop-ui', 40, 100_000), 'beat-cop').state;
+    useGameStore.setState({ state: hired });
+    const view = mount(<HeatScreen />);
+    // On payroll ⇒ the benefit line, and the "put a cop on payroll" pointer is gone.
+    expect(view.container.querySelector('[data-testid="payroll-cop"]')).toBeNull();
+    expect(view.container.textContent!.toLowerCase()).toContain('payroll');
     view.unmount();
   });
 

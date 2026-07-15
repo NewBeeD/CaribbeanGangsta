@@ -30,6 +30,39 @@ describe('tick — clock advancement', () => {
   });
 });
 
+describe('drug prices & loan interest update on a 3-in-game-hour cadence (Ideas2)', () => {
+  const factorSum = (s: GameState): number =>
+    Object.values(s.markets).reduce(
+      (a, byProduct) => a + Object.values(byProduct).reduce((b, m) => b + m.factor, 0),
+      0,
+    );
+
+  it('holds drug prices steady within a 3-hour period, then moves them on the boundary', () => {
+    const start = createInitialState('cadence-prices');
+    const base = factorSum(start);
+    // A 2-hour tick from hour 0 crosses no 3-hour boundary — prices don't drift.
+    const inside = tick(start, 2);
+    expect(factorSum(inside)).toBeCloseTo(base);
+    // Crossing the boundary at hour 3 (hour 2 → 4) refreshes the whole period.
+    const crossed = tick(inside, 2);
+    expect(factorSum(crossed)).not.toBeCloseTo(base);
+  });
+
+  it('accrues loan interest only once a 3-hour boundary is crossed', () => {
+    const start = withActiveDebt(createInitialState('cadence-debt'));
+    const inside = tick(start, 2); // inside the first period — nothing owed yet
+    expect(inside.debt.accruedInterest).toBe(0);
+    const crossed = tick(inside, 2); // crosses hour 3 — interest lands
+    expect(crossed.debt.accruedInterest).toBeGreaterThan(0);
+  });
+
+  it('still drifts prices on a normal multiple-of-3 tick (cadence never disables it)', () => {
+    const start = createInitialState('cadence-day');
+    const base = factorSum(start);
+    expect(factorSum(tick(start, 24))).not.toBeCloseTo(base);
+  });
+});
+
 /** A run carrying active loan-shark debt, to prove offline never advances it. */
 function withActiveDebt(state: GameState): GameState {
   return {

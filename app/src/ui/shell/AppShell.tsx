@@ -14,6 +14,7 @@ import { StoryCardModal } from './StoryCardModal';
 import { nextCardScene } from './storyCardPresenter.model';
 import { SCREENS } from './screens';
 import { navigate, useHash } from './useHash';
+import { formatClock } from './clockReadout.model';
 import { trackReturnToAllocate } from '@/telemetry';
 
 /**
@@ -57,6 +58,29 @@ export function AppShell() {
       cancelled = true;
     };
   }, []);
+
+  // The live in-game clock (Ideas2 §6): once a run is active, real time keeps the
+  // world moving — shipments arrive, heat cools, interest accrues — whether or not
+  // the player acts. It runs only while the tab is visible; hiding the tab pauses
+  // it (the away gap settles through the offline path on the next resume), so time
+  // reflects active play, never a monster catch-up. `runStatus` in the deps
+  // re-syncs when a run ends.
+  const runStatus = state?.runStatus;
+  useEffect(() => {
+    if (!booted) return;
+    const sync = () => {
+      const store = useGameStore.getState();
+      const active = store.state?.runStatus === 'active';
+      if (active && document.visibilityState === 'visible') store.startClock();
+      else store.stopClock();
+    };
+    sync();
+    document.addEventListener('visibilitychange', sync);
+    return () => {
+      document.removeEventListener('visibilitychange', sync);
+      useGameStore.getState().stopClock();
+    };
+  }, [booted, runStatus]);
 
   if (!booted) {
     return (
@@ -131,7 +155,17 @@ export function AppShell() {
   return (
     <div className="cg-shell">
       <header className="cg-shell__top">
-        <span className="cg-kicker">Caribbean Gangsta</span>
+        <div className="cg-shell__brand">
+          <span className="cg-kicker">Caribbean Gangsta</span>
+          <span
+            className="cg-label"
+            data-testid="clock-readout"
+            aria-label="In-game date"
+            style={{ opacity: 0.75 }}
+          >
+            {formatClock(state.clock).text}
+          </span>
+        </div>
         <nav className="cg-shell__uplinks" aria-label="Overview">
           {topNodes.map((n) => {
             // A small count of what's in flight on the Transport uplink (Item 8).

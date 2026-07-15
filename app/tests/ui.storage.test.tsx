@@ -155,3 +155,95 @@ describe('StorageScreen — managing where product lives (Prompt 20)', () => {
     view.unmount();
   });
 });
+
+describe('move rejections are legible, with numbers (design/13 A4)', () => {
+  it('moveRejectProse gives each reason its own line with the real numbers', async () => {
+    const { moveRejectProse, cashMoveRejectProse } = await import(
+      '@/ui/screens/storageScreen.model'
+    );
+    const { effectiveCapacity } = await import('@/engine');
+
+    // Home + a same-country safehouse with 12 units of room + a foreign stash.
+    const built = addStash(run('move-prose', 500_000), 'safehouse');
+    const dest = built.stash!;
+    const home = built.state.stashes[0]!;
+    const state: GameState = {
+      ...built.state,
+      stashes: [
+        { ...home, inventory: { ...home.inventory, weed: 5 } },
+        {
+          ...dest,
+          inventory: {
+            ...dest.inventory,
+            weed: effectiveCapacity(built.state, dest) - 12,
+          },
+        },
+        {
+          ...home,
+          id: 'stash-miami',
+          name: 'Miami spot',
+          countryId: 'miami',
+          dirtyCash: 0,
+        },
+      ],
+    };
+
+    expect(
+      moveRejectProse(state, 'insufficient-capacity', {
+        fromId: home.id,
+        toId: dest.id,
+        product: 'weed',
+        qty: 40,
+      }),
+    ).toBe(`${dest.name} is full — 12 of 40 fit.`);
+
+    expect(
+      moveRejectProse(state, 'insufficient-inventory', {
+        fromId: home.id,
+        toId: dest.id,
+        product: 'weed',
+        qty: 30,
+      }),
+    ).toContain('doesn’t hold 30 weed');
+
+    expect(
+      moveRejectProse(state, 'cross-country', {
+        fromId: home.id,
+        toId: 'stash-miami',
+        product: 'weed',
+        qty: 1,
+      }),
+    ).toContain('Transport desk');
+
+    expect(
+      cashMoveRejectProse(state, 'insufficient-funds', { fromId: 'stash-miami', amount: 500 }),
+    ).toContain('only holds $0 dirty');
+  });
+
+  it('the move sheet shows the destination’s remaining room and rejects with numbers', async () => {
+    const { effectiveCapacity } = await import('@/engine');
+    // A FULL same-country destination: the default 1-unit move must reject.
+    const built = addStash(run('move-full', 500_000), 'safehouse');
+    const dest = built.stash!;
+    const home = built.state.stashes[0]!;
+    const state: GameState = {
+      ...built.state,
+      stashes: built.state.stashes.map((s) =>
+        s.id === home.id
+          ? { ...s, inventory: { ...s.inventory, weed: 5 } }
+          : { ...s, inventory: { ...s.inventory, weed: effectiveCapacity(built.state, s) } },
+      ),
+    };
+    useGameStore.setState({ state });
+
+    const view = mount(<StorageScreen />);
+    // The destination's remaining effectiveCapacity is disclosed BEFORE the move.
+    const room = view.container.querySelector('[data-testid="move-room"]')!;
+    expect(room.textContent).toContain(`Room at ${dest.name}: 0 units`);
+
+    view.click(view.container.querySelector('[data-testid="move-product"]')!);
+    const feedback = view.container.querySelector('[data-testid="move-feedback"]')!;
+    expect(feedback.textContent).toBe(`${dest.name} is full — 0 of 1 fit.`);
+    view.unmount();
+  });
+});

@@ -3,7 +3,7 @@ import { StrictMode, act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { COUNTRIES, createInitialState, type GameState } from '@/engine';
+import { COUNTRIES, addStash, createInitialState, spawnCrew, type GameState } from '@/engine';
 import { LocalSaveStore, useGameStore, type SaveStore } from '@/store';
 import { EmpireMap } from '@/ui/screens/EmpireMap';
 import {
@@ -117,6 +117,46 @@ describe('EmpireMap — the whole map is open, money is the only gate (Ideas.md)
     expect(view.container.querySelector('[data-status="home"]')).not.toBeNull();
     expect(view.container.querySelector('[data-status="unowned"]')).not.toBeNull();
     view.unmount();
+  });
+
+  it('a freshly opened district reads as contested until it consolidates', () => {
+    const funded = fundedRun('empire-contested', 1_000_000);
+    const target = COUNTRIES.find((c) => c.id !== funded.world.startingCountry.id)!;
+    const opened = addStash(funded, 'floor', { countryId: target.id }).state;
+    useGameStore.setState({ state: opened });
+
+    const view = mount(<EmpireMap />);
+    expect(view.container.textContent).toContain('Contested');
+    expect(view.container.textContent).toContain('Consolidating control');
+    // The contested district doesn't yet count as a route in the glance summary.
+    expect(view.container.textContent).toContain('Routes 1');
+    view.unmount();
+  });
+
+  it('the crew gate holds a further open until a lieutenant is on the crew', () => {
+    let s = fundedRun('empire-gate', 5_000_000);
+    const os = COUNTRIES.filter((c) => c.id !== s.world.startingCountry.id);
+    s = addStash(s, 'floor', { countryId: os[0]!.id }).state; // reach past the free tier
+    useGameStore.setState({ state: s });
+
+    const view = mount(<EmpireMap />);
+    // The next new country's button is disabled and names the lieutenant gate…
+    const idx = COUNTRIES.findIndex((c) => c.id === os[1]!.id);
+    const button = [...view.container.querySelectorAll('.cg-btn')][idx]!;
+    expect(button.hasAttribute('disabled')).toBe(true);
+    expect(view.container.textContent).toContain('needs a lieutenant');
+    view.unmount();
+
+    // …and lifts once a lieutenant is promoted.
+    const withLt: GameState = {
+      ...s,
+      crew: [...s.crew, spawnCrew('deon', { id: 'lt', role: 'lieutenant' })],
+    };
+    useGameStore.setState({ state: withLt });
+    const view2 = mount(<EmpireMap />);
+    const button2 = [...view2.container.querySelectorAll('.cg-btn')][idx]!;
+    expect(button2.hasAttribute('disabled')).toBe(false);
+    view2.unmount();
   });
 
   it('opening a route is a purchase — it builds a foothold in that country immediately', () => {

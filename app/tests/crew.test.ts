@@ -40,7 +40,7 @@ function withCrew(seed: string, archetypeId: string): { state: GameState; npc: C
   return { state, npc: crew };
 }
 
-const bar = (id = 'front-bar-1', level = 1): Front => ({ id, type: 'bar', level });
+const bar = (id = 'front-cash-front', level = 1): Front => ({ id, type: 'cash-front', level });
 
 describe('spawnCrew / recruit — the MVP roster (design/02 §7)', () => {
   it('builds a fully-realized person from an archetype, not a stat line', () => {
@@ -293,13 +293,13 @@ describe('development — recruit, train, promote, assign (design/02 §5)', () =
     const withFront: GameState = { ...state, fronts: [bar()] };
     const rateBefore = cleanCashRate(withFront);
 
-    const res = promote(withFront, npc.id, { kind: 'front', targetId: 'front-bar-1' });
+    const res = promote(withFront, npc.id, { kind: 'front', targetId: 'front-cash-front' });
     expect(res.rejected).toBeUndefined();
     expect(res.crew!.role).toBe('lieutenant');
-    expect(res.crew!.assignment).toEqual({ kind: 'front', targetId: 'front-bar-1' });
+    expect(res.crew!.assignment).toEqual({ kind: 'front', targetId: 'front-cash-front' });
 
     // The interaction with laundering: a delegated front earns the lieutenant bonus.
-    expect(frontLieutenantBonus(res.state, 'front-bar-1')).toBe(LIEUTENANT_FRONT_BONUS);
+    expect(frontLieutenantBonus(res.state, 'front-cash-front')).toBe(LIEUTENANT_FRONT_BONUS);
     expect(cleanCashRate(res.state)).toBeCloseTo(rateBefore * (1 + LIEUTENANT_FRONT_BONUS), 6);
   });
 
@@ -311,7 +311,7 @@ describe('development — recruit, train, promote, assign (design/02 §5)', () =
     const reyesBefore = s.crew.find((c) => c.archetypeId === 'reyes')!.loyalty;
 
     const marcoId = s.crew.find((c) => c.archetypeId === 'marco')!.id;
-    s = promote(s, marcoId, { kind: 'front', targetId: 'front-bar-1' }).state;
+    s = promote(s, marcoId, { kind: 'front', targetId: 'front-cash-front' }).state;
 
     const reyesAfter = s.crew.find((c) => c.archetypeId === 'reyes')!.loyalty;
     expect(reyesAfter).toBeLessThan(reyesBefore); // the danger combo, emergent

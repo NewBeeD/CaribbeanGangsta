@@ -14,6 +14,7 @@ import { create } from 'zustand';
 import {
   applyIntent,
   createInitialState,
+  dismissAllPendingChoices,
   type CrewAssignment,
   type CrewMember,
   type GameState,
@@ -72,7 +73,18 @@ import {
   type FrontResult,
   type FrontType,
 } from '@/engine/laundering';
-import { bribeToCoolHeat, setLieLow, type BribeCoolResult } from '@/engine/heat';
+import {
+  queueWash as queueWashEngine,
+  cancelWash as cancelWashEngine,
+  type WashResult,
+} from '@/engine/wash';
+import {
+  buyProductionOp as buyProductionOpEngine,
+  upgradeProductionOp as upgradeProductionOpEngine,
+  type ProductionResult,
+} from '@/engine/production';
+import type { ProductionOpId } from '@/engine/config/production';
+import { setLieLow } from '@/engine/heat';
 import { buyPlug as buyPlugEngine, type PlugResult } from '@/engine/plugs';
 import { convert as convertEngine, type ConvertResult } from '@/engine/conversions';
 import type { RecipeId } from '@/engine/config/conversions';
@@ -126,6 +138,28 @@ import {
 } from '@/telemetry';
 
 const MS_PER_HOUR = 3_600_000;
+
+/**
+ * Live-clock pacing (Ideas2 §6): 30 real seconds = 1 in-game hour. The engine
+ * stays pure — time is INJECTED via `tick()` — so this wall-clock ratio lives in
+ * the store (which owns `Date.now()`), never in `GameConfig` (config/index.ts
+ * deliberately keeps structural time anchors like hours-per-day off the tunable
+ * surface). Change this one number to re-pace the whole game clock.
+ */
+const REAL_SECONDS_PER_GAME_HOUR = 30;
+const GAME_HOURS_PER_MS = 1 / (REAL_SECONDS_PER_GAME_HOUR * 1000);
+/** How often the live loop injects elapsed real time as in-game hours. */
+const CLOCK_INTERVAL_MS = 1000;
+/** Throttle for the live-clock autosave so an idle session still survives a refresh. */
+const LIVE_AUTOSAVE_EVERY_MS = 30_000;
+
+/**
+ * Pure map: real milliseconds elapsed → in-game hours to advance (the 30s = 1h
+ * ratio). Exported so the pacing is unit-testable without wall-clock timers.
+ */
+export function gameHoursForElapsedMs(elapsedMs: number): number {
+  return Math.max(0, elapsedMs) * GAME_HOURS_PER_MS;
+}
 
 /** The single-slot autosave the app boots from / continues into (Prompt 14). */
 export const AUTOSAVE_SLOT = 'autosave';
@@ -261,6 +295,27 @@ export interface GameStore {
   upgradeFront(frontId: string): FrontResult | null;
   /** Open a new Level-1 front of `type`, paid from CLEAN cash. Commits on success. */
   buyFront(type: FrontType): FrontResult | null;
+  /**
+   * Send the mules: commit `amount` of located dirty cash to the wash queue — the
+   * batched dirty→clean converter. It drains to clean over ONLINE time at the mule
+   * throughput (`washStep` on the live clock), landing at `1 − WASH_CUT`. Commits +
+   * autosaves only when it lands (positive amount, enough dirty on hand); returns
+   * the full `WashResult` (its `rejected` reason otherwise), or `null` when no run.
+   */
+  queueWash(amount: number): WashResult | null;
+  /** Call the mules off: return the un-deposited dirty cash to a stash and empty the queue. */
+  cancelWash(): void;
+  /**
+   * Production actions (Prompt 39; Ideas2 item 3) — buy/upgrade a grow-op or drug
+   * factory. Each wraps the pure `production.ts` engine, commits only when it lands
+   * (funds sufficed, not owned/maxed), and autosaves so the ops survive a refresh.
+   * The UI authors no yield/cost math. Crew delegation reuses `assignCrew` with a
+   * `{ kind: 'production', targetId }` assignment — no new action needed.
+   */
+  /** Buy the Level-1 grow-op/factory of `id`, paid from CLEAN cash (single-buy). */
+  buyProductionOp(id: ProductionOpId): ProductionResult | null;
+  /** Upgrade a production op one level, paid from CLEAN cash at `buy_in × 1.15^level`. */
+  upgradeProductionOp(opId: string): ProductionResult | null;
   /** Bring an archetype onto the crew (open access — money/relationships gate it, never a flag). */
   recruitCrew(archetypeId: string): CrewMember | null;
   /** Train a skill by a fixed step, paid from clean cash. Rejects (no commit) if maxed/short. */
@@ -284,12 +339,6 @@ export interface GameStore {
    */
   /** Toggle "lie low" — heat cools faster, laundering income slows (design/07 §5). */
   setLieLow(enabled: boolean): void;
-  /**
-   * Pay a cop off from CLEAN cash to cool heat (design/07 §5's `[ Bribe a cop -$X ]`).
-   * Commits + autosaves only when it lands (funds sufficed); returns the full
-   * `BribeCoolResult` (its `rejected` reason otherwise), or `null` when no run loaded.
-   */
-  coolWithBribe(dollars?: number): BribeCoolResult | null;
   /**
    * Debt actions (Prompt 21) — borrowing at interest, the come-up hook & the
    * lifeline out of the spiral (design/10). Each wraps the pure `debt.ts` engine,
@@ -321,6 +370,13 @@ export interface GameStore {
    * Autosaves so the cleared queue survives a refresh.
    */
   dismissPendingChoice(choiceId: string): void;
+  /**
+   * Clear every safely-dismissible pending choice at once (design/13 A5 — the
+   * Money feed's "Clear all"). Routes through the pure `dismissAllPendingChoices`,
+   * which mirrors the single-dismiss default path and leaves consequential
+   * (card-bearing) choices untouched. Autosaves.
+   */
+  clearPendingChoices(): void;
   /**
    * World-market actions (Prompt 31) — each wraps the pure engine, commits only
    * when the operation lands, and autosaves. The UI authors no price/odds math;
@@ -388,6 +444,16 @@ export interface GameStore {
   refreshMeta(): Promise<void>;
   /** Advance the sim by `dtHours` of online in-game time. */
   tickBy(dtHours: number): void;
+  /**
+   * Start the live in-game clock (Ideas2 §6): real time advances the sim so the
+   * world keeps moving even when the player isn't acting — shipments arrive, heat
+   * cools, interest accrues, the street re-ups. This is what makes time follow
+   * the clock, not the play. Idempotent; the caller (AppShell) runs it while a run
+   * is active and the tab is visible, and stops it otherwise.
+   */
+  startClock(): void;
+  /** Stop the live in-game clock (tab hidden / run ended / unmount). Idempotent. */
+  stopClock(): void;
   /** Load a slot and settle any offline time since it was last played. */
   hydrate(slot: string): Promise<boolean>;
   /** Persist the current run to a slot, stamping the wall clock. */
@@ -414,6 +480,11 @@ function withState(
 
 /** Monotonic tail so two runs minted in the same millisecond still get distinct seeds. */
 let runMint = 0;
+
+/** Live-clock loop handle + last wall-clock reads (module-scoped: one loop per app). */
+let clockHandle: ReturnType<typeof setInterval> | null = null;
+let lastClockReadAt = 0;
+let lastLiveSaveAt = 0;
 
 /** Map a persisted terminal `runStatus` back onto the cause that produced it. */
 function causeForStatus(state: GameState): RunEndCause {
@@ -634,6 +705,47 @@ export const useGameStore = create<GameStore>((set, get) => ({
     return result;
   },
 
+  queueWash(amount) {
+    const { state } = get();
+    if (!state) return null;
+    const result = queueWashEngine(state, amount);
+    // Only commit + autosave when the mules took the job (valid amount, enough dirty).
+    if (!result.rejected) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  cancelWash() {
+    withState(get, set, (state) => cancelWashEngine(state));
+    void get().persist(AUTOSAVE_SLOT).catch(() => {});
+  },
+
+  buyProductionOp(id) {
+    const { state } = get();
+    if (!state) return null;
+    const result = buyProductionOpEngine(state, id);
+    // Only commit + autosave when the op was bought (funds sufficed, not owned).
+    if (!result.rejected) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  upgradeProductionOp(opId) {
+    const { state } = get();
+    if (!state) return null;
+    const result = upgradeProductionOpEngine(state, opId);
+    // Only commit + autosave when the upgrade landed (funds sufficed, not maxed).
+    if (!result.rejected) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
   recruitCrew(archetypeId) {
     const { state } = get();
     if (!state) return null;
@@ -692,18 +804,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
     void get().persist(AUTOSAVE_SLOT).catch(() => {});
   },
 
-  coolWithBribe(dollars) {
-    const { state } = get();
-    if (!state) return null;
-    const result = dollars === undefined ? bribeToCoolHeat(state) : bribeToCoolHeat(state, dollars);
-    // Only commit + autosave when the bribe cleared (funds sufficed, amount valid).
-    if (result.ok) {
-      set({ state: result.state });
-      void get().persist(AUTOSAVE_SLOT).catch(() => {});
-    }
-    return result;
-  },
-
   borrowLoan(lenderId, amount, collateralRef) {
     const { state } = get();
     if (!state) return null;
@@ -757,6 +857,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       ...state,
       pendingChoices: state.pendingChoices.filter((c) => c.id !== choiceId),
     }));
+    void get().persist(AUTOSAVE_SLOT).catch(() => {});
+  },
+
+  clearPendingChoices() {
+    withState(get, set, (state) => dismissAllPendingChoices(state));
     void get().persist(AUTOSAVE_SLOT).catch(() => {});
   },
 
@@ -909,6 +1014,35 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ state: next });
     // Everything the tick did (raids, beats, arrivals, the spiral) as telemetry.
     trackTick(state, next);
+  },
+
+  startClock() {
+    if (clockHandle !== null) return; // already running — idempotent
+    lastClockReadAt = Date.now();
+    lastLiveSaveAt = lastClockReadAt;
+    clockHandle = setInterval(() => {
+      const store = get();
+      const s = store.state;
+      // Only a living run advances; a dead/ended run freezes on the fall screen.
+      if (!s || s.runStatus !== 'active') return;
+      const now = Date.now();
+      const dtHours = gameHoursForElapsedMs(now - lastClockReadAt);
+      lastClockReadAt = now;
+      if (dtHours > 0) store.tickBy(dtHours);
+      // Throttled autosave so an idle session (no player actions) still persists
+      // its advanced clock and re-stamps lastPlayedRealTime for offline settlement.
+      if (now - lastLiveSaveAt >= LIVE_AUTOSAVE_EVERY_MS) {
+        lastLiveSaveAt = now;
+        void store.persist(AUTOSAVE_SLOT).catch(() => {});
+      }
+    }, CLOCK_INTERVAL_MS);
+  },
+
+  stopClock() {
+    if (clockHandle !== null) {
+      clearInterval(clockHandle);
+      clockHandle = null;
+    }
   },
 
   async hydrate(slot) {

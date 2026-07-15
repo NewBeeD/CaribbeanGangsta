@@ -22,6 +22,7 @@ import {
   emptyDebt,
   emptyInventory,
   emptyStreetStock,
+  emptyWash,
   type Corruption,
   type CrewMember,
   type Debt,
@@ -273,6 +274,72 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
       },
     };
   },
+  // 11 → 12: the fixed 6-front roster + single-buy rule (Ideas2 item 1; Prompt
+  // 37). Legacy fronts are remapped to the new technique ids by the table below
+  // and given the stable per-type id `front-${type}`; if a save somehow holds
+  // duplicates of a type (the old "infinite fronts" exploit), they FOLD to the
+  // single highest-level survivor — migrations never seize, so nothing the player
+  // earned is lost, and no refund is given for the folded copies. Levels are
+  // preserved; cash and the RNG stream are untouched.
+  11: (env) => {
+    const legacy = env.state as GameState;
+    const remap: Readonly<Record<string, string>> = {
+      bar: 'cash-front',
+      nightclub: 'shell-company',
+      resort: 'real-estate',
+      crypto: 'crypto',
+    };
+    const maxLevelByType = new Map<string, number>();
+    for (const f of legacy.fronts) {
+      const type = remap[f.type] ?? f.type;
+      maxLevelByType.set(type, Math.max(maxLevelByType.get(type) ?? 0, f.level));
+    }
+    const fronts = [...maxLevelByType].map(([type, level]) => ({
+      id: `front-${type}`,
+      type,
+      level,
+    }));
+    return { ...env, schemaVersion: 12, state: { ...legacy, fronts } };
+  },
+  // 12 → 13: the production layer — grow-ops, strains & drug factories (Ideas2
+  // item 3; Prompt 39). A pre-v13 run never produced, so `productionOps` starts
+  // empty and the saved config gains the `production` group from the default (any
+  // other saved tuning survives). Nothing the player earned changes — no cash,
+  // holdings, or RNG movement.
+  12: (env) => {
+    const legacy = env.state as GameState & { productionOps?: GameState['productionOps'] };
+    const config: GameConfig = { ...legacy.config, production: DEFAULT_GAME_CONFIG.production };
+    return {
+      ...env,
+      schemaVersion: 13,
+      state: { ...legacy, productionOps: legacy.productionOps ?? [], config },
+    };
+  },
+  // 13 → 14: integer inventory (design/13 A1; Prompt 43). Pre-v14 production
+  // deposited fractional units straight into the home stash, which the deal
+  // engine's integer-qty validation could never sell ("sell max" rejected). Every
+  // fractional holding is rounded UP to the next whole unit — in the player's
+  // favor, never a seizure (216.578 weed becomes 217). `ProductionOp.pendingYield`
+  // starts absent (reads as 0). Cash, config, and the RNG stream are untouched.
+  13: (env) => {
+    const legacy = env.state as GameState;
+    const ceilInventory = (inv: Inventory): Inventory => {
+      const next = {} as Record<keyof Inventory, number>;
+      for (const key of Object.keys(inv) as (keyof Inventory)[]) {
+        next[key] = Math.ceil(inv[key]);
+      }
+      return next;
+    };
+    return {
+      ...env,
+      schemaVersion: 14,
+      state: {
+        ...legacy,
+        inventory: ceilInventory(legacy.inventory),
+        stashes: legacy.stashes.map((s) => ({ ...s, inventory: ceilInventory(s.inventory) })),
+      },
+    };
+  },
 };
 
 /**
@@ -291,6 +358,12 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
  *    throw at pricing time. Missing countries are seeded fresh (deterministically
  *    from the save's own seed) and MERGED UNDER the existing ones, so the save's
  *    live drift/stock for countries it already knew is preserved untouched.
+ *  - Prompt 40 (Ideas2 item 4): `loansTaken` — the run's loan counter. A pre-P40
+ *    save that carried an active loan is treated as being on its first loan (`1`);
+ *    otherwise it starts at `0`. Never touches cash, the ledger, or the RNG.
+ *  - Money-mule wash queue: `wash` — the batched dirty→clean converter's queue. A
+ *    save written before it lacks the field; default it to an empty queue (no cash
+ *    in flight), never touching player holdings.
  */
 function normalizeState(state: GameState): GameState {
   const s = state as GameState & {
@@ -300,13 +373,48 @@ function normalizeState(state: GameState): GameState {
     armsBroker?: boolean;
     armsMarkets?: ArmsMarkets;
     armory?: Armory;
+    loansTaken?: number;
+    wash?: GameState['wash'];
+    productionOps?: GameState['productionOps'];
   };
   // A v11 save written before Prompt 35 carries a `config` without the `arms`
   // group; the arms engine reads `config.arms`, so patch it in from the default
   // (any other saved tuning survives). A prior build with the group is untouched.
+  // Prompt 38 (Ideas2 item 2) added `heat.PAYROLLED_COP_DECAY_MULTIPLIER` (and
+  // dropped the two bribe knobs); a save written before it lacks the new knob,
+  // which `decayHeat` reads — patch it in from the default so decay never reads
+  // `undefined` (the dropped knobs are harmless extra data, left untouched).
+  // Prompt 41 (Ideas2 item 5) added the `territory` config group (reach cost,
+  // vulnerability window, consolidation hold, crew gate). A save written before it
+  // lacks the group, which the territory engine reads — patch it in from the
+  // default so nothing reads `undefined` (an in-place v12 extension, no schema bump).
+  const legacyConfig = s.config as GameConfig & {
+    arms?: unknown;
+    territory?: unknown;
+    production?: unknown;
+    heat?: { PAYROLLED_COP_DECAY_MULTIPLIER?: number };
+  };
+  const needsArms = legacyConfig.arms === undefined;
+  const needsTerritory = legacyConfig.territory === undefined;
+  const needsProduction = legacyConfig.production === undefined;
+  const needsCopDecay = legacyConfig.heat?.PAYROLLED_COP_DECAY_MULTIPLIER === undefined;
   const config: GameConfig =
-    (s.config as GameConfig & { arms?: unknown }).arms === undefined
-      ? { ...s.config, arms: DEFAULT_GAME_CONFIG.arms }
+    needsArms || needsTerritory || needsProduction || needsCopDecay
+      ? {
+          ...s.config,
+          ...(needsArms ? { arms: DEFAULT_GAME_CONFIG.arms } : {}),
+          ...(needsTerritory ? { territory: DEFAULT_GAME_CONFIG.territory } : {}),
+          ...(needsProduction ? { production: DEFAULT_GAME_CONFIG.production } : {}),
+          ...(needsCopDecay
+            ? {
+                heat: {
+                  ...s.config.heat,
+                  PAYROLLED_COP_DECAY_MULTIPLIER:
+                    DEFAULT_GAME_CONFIG.heat.PAYROLLED_COP_DECAY_MULTIPLIER,
+                },
+              }
+            : {}),
+        }
       : s.config;
 
   // Backfill drug/arms markets for any country the roster has since gained (Item 9).
@@ -322,6 +430,9 @@ function normalizeState(state: GameState): GameState {
     s.armsMarkets &&
     s.armory &&
     s.armsBroker !== undefined &&
+    s.loansTaken !== undefined &&
+    s.wash !== undefined &&
+    s.productionOps !== undefined &&
     config === s.config &&
     !missingMarkets &&
     !missingArms
@@ -360,6 +471,9 @@ function normalizeState(state: GameState): GameState {
     armsBroker: s.armsBroker ?? false,
     armsMarkets,
     armory: s.armory ?? emptyArmory(),
+    loansTaken: s.loansTaken ?? (state.debt.active ? 1 : 0),
+    wash: s.wash ?? emptyWash(),
+    productionOps: s.productionOps ?? [],
   };
 }
 

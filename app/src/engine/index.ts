@@ -60,6 +60,7 @@ export type {
   PrestigeTuning,
   TransportTuning,
   ConversionsTuning,
+  ProductionTuning,
   StreetTuning,
   PlugsTuning,
   ArmsTuning,
@@ -118,12 +119,15 @@ export {
   emptyDebt,
   emptyStreetStock,
   emptyArmory,
+  emptyWash,
   debtOwed,
   totalDirtyCash,
   spendableAt,
   splitCharge,
   netWorth,
   empireSize,
+  isConsequentialChoice,
+  dismissAllPendingChoices,
   rngFor,
   withRngState,
 } from './state';
@@ -137,6 +141,7 @@ export type {
   Inventory,
   Stash,
   Front,
+  ProductionOp,
   CrewMember,
   MemoryEntry,
   BetrayalArc,
@@ -153,6 +158,7 @@ export type {
   MarketEvent,
   Rumor,
   StreetStock,
+  WashQueue,
 } from './state';
 
 // Injected-time clock + per-tick pipeline (Prompt 03).
@@ -205,6 +211,27 @@ export type {
   ConvertResult,
   ConvertRejectReason,
 } from './conversions';
+
+// Production layer — grow-ops, strains & drug factories (Ideas2 item 3) — Prompt 39.
+export {
+  PRODUCTION_OPS,
+  PRODUCTION_MAX_LEVEL,
+  PRODUCTION_COST_GROWTH,
+  getProductionOp,
+  productionUpgradeCost,
+} from './config/production';
+export type {
+  ProductionOpId,
+  ProductionKind,
+  ProductionOpConfig,
+} from './config/production';
+export {
+  productionYieldRate,
+  productionStep,
+  buyProductionOp,
+  upgradeProductionOp,
+} from './production';
+export type { ProductionResult, ProductionRejectReason } from './production';
 
 // Street teams — the crack corner economy (design/12 Item 5; Prompt 34).
 export {
@@ -319,9 +346,6 @@ export type {
 export {
   addHeat,
   decayHeat,
-  reduceHeatByBribe,
-  bribeCoolQuote,
-  bribeToCoolHeat,
   currentTier,
   tierForHeat,
   tierDots,
@@ -336,8 +360,6 @@ export type {
   TierEscalation,
   LieLowIntent,
   RaidEvent,
-  BribeCoolQuote,
-  BribeCoolResult,
 } from './heat';
 export {
   HEAT_MIN,
@@ -348,8 +370,7 @@ export {
   LIE_LOW_DECAY_MULTIPLIER,
   LIE_LOW_INCOME_MULTIPLIER,
   EMPIRE_DECAY_SLOWDOWN,
-  BRIBE_HEAT_PER_DOLLAR,
-  QUICK_BRIBE_DOLLARS,
+  PAYROLLED_COP_DECAY_MULTIPLIER,
   TIER_TELEGRAPH_MARGIN,
   RAID_TIPOFF_LOOKAHEAD_HOURS,
   RAID_TIPOFF_MIN_CHANCE,
@@ -397,6 +418,33 @@ export type {
   RaidResult,
 } from './storage';
 
+// Meaningful territory expansion — Prompt 41 (Ideas2 item 5).
+export {
+  isHeldCountry,
+  distinctCountriesHeld,
+  newRegionDistance,
+  footholdCost,
+  countryName,
+  requiresLieutenant,
+  hasAvailableLieutenant,
+  crewGateBlocksOpen,
+  stashVulnerability,
+  maxVulnerability,
+  isStashConsolidated,
+  isCountryConsolidated,
+  consolidationProgress,
+} from './territory';
+export {
+  TERRITORY_REACH_GROWTH,
+  TERRITORY_NEW_REGION_JUMP,
+  TERRITORY_TAKEOVER_HEAT,
+  VULNERABILITY_WINDOW_HOURS,
+  VULNERABILITY_RAID_MULTIPLIER,
+  CONSOLIDATION_HOURS,
+  TERRITORY_LT_REQUIRED_AFTER,
+  territoryExpansionCost,
+} from './config/territory';
+
 // Laundering / idle-offline engine — Prompt 07.
 export {
   FRONT_TYPES,
@@ -409,6 +457,10 @@ export {
   CRYPTO_SWING,
   TRADE_LAUNDER_FRACTION,
   tradeLaunderCapacity,
+  WASH_MAX_DEPOSIT,
+  WASH_DEPOSITS_PER_DAY,
+  WASH_CUT,
+  washRatePerHour,
 } from './config/fronts';
 export type { FrontType, FrontTypeConfig } from './config/fronts';
 export {
@@ -427,6 +479,19 @@ export type {
   FrontResult,
   LaunderRejectReason,
 } from './laundering';
+
+// Money-mule wash queue — the batched dirty→clean converter (deposits under $10k
+// over time; complements fronts, eats a cut). See engine/wash.ts.
+export {
+  washRate,
+  washCut,
+  washCleanRate,
+  washEtaHours,
+  queueWash,
+  cancelWash,
+  washStep,
+} from './wash';
+export type { WashResult, WashRejectReason } from './wash';
 
 // Crew & NPC relatedness engine — Prompt 08.
 export {
@@ -481,6 +546,7 @@ export {
   promote,
   assign,
   frontLieutenantBonus,
+  productionLieutenantBonus,
 } from './crew';
 export type {
   LoyaltyEvent,
@@ -574,6 +640,7 @@ export {
   LADDER_MAX_RUNG,
   LADDER_SIGNS,
   LADDER_VIG_RATE_INCREASE,
+  FIRST_LOAN_VIG_DAYS,
   LADDER_INCOME_CUT,
   LADDER_DAYS_PER_RUNG,
   CEILING_MAX_RUNG,

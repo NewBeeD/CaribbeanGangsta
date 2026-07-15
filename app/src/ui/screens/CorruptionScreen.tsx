@@ -61,12 +61,33 @@ function PortCard({ row }: { readonly row: PortRow }) {
     setRefused(false);
   };
 
+  // While the port is protected, the offer row is a STATUS line — no quote, no
+  // "X% → X%" (design/13 A3).
   if (row.paid) {
     return (
       <Panel heading={row.name}>
         <p className="cg-label cg-tone-green" data-testid="port-paid">
-          Paid · shipments here run at {row.paidSeizurePctLabel} seizure
-          {row.standing ? ' (standing — your customs chief)' : ' until it lapses'}.
+          Protected · shipments here run at {row.paidSeizurePctLabel} seizure{' '}
+          {row.standing
+            ? '(standing — your customs chief)'
+            : row.paidUntilLabel
+              ? `until ${row.paidUntilLabel}`
+              : 'until it lapses'}
+          .
+        </p>
+      </Panel>
+    );
+  }
+
+  // A quote renders only against REAL staged value (design/13 A3) — never a
+  // hypothetical shipment. Empty containers get guidance, not a $0 ask.
+  if (!row.hasStaged) {
+    return (
+      <Panel heading={row.name}>
+        <p className="cg-label" data-testid="port-nothing-staged">
+          Nothing staged through this port — stash product or cash in{' '}
+          {row.containerNames.join(', ') || 'a container here'} and the official will
+          price protection against it.
         </p>
       </Panel>
     );
@@ -84,7 +105,7 @@ function PortCard({ row }: { readonly row: PortRow }) {
       }
     >
       <p className="cg-label" style={{ marginBottom: 10 }}>
-        Shipment ~{money(row.shipmentValue)} · pay to drop seizure from{' '}
+        Staged here ~{money(row.shipmentValue)} · pay to drop seizure from{' '}
         {row.unpaidSeizurePctLabel} to {row.paidSeizurePctLabel}.
       </p>
 

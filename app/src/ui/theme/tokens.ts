@@ -1,35 +1,43 @@
 /**
- * Design tokens — the single source of truth for the "cinematic dossier" look
- * (see prompts/01_design_system.md; ported from prototype/style.css).
+ * Design tokens — the single source of truth for the "SUNNY TROPICAL" look.
  *
  * These typed constants are mirrored to CSS custom properties by `GlobalStyles`
  * (via `rootCssText()`), so `global.css` and components reference `var(--cg-*)`
  * and never hard-code the palette. Change a value here and it propagates.
  *
- * UX law this serves: clarity of feedback over flash — tokens exist to make
- * competence legible, not to decorate (design/04 §0).
+ * UX law this serves: clarity of feedback over flash. The palette is bright,
+ * warm and HIGH-CONTRAST (dark ink on light surfaces) so competence is legible
+ * at a glance — readability first, personality close behind.
  */
 
 /* ------------------------------------------------------------------ colors */
-// Warm charcoal base (brown-black, never blue-black), aged-paper text, brass
-// money accent, stamp-red alerts, absinthe-green for "clean / rising".
+// Light, sunny Caribbean palette: warm sand base, white cards, deep teal ink,
+// with mango, turquoise, palm-green and coral as the playful accents.
+//
+// NOTE: the token *names* are inherited from the old dossier theme (ink/paper/
+// brass) and are kept so every `var(--cg-*)` reference keeps working. Read them
+// semantically now: `ink-*` = surfaces (light→lighter), `paper*` = ink/text,
+// `brass*` = the mango/amber money-accent.
 export const color = {
-  ink900: '#100d0a', // app background
-  ink850: '#16120d',
-  ink800: '#1c1712', // panel
-  ink750: '#241d16', // raised panel
-  paper: '#ece2d0', // aged paper text
-  paperDim: '#a89a83', // faded ink
-  paperGhost: '#6b6152', // ghosted ink (least emphasis)
-  brass: '#c9a24b', // money + primary accent
-  brassHi: '#e7c877',
-  brassLo: '#8f6d28',
-  red: '#b2412f', // stamp red / alert / heat
-  redHi: '#cf5b46',
-  green: '#8a9a5b', // absinthe — "rising / clean", never candy-green
-  greenHi: '#adbd78',
-  line: '#372f24', // hairline
-  lineSoft: '#2a231b',
+  ink900: '#fdf4e9', // app background base (warm sand)
+  ink850: '#fbf0e1', // inset panel (soft beige)
+  ink800: '#ffffff', // card surface (white)
+  ink750: '#f2e2cc', // raised / track surface (peach)
+  paper: '#233a47', // primary ink (deep teal-charcoal)
+  paperDim: '#5e7683', // secondary ink (muted teal-grey)
+  paperGhost: '#9bb0b9', // least-emphasis ink
+  brass: '#f59e0b', // mango — money + primary accent
+  brassHi: '#fcc33f', // bright mango (gradients / glows)
+  brassLo: '#b4720b', // deep amber (readable "gold" ink + borders)
+  red: '#f0483b', // coral — heat / alert
+  redHi: '#e23a2e', // readable coral ink
+  green: '#12b981', // palm/emerald — "clean / rising"
+  greenHi: '#0e9e62', // readable emerald ink
+  teal: '#0ea5b7', // turquoise — secondary brand accent (nav / links)
+  tealHi: '#1ec0d2',
+  goldInk: '#b26a00', // readable deep-amber text for "gold" tone
+  line: '#eedfc9', // hairline border
+  lineSoft: '#f5eadb',
 } as const;
 
 /**
@@ -44,8 +52,9 @@ export const semantic = {
   textDim: color.paperDim,
   textGhost: color.paperGhost,
   accent: color.brass,
+  brand: color.teal,
   cashClean: color.greenHi, // laundered / legit money
-  cashDirty: color.brass, // contraband proceeds
+  cashDirty: color.brassLo, // contraband proceeds
   alert: color.redHi, // heat / bust / danger
   rising: color.greenHi,
   falling: color.redHi,
@@ -65,54 +74,54 @@ export const space = {
 } as const;
 
 /* ------------------------------------------------------------------- radii */
-// Dossiers have crisp corners, not pill blobs.
+// Friendly, rounded — soft cards, pill chips. Fun, not clinical.
 export const radius = {
-  sm: 3,
-  md: 4,
-  lg: 6,
-  xl: 8,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
   pill: 999,
 } as const;
 
 /* --------------------------------------------------------------- typography */
-// Fraunces display + Special Elite typewriter stamp + Spectral serif body,
-// each with a Georgia/Courier offline fallback so the app still reads offline.
+// Baloo 2 (rounded, chunky display) + Nunito (rounded, highly-readable body).
+// System sans fallbacks so the app still reads offline.
 export const font = {
-  display: '"Fraunces", Georgia, serif',
-  body: '"Spectral", Georgia, serif',
-  stamp: '"Special Elite", "Courier New", monospace',
+  display: '"Baloo 2", "Trebuchet MS", system-ui, sans-serif',
+  body: '"Nunito", "Segoe UI", system-ui, sans-serif',
+  stamp: '"Nunito", "Segoe UI", system-ui, sans-serif',
 } as const;
 
 export const fontSize = {
-  stamp: '0.58rem', // typewriter labels / kickers
-  micro: '0.62rem',
-  small: '0.82rem',
-  body: '1.02rem',
-  bodyLg: '1.06rem',
-  h3: '1.15rem',
-  h2: '1.4rem',
-  h1: '1.9rem',
+  stamp: '0.72rem', // labels / kickers (bumped up for legibility)
+  micro: '0.74rem',
+  small: '0.86rem',
+  body: '1rem',
+  bodyLg: '1.05rem',
+  h3: '1.2rem',
+  h2: '1.5rem',
+  h1: '2rem',
 } as const;
 
 export const fontWeight = {
   regular: 400,
   medium: 600,
   bold: 700,
-  black: 900,
+  black: 800,
 } as const;
 
 export const lineHeight = {
-  tight: 1.02,
-  snug: 1.2,
-  body: 1.62,
+  tight: 1.05,
+  snug: 1.25,
+  body: 1.6,
 } as const;
 
 export const letterSpacing = {
   tight: '-0.01em',
   normal: '0',
-  wide: '0.18em',
-  wider: '0.24em',
-  widest: '0.28em', // stamped kickers
+  wide: '0.06em',
+  wider: '0.1em',
+  widest: '0.12em', // tracked kickers (was 0.28em — unreadably wide)
 } as const;
 
 /* ----------------------------------------------------------------- z-index */
@@ -130,7 +139,7 @@ export const z = {
  * by `GlobalStyles` to emit `:root { ... }`. Keep names `--cg-*` namespaced.
  */
 export const cssVarMap: Record<string, string> = {
-  // colors
+  // colors / surfaces
   '--cg-ink-900': color.ink900,
   '--cg-ink-850': color.ink850,
   '--cg-ink-800': color.ink800,
@@ -145,6 +154,9 @@ export const cssVarMap: Record<string, string> = {
   '--cg-red-hi': color.redHi,
   '--cg-green': color.green,
   '--cg-green-hi': color.greenHi,
+  '--cg-teal': color.teal,
+  '--cg-teal-hi': color.tealHi,
+  '--cg-gold-ink': color.goldInk,
   '--cg-line': color.line,
   '--cg-line-soft': color.lineSoft,
   // semantic

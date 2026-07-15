@@ -23,6 +23,8 @@ import { applyHeatEscalation, decayHeat } from './heat';
 import { raidStep } from './storage';
 import { travelStep } from './travel';
 import { accrue } from './laundering';
+import { productionStep } from './production';
+import { washStep } from './wash';
 import { streetStep } from './street';
 import { crewStep } from './crew';
 import { corruptionStep } from './corruption';
@@ -34,6 +36,31 @@ import { bankPeaks } from './endgame';
 
 const HOURS_PER_DAY = 24;
 const DAYS_PER_WEEK = 7;
+
+/**
+ * Fixed in-game cadence for the two systems that update in discrete steps rather
+ * than continuously (Ideas2): drug prices and loan interest refresh once every
+ * 3 in-game hours (≈90 real seconds at the live-clock pacing). Under the live
+ * clock, ticks land ~once a real second — far too fine to move a price on each —
+ * so these two steps batch to a 3-hour grid. Every other system stays continuous.
+ * Not a balance knob (totals are unchanged, only the delivery cadence), so it
+ * lives here beside the other structural time anchors, not in GameConfig.
+ */
+const PRICE_INTEREST_PERIOD_HOURS = 3;
+
+/**
+ * The whole in-game hours to apply when advancing `oldHours → oldHours + dt`
+ * crosses one or more `period`-length boundaries: `crossings × period`, or 0 when
+ * the tick stays inside the current period. Passing the crossed-period total (not
+ * the raw `dt`) keeps the daily drift/interest budget identical to per-tick
+ * updates — the movement is merely delivered in discrete 3-hour steps. Stateless
+ * and deterministic: a tick that crosses no boundary is a clean no-op (it never
+ * touches the RNG stream), so no per-system "last updated" bookkeeping is needed.
+ */
+function periodHoursCrossed(oldHours: number, dt: number, period: number): number {
+  const crossings = Math.floor((oldHours + dt) / period) - Math.floor(oldHours / period);
+  return crossings > 0 ? crossings * period : 0;
+}
 
 export type TickMode = 'active' | 'offline';
 
@@ -59,11 +86,17 @@ export interface TickStep {
 export const TICK_STEPS: readonly TickStep[] = [
   // Live market price walk (design/01 §2). Prompt 04. Active-only: prices are
   // frozen while away so absence is never punished (GDD §6). Draws from and
-  // advances the run's RNG stream.
+  // advances the run's RNG stream — but only on a 3-in-game-hour cadence (Ideas2):
+  // the price refreshes in readable steps under the live clock, applying the whole
+  // crossed period at once (same daily drift budget). A tick that crosses no
+  // 3-hour boundary leaves prices and the RNG stream untouched.
   {
     id: 'price-drift',
     modes: ['active'],
-    run: (s, dt) => driftPrices(s, restoreRng(s.rngState), dt),
+    run: (s, dt) => {
+      const hours = periodHoursCrossed(s.clock.hours - dt, dt, PRICE_INTEREST_PERIOD_HOURS);
+      return hours > 0 ? driftPrices(s, restoreRng(s.rngState), hours) : s;
+    },
   },
   // Market stock pools refill over PLAY time (design/12 Item 10; Prompt 32).
   // Active-only: the street never re-ups while the world is frozen offline
@@ -94,6 +127,19 @@ export const TICK_STEPS: readonly TickStep[] = [
   // (design/01 §3). Prompt 07. Active-only: the offline return payoff is settled
   // separately by `laundering.settleOffline` on its own piecewise curve.
   { id: 'laundering-accrual', modes: ['active'], run: (s, dt) => accrue(s, dt) },
+  // Grow-ops & drug factories deposit product units into the home stash + apply
+  // their passive heat footprint (Ideas2 item 3; Prompt 39). Active-only: the
+  // offline path deposits nothing (frozen — GDD §6), so absence forgoes yield but
+  // never seizes it. Runs AFTER laundering-accrual (both are idle-yield systems)
+  // and is bounded by the same effectiveCapacity rule as every other producer.
+  // Deterministic — no randomness — so it never touches the RNG stream.
+  { id: 'production-yield', modes: ['active'], run: (s, dt, mode) => productionStep(s, dt, mode) },
+  // Money-mule wash queue: deposit committed dirty cash in sub-$10k batches over
+  // time, landing clean at 1−cut (the batched dirty→clean converter). Active-only:
+  // a batch never clears while the player is away (GDD §6) — absence neither
+  // launders nor loses. Deterministic (no randomness), so it sits beside the
+  // accrual step without touching the RNG stream.
+  { id: 'wash-queue', modes: ['active'], run: (s, dt, mode) => washStep(s, dt, mode) },
   // Street teams drip cooked crack back as dirty cash + a little corner heat
   // (design/12 Item 5d; Prompt 34). Active-only: the crew's hustle freezes while
   // the player is away, so absence never earns or heats (GDD §6). Deterministic —
@@ -112,8 +158,18 @@ export const TICK_STEPS: readonly TickStep[] = [
   // Debt interest + default ladder (design/10). Prompt 10. Active-only AND only
   // when debt.active: accrues interest per in-game day played, then advances the
   // telegraphed default ladder one rung past the soft due date. Offline never runs
-  // it, so absence never grows what's owed or escalates (guarantee #2, §4.2).
-  { id: 'debt-interest', modes: ['active'], run: (s, dt) => debtStep(s, dt) },
+  // it, so absence never grows what's owed or escalates (guarantee #2, §4.2). Like
+  // price drift, it compounds on the 3-in-game-hour cadence (Ideas2) rather than
+  // every tick — applying the whole crossed period, so the per-day interest total
+  // is unchanged; it just lands in discrete steps under the live clock.
+  {
+    id: 'debt-interest',
+    modes: ['active'],
+    run: (s, dt) => {
+      const hours = periodHoursCrossed(s.clock.hours - dt, dt, PRICE_INTEREST_PERIOD_HOURS);
+      return hours > 0 ? debtStep(s, hours) : s;
+    },
+  },
   // Procedural world events — the variable-reward core (design/05 §2; design/01
   // §4.7). Prompt 12. Active-only: offline is frozen/safe, so absence never
   // triggers chaos (GDD §6). Draws from an INDEPENDENT run-seeded stream, so it

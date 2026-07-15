@@ -1,15 +1,17 @@
 /* ==========================================================================
    Caribbean Gangsta — global styles & primitive component classes
-   Aesthetic: CINEMATIC DOSSIER — warm charcoal, film grain, brass foil,
-   serif display + typewriter stamps. Refined, not maximalist.
+   Aesthetic: SUNNY TROPICAL — warm sand + white surfaces, deep-teal ink,
+   mango / turquoise / palm-green / coral accents, soft rounded cards.
+   Bright, modern and HIGH-CONTRAST. Fun, not muddy.
 
    The palette/spacing/type live as tokens in `tokens.ts` and are injected as
    `:root { --cg-* }` custom properties by `GlobalStyles`. This file only uses
    `var(--cg-*)`; it never hard-codes the palette. Fonts load online and fall
-   back to Georgia/Courier offline (design/01 acceptance).
+   back to a system sans offline. Component CLASS NAMES are stable (tests +
+   screens depend on them) — only their look changes here.
    ========================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Spectral:ital,wght@0,400;0,600;0,700;1,400&family=Special+Elite&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap');
 
 /* ------------------------------------------------------------------- reset */
 *,
@@ -28,12 +30,15 @@ body,
 
 body {
   background:
-    radial-gradient(120% 90% at 50% -10%, #241c14 0%, var(--cg-ink-900) 60%),
+    radial-gradient(130% 80% at 12% -10%, #d3f3ee 0%, transparent 46%),
+    radial-gradient(120% 70% at 100% 0%, #ffe6bf 0%, transparent 44%),
+    radial-gradient(140% 100% at 50% 120%, #ffe0d0 0%, transparent 50%),
     var(--cg-ink-900);
+  background-attachment: fixed;
   color: var(--cg-paper);
   font-family: var(--cg-font-body);
   font-size: 16px;
-  line-height: 1.5;
+  line-height: 1.55;
   min-height: 100vh;
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
@@ -48,55 +53,47 @@ button {
 /* Mobile-first / portrait: primary content column caps at a phone width. */
 .cg-app {
   width: 100%;
-  max-width: 430px;
+  max-width: 440px;
   margin: 0 auto;
-  padding: var(--cg-space-xl) var(--cg-space-md) var(--cg-space-xxl);
+  padding: var(--cg-space-lg) var(--cg-space-md) var(--cg-space-xxl);
 }
 
-/* ------------------------------------------------ atmosphere: grain + vignette */
+/* ------------------------------- atmosphere: soft light wash (no film grain) */
+/* The old noir grain/vignette are neutralised — they fought the sunny look. */
 .cg-grain {
-  position: fixed;
-  inset: 0;
-  z-index: var(--cg-z-grain);
-  pointer-events: none;
-  opacity: 0.05;
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  animation: cg-grain 640ms steps(2) infinite;
+  display: none;
 }
 .cg-vignette {
   position: fixed;
   inset: 0;
   z-index: var(--cg-z-vignette);
   pointer-events: none;
-  background: radial-gradient(115% 80% at 50% 42%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
-}
-@media (prefers-reduced-motion: reduce) {
-  .cg-grain {
-    animation: none;
-  }
+  background: radial-gradient(120% 90% at 50% 40%, transparent 62%, rgba(35, 58, 71, 0.06) 100%);
 }
 
 /* ----------------------------------------------------------- type utilities */
 .cg-label {
-  font-family: var(--cg-font-stamp);
-  font-size: 0.58rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+  font-family: var(--cg-font-body);
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--cg-paper-dim);
 }
 .cg-kicker {
-  font-family: var(--cg-font-stamp);
-  font-size: 0.58rem;
-  letter-spacing: 0.28em;
+  font-family: var(--cg-font-display);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--cg-brass);
+  color: var(--cg-teal);
 }
 .cg-title {
   font-family: var(--cg-font-display);
-  font-weight: 900;
-  font-size: 1.9rem;
-  line-height: 1.02;
+  font-weight: 800;
+  font-size: 2rem;
+  line-height: 1.05;
   letter-spacing: -0.01em;
   color: var(--cg-paper);
 }
@@ -114,94 +111,133 @@ button {
   border: 0;
 }
 
-/* tone helpers — always paired with a glyph/label, never color alone */
+/* tone helpers — always paired with a glyph/label, never colour alone */
 .cg-tone-gold {
-  color: var(--cg-brass-hi);
+  color: var(--cg-gold-ink);
+  font-weight: 800;
 }
 .cg-tone-green {
   color: var(--cg-green-hi);
+  font-weight: 800;
 }
 .cg-tone-red {
   color: var(--cg-red-hi);
+  font-weight: 800;
 }
 .cg-tone-dim {
   color: var(--cg-paper-dim);
 }
+/* warm caution — contested/exposed territory (Prompt 41); paired with a label. */
+.cg-tone-amber {
+  color: var(--cg-brass);
+  font-weight: 800;
+}
 
 /* -------------------------------------------------------------- containers */
-/* Optional dossier frame with a CONFIDENTIAL tab (for framing whole screens). */
+/* Optional framed panel with a little tab (for framing whole screens). */
 .cg-dossier {
   position: relative;
   padding: var(--cg-space-md);
-  background: linear-gradient(155deg, #241b12, #1a130c);
-  border: 1px solid #4a3a25;
+  background: var(--cg-ink-800);
+  border: 1px solid var(--cg-line);
   border-radius: var(--cg-radius-xl);
+  box-shadow: 0 10px 26px rgba(35, 58, 71, 0.08);
 }
 .cg-dossier__tab {
   position: absolute;
-  top: -13px;
-  left: 22px;
-  font-family: var(--cg-font-stamp);
-  font-size: 0.58rem;
-  letter-spacing: 0.28em;
-  color: var(--cg-brass);
-  background: #241b12;
-  padding: 3px 12px;
-  border: 1px solid #4a3a25;
-  border-bottom: none;
-  border-radius: 5px 5px 0 0;
+  top: -12px;
+  left: 20px;
+  font-family: var(--cg-font-display);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--cg-teal);
+  padding: 4px 12px;
+  border-radius: var(--cg-radius-pill);
 }
 
-/* Card = dossier index panel */
+/* Card = the primary content panel for a screen section */
 .cg-card {
   position: relative;
-  background: linear-gradient(180deg, var(--cg-ink-800), var(--cg-ink-750));
+  background: var(--cg-ink-800);
   border: 1px solid var(--cg-line);
-  border-radius: var(--cg-radius-md);
-  padding: 15px 16px;
-  margin-bottom: 15px;
+  border-radius: var(--cg-radius-xl);
+  padding: 16px;
+  margin-bottom: 14px;
   box-shadow:
-    inset 0 1px 0 rgba(255, 230, 180, 0.04),
-    0 8px 20px rgba(0, 0, 0, 0.35);
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 8px 22px rgba(35, 58, 71, 0.07);
 }
 .cg-card__head {
   display: block;
-  margin-bottom: 10px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--cg-line-soft);
+  margin-bottom: 12px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--cg-line);
+  font-family: var(--cg-font-display);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cg-teal);
 }
 
-/* Panel = inset/raised sub-box (e.g. the "RISK THIS RUN" block) */
+/* Panel = inset/raised sub-box (e.g. the "RISK THIS RUN" block, a front card) */
 .cg-panel {
   background: var(--cg-ink-850);
   border: 1px solid var(--cg-line);
-  border-radius: var(--cg-radius-md);
+  border-radius: var(--cg-radius-lg);
   padding: 13px 14px;
+}
+
+/* The price-book matrix (World Market §By-country / Price book, Ideas2 §6). */
+.cg-pricebook {
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.cg-pricebook th,
+.cg-pricebook td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--cg-line);
+}
+.cg-pricebook thead th {
+  position: sticky;
+  top: 0;
+  background: var(--cg-ink-850);
+  color: var(--cg-label, var(--cg-paper));
+  font-weight: 700;
+}
+.cg-pricebook tbody th {
+  color: var(--cg-paper);
+  font-weight: 700;
 }
 
 /* ----------------------------------------------------------------- buttons */
 .cg-btn {
   display: inline-block;
-  background: var(--cg-ink-750);
+  background: var(--cg-ink-800);
   border: 1px solid var(--cg-line);
   border-radius: var(--cg-radius-md);
   color: var(--cg-paper);
   cursor: pointer;
   padding: 12px 16px;
-  font-family: var(--cg-font-stamp);
-  font-size: 0.72rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  font-family: var(--cg-font-display);
+  font-weight: 700;
+  font-size: 0.86rem;
+  letter-spacing: 0.02em;
   transition:
-    transform 0.06s ease,
+    transform 0.08s ease,
     box-shadow 0.2s ease,
-    background 0.2s ease;
+    background 0.2s ease,
+    border-color 0.2s ease;
 }
 .cg-btn:active {
   transform: translateY(1px);
 }
 .cg-btn:disabled {
-  opacity: 0.35;
+  opacity: 0.45;
   cursor: default;
 }
 .cg-btn--block {
@@ -209,22 +245,18 @@ button {
   width: 100%;
 }
 
-/* Primary = brass foil with a moving sheen. One primary per screen state. */
+/* Primary = bright mango foil with a moving sheen. One primary per screen. */
 .cg-btn--primary {
-  padding: 16px;
-  color: #211703;
-  border: 1px solid var(--cg-brass-hi);
-  background: linear-gradient(
-    180deg,
-    var(--cg-brass-hi) 0%,
-    var(--cg-brass) 46%,
-    var(--cg-brass-lo) 100%
-  );
+  padding: 15px 16px;
+  color: #3a2400;
+  border: none;
+  background: linear-gradient(180deg, var(--cg-brass-hi) 0%, var(--cg-brass) 62%, #e88f08 100%);
   box-shadow:
-    0 6px 18px rgba(180, 130, 40, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    0 8px 18px rgba(245, 158, 11, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
   position: relative;
   overflow: hidden;
+  text-transform: none;
 }
 .cg-btn--primary::after {
   content: '';
@@ -233,14 +265,14 @@ button {
   bottom: 0;
   left: -60%;
   width: 40%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.55), transparent);
   transform: skewX(-18deg);
   animation: cg-sheen 3.6s ease-in-out infinite;
 }
 .cg-btn--primary:hover:not(:disabled) {
   box-shadow:
-    0 8px 26px rgba(210, 160, 60, 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    0 10px 24px rgba(245, 158, 11, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 .cg-btn--primary:disabled::after {
   animation: none;
@@ -251,28 +283,33 @@ button {
   }
 }
 
-/* Secondary = index-card option (left brass rule, prose face) */
+/* Secondary = friendly option card (turquoise left rule, prose face) */
 .cg-btn--secondary {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 15px 16px;
+  padding: 14px 16px;
   font-family: var(--cg-font-body);
-  font-size: 1.02rem;
+  font-weight: 700;
+  font-size: 1rem;
   letter-spacing: 0;
   text-transform: none;
+  color: var(--cg-paper);
   background: var(--cg-ink-800);
   border: 1px solid var(--cg-line);
-  border-left: 2px solid var(--cg-brass-lo);
+  border-left: 4px solid var(--cg-teal);
+  box-shadow: 0 4px 12px rgba(35, 58, 71, 0.05);
 }
 .cg-btn--secondary:hover:not(:disabled) {
   border-left-color: var(--cg-brass);
-  background: var(--cg-ink-750);
+  background: #fffdf8;
+  box-shadow: 0 6px 16px rgba(35, 58, 71, 0.09);
 }
 .cg-btn--secondary small {
   display: block;
   margin-top: 5px;
-  font-size: 0.82rem;
+  font-weight: 600;
+  font-size: 0.84rem;
   color: var(--cg-paper-dim);
 }
 
@@ -280,11 +317,13 @@ button {
 .cg-btn--ghost {
   background: none;
   border: none;
-  color: var(--cg-paper-dim);
-  letter-spacing: 0.12em;
+  color: var(--cg-teal);
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 .cg-btn--ghost:hover:not(:disabled) {
-  color: var(--cg-paper);
+  color: var(--cg-teal-hi);
+  text-decoration: underline;
 }
 
 /* ------------------------------------------------------ Stat / dotted rows */
@@ -292,18 +331,20 @@ button {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+  gap: 10px;
   margin: 7px 0;
 }
 .cg-stat__value {
   font-family: var(--cg-font-display);
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: -0.01em;
+  color: var(--cg-paper);
 }
 .cg-stat--big .cg-stat__value {
-  font-size: 1.4rem;
+  font-size: 1.6rem;
 }
 
-/* Dotted leader: label · · · · · · value (the case-file row) */
+/* Dotted leader: label · · · · · · value (the ledger row) */
 .cg-dotted {
   display: flex;
   align-items: baseline;
@@ -312,20 +353,21 @@ button {
 }
 .cg-dotted__label {
   white-space: nowrap;
+  color: var(--cg-paper-dim);
+  font-size: 0.9rem;
 }
 .cg-dotted__fill {
   flex: 1;
-  border-bottom: 1px dotted var(--cg-line);
+  border-bottom: 2px dotted var(--cg-line);
   transform: translateY(-3px);
 }
 .cg-dotted__value {
   white-space: nowrap;
   font-family: var(--cg-font-display);
-  font-weight: 600;
+  font-weight: 800;
 }
 
 /* --------------------------------------------------------------- RiskMeter */
-/* Risk shown as dots + inked bar + the EXACT % (odds shown = odds rolled). */
 .cg-riskmeter__head {
   display: flex;
   justify-content: space-between;
@@ -334,52 +376,55 @@ button {
 }
 .cg-riskmeter__pct {
   font-family: var(--cg-font-display);
-  font-weight: 700;
-  font-size: 1.1rem;
+  font-weight: 800;
+  font-size: 1.15rem;
   color: var(--cg-paper);
 }
 .cg-riskmeter__dots {
   display: inline-flex;
   gap: 3px;
   margin: 8px 0 2px;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   line-height: 1;
   letter-spacing: 0;
 }
 .cg-dot--on {
-  color: var(--cg-brass-hi);
+  color: var(--cg-brass);
 }
 .cg-dot--off {
   color: var(--cg-paper-ghost);
 }
 .cg-riskmeter__bar {
-  height: 7px;
-  background: #0c0906;
-  border: 1px solid var(--cg-line-soft);
-  border-radius: 2px;
+  height: 9px;
+  background: var(--cg-ink-750);
+  border: 1px solid var(--cg-line);
+  border-radius: var(--cg-radius-pill);
   overflow: hidden;
   margin-top: 9px;
 }
 .cg-riskmeter__bar > i {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, var(--cg-brass-lo), var(--cg-brass));
+  border-radius: var(--cg-radius-pill);
+  background: linear-gradient(90deg, var(--cg-brass), #e88f08);
 }
 .cg-riskmeter__note {
   margin-top: 8px;
-  font-family: var(--cg-font-stamp);
-  font-size: 0.62rem;
-  letter-spacing: 0.05em;
-  color: var(--cg-paper-ghost);
+  font-family: var(--cg-font-body);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--cg-paper-dim);
 }
 
 /* -------------------------------------------------------------- TrendArrow */
-/* Direction carried by glyph + optional text, not color alone (colorblind). */
+/* Direction carried by glyph + optional text, not colour alone (colourblind). */
 .cg-trend {
   display: inline-flex;
   align-items: baseline;
   gap: 5px;
   font-size: 0.9em;
+  font-weight: 800;
 }
 .cg-trend__glyph {
   font-size: 0.8em;
@@ -399,47 +444,50 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   line-height: 1;
 }
 .cg-heatdots__dot--on {
-  color: var(--cg-red-hi);
+  color: var(--cg-red);
 }
 .cg-heatdots__dot--off {
   color: var(--cg-paper-ghost);
 }
 
 /* --------------------------------------------------------------- SceneText */
-/* Failure/story renders as a typed case note — never a toast (design/07). */
+/* Failure/story renders as an in-world note — never a toast (design/07). */
 .cg-scene {
   position: relative;
   font-family: var(--cg-font-body);
-  font-size: 1.06rem;
+  font-size: 1.05rem;
   line-height: 1.62;
-  color: #ded3bf;
-  padding: 4px 2px 6px 20px;
-  margin: 6px 0 22px;
-  border-left: 2px solid var(--cg-brass-lo);
+  color: var(--cg-paper);
+  background: var(--cg-ink-850);
+  padding: 14px 16px 14px 22px;
+  margin: 8px 0 20px;
+  border-radius: var(--cg-radius-lg);
+  border-left: 4px solid var(--cg-brass);
 }
 .cg-scene::before {
   content: '\275D';
   position: absolute;
-  left: -4px;
-  top: -14px;
+  left: 8px;
+  top: 2px;
   font-family: var(--cg-font-display);
-  font-size: 2.4rem;
-  color: var(--cg-brass-lo);
-  opacity: 0.5;
+  font-size: 1.6rem;
+  color: var(--cg-brass);
+  opacity: 0.45;
 }
 .cg-scene__who {
   font-family: var(--cg-font-display);
-  font-weight: 700;
-  font-style: italic;
-  color: var(--cg-brass-hi);
+  font-weight: 800;
+  font-style: normal;
+  color: var(--cg-brass-lo);
 }
 .cg-scene em {
-  color: var(--cg-brass-hi);
+  color: var(--cg-brass-lo);
   font-style: italic;
+  font-weight: 700;
 }
 .cg-scene--win {
   border-left-color: var(--cg-green);
@@ -457,68 +505,81 @@ button {
 /* ------------------------------------------------------------- StampBadge */
 .cg-stamp {
   display: inline-block;
-  font-family: var(--cg-font-stamp);
-  font-size: 0.64rem;
-  letter-spacing: 0.18em;
+  font-family: var(--cg-font-display);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 5px 11px;
-  border-radius: 3px;
-  transform: rotate(-6deg);
-  opacity: 0.85;
+  padding: 5px 12px;
+  border-radius: var(--cg-radius-pill);
 }
 .cg-stamp--confidential {
-  color: var(--cg-brass-hi);
-  border: 2px solid var(--cg-brass-lo);
-  box-shadow: inset 0 0 0 1px rgba(143, 109, 40, 0.3);
+  color: var(--cg-brass-lo);
+  background: #fff2d6;
+  border: 1px solid #f6d79a;
 }
 .cg-stamp--filed {
   color: var(--cg-green-hi);
-  border: 2px solid var(--cg-green);
-  box-shadow: inset 0 0 0 1px rgba(138, 154, 91, 0.3);
+  background: #d8f6e8;
+  border: 1px solid #a9e6cc;
 }
 .cg-stamp--danger {
   color: var(--cg-red-hi);
-  border: 2px solid var(--cg-red);
-  box-shadow: inset 0 0 0 1px rgba(178, 65, 47, 0.3);
+  background: #ffe1dc;
+  border: 1px solid #f8bcb2;
 }
 
 /* -------------------------------------------------------------- BottomNav */
 .cg-bottomnav {
   display: flex;
+  gap: 2px;
   border-top: 1px solid var(--cg-line);
-  background: linear-gradient(180deg, transparent, rgba(40, 31, 20, 0.5));
+  background: rgba(255, 255, 255, 0.92);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
 }
 .cg-bottomnav__btn {
   flex: 1;
   background: none;
   border: none;
-  color: var(--cg-paper-ghost);
-  padding: 15px 0 16px;
+  color: var(--cg-paper-dim);
+  padding: 11px 0 10px;
   cursor: pointer;
-  font-family: var(--cg-font-stamp);
-  font-size: 0.62rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  border-radius: var(--cg-radius-md);
+  font-family: var(--cg-font-display);
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  text-transform: none;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
 }
 .cg-bottomnav__btn > span {
   position: relative;
-  padding-bottom: 5px;
+  padding-bottom: 4px;
+}
+.cg-bottomnav__btn:not(:disabled):hover {
+  color: var(--cg-paper);
 }
 .cg-bottomnav__btn:not(:disabled).is-active {
-  color: var(--cg-brass);
+  color: var(--cg-teal);
+  background: #e6f8fb;
 }
 .cg-bottomnav__btn:not(:disabled).is-active > span::after {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  background: var(--cg-brass);
-  box-shadow: 0 0 8px var(--cg-brass-lo);
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: -2px;
+  width: 18px;
+  height: 3px;
+  border-radius: var(--cg-radius-pill);
+  background: var(--cg-teal);
 }
 .cg-bottomnav__btn:disabled {
-  opacity: 0.3;
+  opacity: 0.35;
   cursor: default;
 }
 
@@ -526,7 +587,7 @@ button {
 /* Mobile-first column: header · scrolling screen · persistent bottom nav. */
 .cg-shell {
   width: 100%;
-  max-width: 430px;
+  max-width: 440px;
   margin: 0 auto;
   min-height: 100vh;
   min-height: 100dvh;
@@ -535,30 +596,83 @@ button {
 }
 .cg-shell__top {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 10px;
-  padding: 14px 16px 10px;
-  border-bottom: 1px solid var(--cg-line-soft);
+  padding: 14px 14px 12px;
+  background: rgba(255, 255, 255, 0.75);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--cg-line);
 }
+.cg-shell__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cg-shell__brand .cg-kicker {
+  font-size: 0.92rem;
+  letter-spacing: 0.08em;
+  color: var(--cg-paper);
+}
+.cg-shell__brand .cg-kicker::before {
+  content: '🌴';
+  margin-right: 6px;
+  -webkit-text-fill-color: initial;
+}
+/* Overview uplinks: pill chips that WRAP onto multiple lines so every tab is
+   always reachable (no hidden horizontal scroll). */
 .cg-shell__uplinks {
   display: flex;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 -2px;
 }
 .cg-shell__uplinks .cg-btn {
-  padding: 6px 8px;
-  font-size: 0.6rem;
-  letter-spacing: 0.14em;
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  font-size: 0.74rem;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  border-radius: var(--cg-radius-pill);
+  background: var(--cg-ink-850);
+  border: 1px solid var(--cg-line);
+  color: var(--cg-paper-dim);
+  text-decoration: none;
+}
+.cg-shell__uplinks .cg-btn:hover:not(:disabled) {
+  color: var(--cg-paper);
+  border-color: var(--cg-teal);
+  text-decoration: none;
+}
+.cg-shell__uplinks .cg-btn[aria-current='page'] {
+  color: #fff;
+  background: var(--cg-teal);
+  border-color: var(--cg-teal);
+}
+/* Small count badge on an uplink (e.g. shipments in flight). */
+.cg-uplink__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: var(--cg-radius-pill);
+  background: var(--cg-brass);
+  color: #3a2400;
+  font-family: var(--cg-font-display);
+  font-weight: 800;
+  font-size: 0.66rem;
+  line-height: 1;
 }
 /* The routed screen fills the space between header and nav. */
 .cg-shell__main {
   flex: 1;
-  padding-top: var(--cg-space-lg);
+  padding-top: var(--cg-space-md);
 }
 .cg-shell .cg-bottomnav {
   position: sticky;
   bottom: 0;
-  background: var(--cg-ink-900);
 }
 
 /* Entry gate + error screen: vertically centered aspiration, one primary action. */
@@ -570,18 +684,14 @@ button {
   justify-content: center;
 }
 
-/* ---------------------------------------------------------------- keyframes */
-@keyframes cg-grain {
-  0% {
-    transform: translate(0, 0);
-  }
-  50% {
-    transform: translate(-6px, 4px);
-  }
-  100% {
-    transform: translate(4px, -5px);
-  }
+/* Modal scrim used by interrupts (story cards, abandon-run). */
+.cg-modal__scrim {
+  background: rgba(35, 58, 71, 0.42);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
 }
+
+/* ---------------------------------------------------------------- keyframes */
 @keyframes cg-sheen {
   0%,
   72% {
@@ -593,66 +703,69 @@ button {
   }
 }
 
-/* ------------------------------------------------------ form controls (Prompt 20) */
-/* Native select/number inputs used by the Storage/Corruption movers. Kept on-theme
-   so they read on the dark dossier surface; shape + label carry meaning, not color. */
+/* ------------------------------------------------------ form controls */
+/* Native select/number inputs (Storage/Corruption movers, QtyInput). Kept
+   on-theme so they read on the light surface; shape + label carry meaning. */
 .cg-select,
 .cg-input {
   font: inherit;
+  font-weight: 700;
   color: var(--cg-paper);
-  background: var(--cg-ink-750);
+  background: var(--cg-ink-800);
   border: 1px solid var(--cg-line);
   border-radius: var(--cg-radius-md);
-  padding: 6px 8px;
+  padding: 9px 11px;
 }
 .cg-select:focus-visible,
 .cg-input:focus-visible {
-  outline: 2px solid var(--cg-brass);
+  outline: 2px solid var(--cg-teal);
   outline-offset: 1px;
 }
 
-/* ------------------------------------------------- telemetry overlay (Prompt 25) */
-/* Dev-only instrument panel (design/06). Fixed over the shell, deliberately
-   utilitarian — it is a lab window, not part of the fiction. */
+/* ------------------------------------------------- telemetry overlay (dev) */
+/* Dev-only instrument panel (design/06). Deliberately utilitarian. */
 .cg-telemetry__toggle {
   position: fixed;
   right: 8px;
-  bottom: 72px;
+  bottom: 78px;
   z-index: 60;
-  font: 600 11px/1 var(--cg-font-mono, monospace);
-  letter-spacing: 0.08em;
-  color: var(--cg-brass);
-  background: var(--cg-ink-750);
-  border: 1px solid var(--cg-line);
-  border-radius: var(--cg-radius-md);
-  padding: 6px 8px;
-  opacity: 0.75;
+  font: 800 11px/1 var(--cg-font-body);
+  letter-spacing: 0.06em;
+  color: #fff;
+  background: var(--cg-teal);
+  border: none;
+  border-radius: var(--cg-radius-pill);
+  padding: 7px 11px;
+  box-shadow: 0 4px 12px rgba(14, 165, 183, 0.4);
+  opacity: 0.9;
   cursor: pointer;
 }
 .cg-telemetry {
   position: fixed;
   right: 8px;
-  bottom: 72px;
+  bottom: 78px;
   z-index: 60;
   width: min(340px, calc(100vw - 16px));
   max-height: min(60vh, 480px);
   overflow-y: auto;
-  font: 11px/1.5 var(--cg-font-mono, monospace);
+  font: 12px/1.5 var(--cg-font-body);
   color: var(--cg-paper);
-  background: var(--cg-ink-750);
+  background: var(--cg-ink-800);
   border: 1px solid var(--cg-line);
-  border-radius: var(--cg-radius-md);
-  padding: 8px 10px;
+  border-radius: var(--cg-radius-lg);
+  padding: 10px 12px;
+  box-shadow: 0 12px 30px rgba(35, 58, 71, 0.18);
 }
 .cg-telemetry__head {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   margin-bottom: 6px;
+  font-weight: 800;
 }
 .cg-telemetry__head button {
   font: inherit;
-  color: var(--cg-brass);
+  color: var(--cg-teal);
   background: none;
   border: none;
   cursor: pointer;
@@ -683,5 +796,5 @@ button {
   border-top: 1px dashed var(--cg-line);
 }
 .cg-telemetry__log code {
-  color: var(--cg-brass);
+  color: var(--cg-teal);
 }

@@ -639,3 +639,23 @@ export function frontLieutenantBonus(state: GameState, frontId: string): number 
   );
   return running ? state.config.crew.LIEUTENANT_FRONT_BONUS : 0;
 }
+
+/**
+ * The yield bonus a promoted lieutenant running the production op `opId` adds
+ * (Ideas2 item 3 crew delegation — "transfer a crew member to manage the grow").
+ * Read by `production.ts`, so assigning a lieutenant has a real, tested effect;
+ * unassigning (or a flip to a wire) restores the base yield. Reuses the SAME
+ * `LIEUTENANT_FRONT_BONUS` and the SAME assignment machinery as the front
+ * delegation (`assign(npc, { kind: 'production', targetId })`), so there is no new
+ * randomness and no new gate. Returns 0 when no lieutenant runs the op.
+ */
+export function productionLieutenantBonus(state: GameState, opId: string): number {
+  const running = state.crew.some(
+    (c) =>
+      c.role === 'lieutenant' &&
+      !c.isWire &&
+      c.assignment.kind === 'production' &&
+      c.assignment.targetId === opId,
+  );
+  return running ? state.config.crew.LIEUTENANT_FRONT_BONUS : 0;
+}

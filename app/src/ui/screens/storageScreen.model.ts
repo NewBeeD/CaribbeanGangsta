@@ -19,6 +19,7 @@ import {
   PRODUCTS,
   PRODUCT_IDS,
   STASH_TYPES,
+  countryName,
   diversificationIndex,
   effectiveCapacity,
   effectiveCapacityRemaining,
@@ -29,6 +30,7 @@ import {
   type GameState,
   type ProductId,
   type StashType,
+  type StorageRejectReason,
 } from '@/engine';
 
 /** Below this diversification index (with real value at stake) the run reads as over-concentrated. */
@@ -100,7 +102,7 @@ export function stashRows(state: GameState): readonly StashRow[] {
 
     const heldProducts: HeldProduct[] = PRODUCT_IDS.filter(
       (id) => stash.inventory[id] > 0,
-    ).map((id) => ({ id, name: productName(id), qty: stash.inventory[id] }));
+    ).map((id) => ({ id, name: productName(id), qty: Math.floor(stash.inventory[id]) }));
 
     return {
       id: stash.id,
@@ -109,8 +111,9 @@ export function stashRows(state: GameState): readonly StashRow[] {
       typeName: cfg.name,
       isDecoy: cfg.isDecoy,
       countryId: stash.countryId,
-      capacityUsed: used,
-      capacityTotal: total,
+      // Shown as whole units (fill keeps the exact ratio for a smooth bar).
+      capacityUsed: Math.floor(used),
+      capacityTotal: Math.floor(total),
       capacityFree: effectiveCapacityRemaining(state, stash),
       fill: total > 0 ? used / total : 0,
       seizurePct: pct,
@@ -214,6 +217,73 @@ export function guardOptions(state: GameState): readonly GuardOption[] {
 /** The other stashes a move can target (everything but `fromId`). */
 export function moveTargets(state: GameState, fromId: string): readonly StashRow[] {
   return stashRows(state).filter((s) => s.id !== fromId);
+}
+
+/**
+ * A `moveProduct` rejection as SPECIFIC prose with its numbers (design/13 A4) —
+ * each `StorageRejectReason` gets its own line ("Container is full — 12 of 40
+ * fit", "That stash doesn't hold 30 weed"), never the one generic "check space
+ * and what's held". Pure read; mirrors exactly the checks `moveProduct` makes.
+ */
+export function moveRejectProse(
+  state: GameState,
+  rejected: StorageRejectReason,
+  ctx: {
+    readonly fromId: string;
+    readonly toId: string;
+    readonly product: ProductId;
+    readonly qty: number;
+  },
+): string {
+  const from = state.stashes.find((s) => s.id === ctx.fromId);
+  const to = state.stashes.find((s) => s.id === ctx.toId);
+  const prod = productName(ctx.product).toLowerCase();
+  switch (rejected) {
+    case 'insufficient-capacity': {
+      const free = to ? effectiveCapacityRemaining(state, to) : 0;
+      return `${to?.name ?? 'That stash'} is full — ${Math.min(Math.floor(free), ctx.qty)} of ${ctx.qty} fit.`;
+    }
+    case 'insufficient-inventory': {
+      const held = from ? Math.floor(from.inventory[ctx.product] ?? 0) : 0;
+      return `${from?.name ?? 'That stash'} doesn’t hold ${ctx.qty} ${prod} — ${held} here.`;
+    }
+    case 'cross-country':
+      return `${to?.name ?? 'That stash'} sits in ${
+        to ? countryName(to.countryId) : 'another country'
+      } — cross-border weight ships from the Transport desk, not a local move.`;
+    case 'invalid-qty':
+      return 'Whole units only — pick how many units to move.';
+    case 'invalid-move':
+      return 'It’s already there — pick a different stash to move it to.';
+    case 'no-stash':
+      return 'That stash isn’t on the books anymore.';
+    default:
+      return 'Couldn’t move that.';
+  }
+}
+
+/**
+ * A `storeCash` rejection as specific prose with its numbers (design/13 A4) —
+ * the dirty-cash counterpart of `moveRejectProse`.
+ */
+export function cashMoveRejectProse(
+  state: GameState,
+  rejected: StorageRejectReason,
+  ctx: { readonly fromId: string; readonly amount: number },
+): string {
+  const from = state.stashes.find((s) => s.id === ctx.fromId);
+  switch (rejected) {
+    case 'insufficient-funds':
+      return `${from?.name ?? 'That stash'} only holds ${money(from?.dirtyCash ?? 0)} dirty — ${money(ctx.amount)} doesn’t fit the move.`;
+    case 'invalid-amount':
+      return 'Pick an amount of dirty cash to move.';
+    case 'invalid-move':
+      return 'It’s already there — pick a different stash.';
+    case 'no-stash':
+      return 'That stash isn’t on the books anymore.';
+    default:
+      return 'Couldn’t move that cash.';
+  }
 }
 
 /** A raid outcome queued as a scene (design/09 A.4 — loss is a scene, never a toast). */
