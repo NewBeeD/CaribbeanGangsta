@@ -38,16 +38,21 @@ export function homeCountryId(state: GameState): string {
 
 /** The crew member (a lieutenant) currently running op `opId`, or `null`. */
 export function opManager(state: GameState, opId: string): { readonly id: string; readonly name: string } | null {
-  const npc = state.crew.find(
-    (c) => c.assignment.kind === 'production' && c.assignment.targetId === opId,
-  );
+  const npc = state.crew.find((c) => c.productionOpIds.includes(opId));
   return npc ? { id: npc.id, name: npc.name } : null;
 }
 
-/** Non-wire lieutenants who can be transferred to run an op (design/02 §5 delegation). */
+/**
+ * Non-wire lieutenants who can still take ON another op — those below the
+ * span-of-control cap (design/13 D; Prompt 46). A lieutenant already running two ops
+ * drops out of the picker (assigning a third would reject), so the UI only offers
+ * assignments that will actually land. A lieutenant with one free slot still appears,
+ * so their capacity is usable across ops.
+ */
 export function availableManagers(state: GameState): readonly { readonly id: string; readonly name: string }[] {
+  const cap = state.config.crew.LIEUTENANT_MAX_PRODUCTION_OPS;
   return state.crew
-    .filter((c) => c.role === 'lieutenant' && !c.isWire)
+    .filter((c) => c.role === 'lieutenant' && !c.isWire && c.productionOpIds.length < cap)
     .map((c) => ({ id: c.id, name: c.name }));
 }
 

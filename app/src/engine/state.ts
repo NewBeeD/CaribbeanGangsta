@@ -137,8 +137,19 @@ import type {
  *     absent = running). Both are absent-is-safe on an older save: a legacy op
  *     deposits into home and always runs, exactly as before. The live-clock pacing
  *     retune is config-only (`config/production.ts`), no shape change.
+ * v16: crew expansion + lieutenant span-of-control (design/13 D; Prompt 46).
+ *     `CrewMember.productionOpIds` (the up-to-2 production ops a member personally
+ *     runs) replaces the single `assignment.kind === 'production'` slot, so one
+ *     lieutenant can run two grows; the migration MOVES a legacy production
+ *     assignment into `productionOpIds` and idles the `assignment`. `GameState.
+ *     lastCrewPayrollWeek` bookkeeps the weekly crew-wage settle (`chargeWages` —
+ *     wages are config CONTENT on the archetype, not a tuning knob), seeded from the
+ *     stored clock so a migrated run never back-charges. `config.crew.
+ *     LIEUTENANT_MAX_PRODUCTION_OPS` is backfilled from the default. The bigger
+ *     archetype roster is pure config CONTENT (no schema impact — new candidates
+ *     just appear as hireable). Never touches player cash, holdings, or the RNG.
  */
-export const SCHEMA_VERSION = 15 as const;
+export const SCHEMA_VERSION = 16 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -273,7 +284,14 @@ export interface BetrayalArc {
   readonly sign: string;
 }
 
-/** What a crew member is currently doing (design/02 §5). `targetId` names the asset. */
+/**
+ * What a crew member is currently doing in their ONE non-production duty (design/02
+ * §5). `targetId` names the asset. Production is NO LONGER expressed here — a member
+ * can run up to two ops via `CrewMember.productionOpIds` (design/13 D; Prompt 46),
+ * independent of this slot. The `'production'` kind is retained ONLY so a legacy
+ * save deserializes; the v16 migration moves it into `productionOpIds` and idles
+ * this slot, and no new code sets `assignment.kind === 'production'`.
+ */
 export interface CrewAssignment {
   readonly kind:
     | 'idle'
@@ -282,7 +300,7 @@ export interface CrewAssignment {
     | 'territory'
     | 'deal-crew'
     | 'courier'
-    /** Running a grow-op / factory for a yield bonus (Ideas2 item 3; Prompt 39). */
+    /** LEGACY only — a pre-v16 grow-op assignment, migrated into `productionOpIds`. */
     | 'production';
   /** The stash/front/territory/shipment/production-op id this references, when applicable. */
   readonly targetId?: string;
@@ -309,6 +327,14 @@ export interface CrewMember {
   readonly agenda: CrewAgenda;
   readonly memoryLog: readonly MemoryEntry[];
   readonly assignment: CrewAssignment;
+  /**
+   * The production ops this member personally runs (design/13 D; Prompt 46). A
+   * promoted lieutenant may hold up to `LIEUTENANT_MAX_PRODUCTION_OPS` at once, each
+   * earning the full disclosed `LIEUTENANT_FRONT_BONUS` (no dilution). Independent of
+   * `assignment`, so a lieutenant can also hold a single non-production duty. Empty
+   * on a fresh spawn; a migrated legacy save carries its one prior op here.
+   */
+  readonly productionOpIds: readonly string[];
   /** Present once a betrayal arc has begun (design/02 §4). Absent = no arc. */
   readonly activeArc?: BetrayalArc;
   /** True once flipped: an embedded wire feeding heat/LE (design/02 §4; Prompt 05/09). */
@@ -651,6 +677,14 @@ export interface GameState {
    */
   readonly productionOps: readonly ProductionOp[];
   readonly crew: readonly CrewMember[];
+  /**
+   * Last in-game week the crew payroll was settled (design/13 D; Prompt 46 — the
+   * weekly-boundary bookkeeping, mirroring `Corruption.lastPayrollWeek`). `chargeWages`
+   * charges `wagePerWeek × weeksElapsed` from clean cash on the weekly boundary and
+   * advances this so the same week is never charged twice. Active-only, so wages
+   * never draw while the player is away (GDD §6).
+   */
+  readonly lastCrewPayrollWeek: number;
   readonly corruption: Corruption;
   readonly debt: Debt;
   /**
@@ -875,6 +909,7 @@ export function createInitialState(
     fronts: [],
     productionOps: [],
     crew: [],
+    lastCrewPayrollWeek: 1,
     corruption: { officials: [], payrollPerWeek: 0, paidPorts: [], lastPayrollWeek: 1 },
     debt: emptyDebt(),
     loansTaken: 0,

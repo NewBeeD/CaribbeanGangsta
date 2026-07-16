@@ -119,6 +119,7 @@ import {
   TRAIN_SKILL_GAIN,
   TRAIN_COST,
   LIEUTENANT_FRONT_BONUS,
+  LIEUTENANT_MAX_PRODUCTION_OPS,
   type CrewTrait,
   type LoyaltyEventKind,
 } from './crew';
@@ -389,6 +390,8 @@ export interface CrewTuning {
   readonly TRAIN_SKILL_GAIN: number;
   readonly TRAIN_COST: number;
   readonly LIEUTENANT_FRONT_BONUS: number;
+  /** A lieutenant's production span-of-control — max ops at once (design/13 D; Prompt 46). */
+  readonly LIEUTENANT_MAX_PRODUCTION_OPS: number;
 }
 
 /** Corruption network — port bribes & payroll (design/09 System B). */
@@ -695,6 +698,7 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     TRAIN_SKILL_GAIN,
     TRAIN_COST,
     LIEUTENANT_FRONT_BONUS,
+    LIEUTENANT_MAX_PRODUCTION_OPS,
   },
   corruption: {
     POLITICIAN_REP_BONUS,

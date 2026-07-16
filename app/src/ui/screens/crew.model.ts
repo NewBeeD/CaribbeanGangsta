@@ -22,6 +22,7 @@ import {
   COUNTRIES,
   FRONT_TYPES,
   TRAIN_COST,
+  crewPayrollPerWeek,
   describeLoyalty,
   getProductionOp,
   shipmentRoute,
@@ -138,6 +139,72 @@ export function assignmentLabel(state: GameState, member: CrewMember): string {
   }
 }
 
+/**
+ * The production-site phrase for a member running one or more grows/factories
+ * (design/13 D; Prompt 46). `null` when they run none. A lieutenant can hold up to
+ * two, so this reads the count off `productionOpIds` — independent of `assignment`.
+ */
+export function productionDutyPhrase(member: CrewMember): string | null {
+  const n = member.productionOpIds.length;
+  if (n === 0) return null;
+  return n === 1 ? 'Running a production site' : `Running ${n} production sites`;
+}
+
+/**
+ * The one-line "what they're doing right now" summary, folding BOTH the single
+ * non-production duty and any production ops (design/13 D). A lieutenant on a front
+ * who also runs a grow reads as both; an idle grower reads as production; a truly
+ * free body reads as "Unassigned".
+ */
+export function dutyLine(state: GameState, member: CrewMember): string {
+  const prod = productionDutyPhrase(member);
+  if (member.assignment.kind === 'idle') return prod ?? 'Unassigned';
+  const base = assignmentLabel(state, member);
+  return prod ? `${base} · ${prod}` : base;
+}
+
+/** Whether a member is FREE to take on work — idle duty and no production ops. */
+export function isAvailable(member: CrewMember): boolean {
+  return member.assignment.kind === 'idle' && member.productionOpIds.length === 0;
+}
+
+/** The bucket a member is grouped under on the roster (design/13 D — legibility). */
+export type CrewDuty =
+  | 'production'
+  | 'front'
+  | 'courier'
+  | 'street'
+  | 'guard'
+  | 'territory'
+  | 'unassigned';
+
+/**
+ * A member's grouping bucket (design/13 D; Prompt 46). Production takes priority —
+ * it's the salient new duty and the one the roster grew to serve — so a lieutenant
+ * running grows groups there even if they also hold a front. Everyone else groups by
+ * their single `assignment`; a free body lands in `unassigned` (the "available now"
+ * pool).
+ */
+export function memberDuty(member: CrewMember): CrewDuty {
+  if (member.productionOpIds.length > 0) return 'production';
+  switch (member.assignment.kind) {
+    case 'front':
+      return 'front';
+    case 'courier':
+      return 'courier';
+    case 'deal-crew':
+      return 'street';
+    case 'guard':
+      return 'guard';
+    case 'territory':
+      return 'territory';
+    case 'production': // legacy — migrated out, but keeps the switch exhaustive
+      return 'production';
+    case 'idle':
+      return 'unassigned';
+  }
+}
+
 /** One roster row — a person, surfaced through behaviour (design/02 §1). */
 export interface CrewRow {
   readonly id: string;
@@ -146,7 +213,10 @@ export interface CrewRow {
   readonly roleLabel: string;
   /** The ONLY loyalty surface — prose from `describeLoyalty`, never a number. */
   readonly loyaltyLine: string;
+  /** The full "what they're doing" line, folding assignment + any production ops. */
   readonly assignment: string;
+  /** True when free to take on work (idle + no production ops) — the "available" pool. */
+  readonly available: boolean;
   readonly skills: readonly SkillDots[];
   readonly isFamily: boolean;
   readonly isWire: boolean;
@@ -154,18 +224,80 @@ export interface CrewRow {
   readonly hasArc: boolean;
 }
 
-export function crewRoster(state: GameState): readonly CrewRow[] {
-  return state.crew.map((m) => ({
+function toRow(state: GameState, m: CrewMember): CrewRow {
+  return {
     id: m.id,
     name: m.name,
     role: m.role,
     roleLabel: ROLE_LABEL[m.role],
     loyaltyLine: describeLoyalty(m),
-    assignment: assignmentLabel(state, m),
+    assignment: dutyLine(state, m),
+    available: isAvailable(m),
     skills: topSkillDots(m),
     isFamily: m.isFamily === true,
     isWire: m.isWire === true,
     hasArc: m.activeArc !== undefined,
+  };
+}
+
+export function crewRoster(state: GameState): readonly CrewRow[] {
+  return state.crew.map((m) => toRow(state, m));
+}
+
+/** How many crew are FREE to take on work right now — the header's readable count. */
+export function availableCount(state: GameState): number {
+  return state.crew.reduce((n, m) => (isAvailable(m) ? n + 1 : n), 0);
+}
+
+/** Total weekly crew wages — the payroll line (design/13 D; equals what's charged). */
+export function crewPayrollLine(state: GameState): number {
+  return crewPayrollPerWeek(state);
+}
+
+/** A roster section: a duty bucket, its label, and the people in it (design/13 D). */
+export interface CrewGroup {
+  readonly duty: CrewDuty;
+  readonly label: string;
+  readonly rows: readonly CrewRow[];
+}
+
+const DUTY_LABEL: Readonly<Record<CrewDuty, string>> = {
+  unassigned: 'Available now',
+  production: 'On production',
+  front: 'Running fronts',
+  courier: 'Couriers in flight',
+  street: 'Street teams',
+  guard: 'Guarding stashes',
+  territory: 'Holding territory',
+};
+
+/** Display order — the free pool first (that legibility gap is half the complaint). */
+const DUTY_ORDER: readonly CrewDuty[] = [
+  'unassigned',
+  'production',
+  'front',
+  'courier',
+  'street',
+  'guard',
+  'territory',
+];
+
+/**
+ * The roster grouped by current duty (design/13 D; Prompt 46) — so "who is free"
+ * reads at a glance. Only non-empty groups are returned, in `DUTY_ORDER` (the
+ * available pool first). Half the original complaint was not being able to SEE who
+ * was free; this is the fix.
+ */
+export function crewGroups(state: GameState): readonly CrewGroup[] {
+  const byDuty = new Map<CrewDuty, CrewRow[]>();
+  for (const m of state.crew) {
+    const duty = memberDuty(m);
+    (byDuty.get(duty) ?? byDuty.set(duty, []).get(duty)!).push(toRow(state, m));
+  }
+  return DUTY_ORDER.filter((d) => byDuty.has(d)).map((duty) => ({
+    duty,
+    label: DUTY_LABEL[duty],
+    rows: byDuty.get(duty)!,
   }));
 }
 
@@ -176,6 +308,8 @@ export interface RecruitOption {
   readonly role: CrewRole;
   readonly roleLabel: string;
   readonly bond: string;
+  /** Weekly wage, shown BEFORE hiring (design/13 D ethical guardrail). */
+  readonly wagePerWeek: number;
 }
 
 /**
@@ -191,6 +325,7 @@ export function recruitableArchetypes(state: GameState): readonly RecruitOption[
     role: a.role,
     roleLabel: ROLE_LABEL[a.role],
     bond: a.bond,
+    wagePerWeek: a.wagePerWeek,
   }));
 }
 

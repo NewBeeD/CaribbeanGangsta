@@ -93,6 +93,7 @@ export function spawnCrew(
     agenda: a.agenda,
     memoryLog: [],
     assignment: { kind: 'idle' },
+    productionOpIds: [],
     ...(a.isFamily ? { isFamily: true } : {}),
   };
   return { ...base, ...overrides };
@@ -122,6 +123,7 @@ export function hydrateLegacyCrew(legacy: {
     agenda: 'just-survive',
     memoryLog: [],
     assignment: { kind: 'idle' },
+    productionOpIds: [],
   };
 }
 
@@ -500,12 +502,14 @@ export function applyWireHeat(state: GameState, dtHours: number): GameState {
 }
 
 /**
- * The crew tick step (registered active-only in `clock.ts`): advance betrayal
- * arcs one telegraphed stage, then apply any wire heat. Pure; no RNG, no wall
- * clock — offline never runs it.
+ * The crew tick step (registered active-only in `clock.ts`): settle crew wages on
+ * the weekly boundary (design/13 D), advance betrayal arcs one telegraphed stage,
+ * then apply any wire heat. Pure; no RNG, no wall clock — offline never runs it, so
+ * wages never draw and arcs never advance while the player is away (GDD §6).
  */
 export function crewStep(state: GameState, dtHours: number): GameState {
-  return applyWireHeat(advanceBetrayalArcs(state), dtHours);
+  const paid = chargeWages(state).state;
+  return applyWireHeat(advanceBetrayalArcs(paid), dtHours);
 }
 
 // --- Development: train, promote, assign (design/02 §5) -----------------------
@@ -649,17 +653,125 @@ export function frontLieutenantBonus(state: GameState, frontId: string): number 
  * (Ideas2 item 3 crew delegation — "transfer a crew member to manage the grow").
  * Read by `production.ts`, so assigning a lieutenant has a real, tested effect;
  * unassigning (or a flip to a wire) restores the base yield. Reuses the SAME
- * `LIEUTENANT_FRONT_BONUS` and the SAME assignment machinery as the front
- * delegation (`assign(npc, { kind: 'production', targetId })`), so there is no new
- * randomness and no new gate. Returns 0 when no lieutenant runs the op.
+ * `LIEUTENANT_FRONT_BONUS` as the front delegation, so there is no new randomness
+ * and no new gate. Since a lieutenant can run up to `LIEUTENANT_MAX_PRODUCTION_OPS`
+ * ops (design/13 D; Prompt 46), the bonus resolves PER-OP off `productionOpIds` —
+ * the FULL disclosed bonus lands on each op they hold, with no hidden dilution.
+ * Returns 0 when no (non-wire) lieutenant runs the op.
  */
 export function productionLieutenantBonus(state: GameState, opId: string): number {
   const running = state.crew.some(
     (c) =>
       c.role === 'lieutenant' &&
       !c.isWire &&
-      c.assignment.kind === 'production' &&
-      c.assignment.targetId === opId,
+      c.productionOpIds.includes(opId),
   );
   return running ? state.config.crew.LIEUTENANT_FRONT_BONUS : 0;
+}
+
+// --- Production span-of-control (design/13 D; Prompt 46) ----------------------
+
+export type AssignProductionReject =
+  | 'no-crew'
+  | 'invalid-target'
+  /** The lieutenant already runs `LIEUTENANT_MAX_PRODUCTION_OPS` ops (span-of-control). */
+  | 'lieutenant-at-capacity';
+
+export interface AssignProductionResult {
+  readonly state: GameState;
+  readonly crew: CrewMember | null;
+  readonly rejected?: AssignProductionReject;
+}
+
+/**
+ * Put crew member `npcId` on production op `opId` (design/13 D; Prompt 46). A member
+ * runs up to `LIEUTENANT_MAX_PRODUCTION_OPS` ops at once — the span-of-control cap
+ * that keeps a whole industry off one back. Assigning an op they ALREADY run is an
+ * idempotent success (no duplicate, no reject). Assigning a NEW op when already at
+ * capacity rejects `lieutenant-at-capacity` WITHOUT mutating — the caller shows the
+ * readable copy. Rejects `no-crew`/`invalid-target` (unknown op) the same way. The
+ * bonus itself is a lieutenant/non-wire concern resolved in `productionLieutenantBonus`;
+ * this only tracks who is on what.
+ */
+export function assignProduction(
+  state: GameState,
+  npcId: string,
+  opId: string,
+): AssignProductionResult {
+  const npc = findCrew(state, npcId);
+  if (!npc) return { state, crew: null, rejected: 'no-crew' };
+  if (!state.productionOps.some((o) => o.id === opId)) {
+    return { state, crew: npc, rejected: 'invalid-target' };
+  }
+  if (npc.productionOpIds.includes(opId)) return { state, crew: npc }; // already on it
+  const cap = state.config.crew.LIEUTENANT_MAX_PRODUCTION_OPS;
+  if (npc.productionOpIds.length >= cap) {
+    return { state, crew: npc, rejected: 'lieutenant-at-capacity' };
+  }
+  const next: CrewMember = { ...npc, productionOpIds: [...npc.productionOpIds, opId] };
+  return { state: withCrew(state, next), crew: next };
+}
+
+/**
+ * Pull crew member `npcId` off production op `opId` (design/13 D; Prompt 46) —
+ * frees a span-of-control slot and restores that op's base yield. A no-op when the
+ * member (or the assignment) isn't there.
+ */
+export function unassignProduction(state: GameState, npcId: string, opId: string): GameState {
+  const npc = findCrew(state, npcId);
+  if (!npc || !npc.productionOpIds.includes(opId)) return state;
+  return withCrew(state, {
+    ...npc,
+    productionOpIds: npc.productionOpIds.filter((id) => id !== opId),
+  });
+}
+
+// --- Crew wages (design/13 D; Prompt 46 — a real weekly obligation) ----------
+
+/**
+ * The run's total weekly crew wage draw — the payroll LINE (design/13 D; Prompt 46).
+ * Summed live from the roster's archetype wages, so the number shown always equals
+ * the number charged (the ethical guardrail). A rehydrated legacy stub whose
+ * archetype predates the roster contributes 0 (tolerant, never throws).
+ */
+export function crewPayrollPerWeek(state: GameState): number {
+  return state.crew.reduce(
+    (sum, c) => sum + (findCrewArchetype(c.archetypeId)?.wagePerWeek ?? 0),
+    0,
+  );
+}
+
+export interface WageChargeResult {
+  readonly state: GameState;
+  /** Total clean cash paid out this settlement. */
+  readonly charged: number;
+  /** Whole in-game weeks this settlement covered. */
+  readonly weeks: number;
+}
+
+/**
+ * Settle crew wages on the weekly boundary (design/13 D; Prompt 46). Charges
+ * `crewPayrollPerWeek × weeksElapsed` from CLEAN cash, paying what's affordable and
+ * NEVER going negative — a material weekly obligation, not a run-ender (a short week
+ * simply pays what it can). Advances `lastCrewPayrollWeek` so the same week is never
+ * charged twice. Called only from `crewStep`, an active-only tick step, so wages
+ * never draw while the player is away (GDD §6). Wages are pure clean-cash cost here —
+ * loyalty consequences stay with the explicit pay/short treatment levers.
+ */
+export function chargeWages(state: GameState): WageChargeResult {
+  const weeks = state.clock.week - state.lastCrewPayrollWeek;
+  if (weeks <= 0 || state.crew.length === 0) {
+    return { state: { ...state, lastCrewPayrollWeek: state.clock.week }, charged: 0, weeks: 0 };
+  }
+  const owed = crewPayrollPerWeek(state) * weeks;
+  const charged = Math.min(owed, state.cleanCash);
+  return {
+    state: {
+      ...state,
+      cleanCash: state.cleanCash - charged,
+      lastCrewPayrollWeek: state.clock.week,
+    },
+    charged,
+    weeks,
+  };
 }

@@ -98,6 +98,28 @@ describe('CrewScreen — loyalty is behaviour/prose, never a number (design/02 �
     expect(after.crew.map((c) => c.archetypeId)).toContain(target.id);
     view.unmount();
   });
+
+  it('groups the roster by duty and shows the available count (design/13 D; Prompt 46)', () => {
+    const lt = spawnCrew('marco', { id: 'lt', role: 'lieutenant', productionOpIds: ['prod-x'] });
+    const idle = spawnCrew('deon', { id: 'idle' });
+    const courier = spawnCrew('benji', {
+      id: 'cour',
+      assignment: { kind: 'courier', targetId: 'ship-1' },
+    });
+    useGameStore.setState({ state: runWith('crew-groups', [lt, idle, courier]) });
+
+    const view = mount(<CrewScreen />);
+    const text = view.container.textContent ?? '';
+    // Only the truly-idle body counts as available.
+    expect(text).toContain('1 available');
+    // Duty group headers surface each state; the free pool leads.
+    expect(text).toContain('Available now');
+    expect(text).toContain('On production');
+    // An in-flight courier reads as busy, not available.
+    expect(text).toContain('Couriers in flight');
+    expect(text).not.toContain('2 available');
+    view.unmount();
+  });
 });
 
 describe('CrewDetail — perspective, memory, and the betrayal arc (design/02 §2–§4)', () => {

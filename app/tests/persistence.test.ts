@@ -4,6 +4,7 @@ import {
   createInitialState,
   DEFAULT_GAME_CONFIG,
   rngFor,
+  spawnCrew,
   SCHEMA_VERSION,
   type GameState,
 } from '@/engine';
@@ -258,6 +259,41 @@ describe('migrateEnvelope — schema version + migration hook', () => {
     // Cash and the RNG stream are untouched.
     expect(migrated?.cleanCash).toBe(state.cleanCash);
     expect(migrated?.rngState).toEqual(state.rngState);
+  });
+
+  it('migrates a v15 save: production assignment → productionOpIds (Prompt 46)', () => {
+    // A pre-v16 lieutenant delegated to a grow via the single `assignment` slot,
+    // with neither `productionOpIds` nor `lastCrewPayrollWeek` on the save.
+    const ltFull = spawnCrew('marco', {
+      id: 'crew-marco',
+      role: 'lieutenant',
+      assignment: { kind: 'production', targetId: 'prod-backyard-grow' },
+    });
+    const { productionOpIds: _drop, ...ltV15 } = ltFull;
+    const legacy = {
+      ...state,
+      crew: [ltV15],
+      productionOps: [{ id: 'prod-backyard-grow', type: 'backyard-grow', level: 1 }],
+    } as Record<string, unknown>;
+    delete legacy.lastCrewPayrollWeek;
+
+    const migrated = migrateEnvelope({
+      ...envelope,
+      schemaVersion: 15,
+      state: legacy as unknown as GameState,
+    });
+
+    expect(migrated).not.toBeNull();
+    const m = migrated!.crew[0]!;
+    // The legacy lieutenant KEEPS their one op and gains a free second slot.
+    expect(m.productionOpIds).toEqual(['prod-backyard-grow']);
+    expect(m.assignment).toEqual({ kind: 'idle' });
+    expect(migrated!.config.crew.LIEUTENANT_MAX_PRODUCTION_OPS).toBe(2);
+    // Payroll bookkeeping seeded from the clock — never back-charges past weeks.
+    expect(migrated!.lastCrewPayrollWeek).toBe(state.clock.week);
+    // Nothing owned changes: no cash or RNG movement.
+    expect(migrated!.cleanCash).toBe(state.cleanCash);
+    expect(migrated!.rngState).toEqual(state.rngState);
   });
 
   it('migrates a v2 save up to the heat engine (Prompt 05 fields defaulted)', () => {

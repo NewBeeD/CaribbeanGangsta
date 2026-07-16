@@ -558,6 +558,7 @@ export {
   TRAIN_COST,
   CREW_SKILL_MAX,
   LIEUTENANT_FRONT_BONUS,
+  LIEUTENANT_MAX_PRODUCTION_OPS,
 } from './config/crew';
 export type {
   CrewArchetype,
@@ -589,8 +590,12 @@ export {
   train,
   promote,
   assign,
+  assignProduction,
+  unassignProduction,
   frontLieutenantBonus,
   productionLieutenantBonus,
+  crewPayrollPerWeek,
+  chargeWages,
 } from './crew';
 export type {
   LoyaltyEvent,
@@ -600,6 +605,9 @@ export type {
   PromoteResult,
   PromoteTarget,
   CrewRejectReason,
+  AssignProductionResult,
+  AssignProductionReject,
+  WageChargeResult,
 } from './crew';
 
 // Corruption network — port bribes & standing payroll — Prompt 09.

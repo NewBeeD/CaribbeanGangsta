@@ -39,6 +39,7 @@ function crewWithArc(): CrewMember {
     agenda: 'wants-own-territory',
     memoryLog: [],
     assignment: { kind: 'idle' },
+    productionOpIds: [],
     activeArc: {
       stage: 'warning',
       startedAtHours: 0,

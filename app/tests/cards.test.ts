@@ -50,6 +50,7 @@ function crewMember(): CrewMember {
     agenda: 'wants-own-territory',
     memoryLog: [],
     assignment: { kind: 'idle' },
+    productionOpIds: [],
   };
 }
 

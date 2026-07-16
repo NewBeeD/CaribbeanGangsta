@@ -14,7 +14,15 @@ import { useState } from 'react';
 import { useGameState, useGameStore } from '@/store';
 import { Button, Card, Panel, StampBadge } from '@/ui/components';
 import { CrewDetail } from './CrewDetail';
-import { crewRoster, recruitableArchetypes, type CrewRow } from './crew.model';
+import {
+  availableCount,
+  crewGroups,
+  crewPayrollLine,
+  recruitableArchetypes,
+  type CrewRow,
+} from './crew.model';
+
+const money = (n: number): string => `$${Math.round(n).toLocaleString('en-US')}`;
 
 /** One roster row — a tap-through into the person (design/07 §3). */
 function RosterRow({ row, onOpen }: { readonly row: CrewRow; readonly onOpen: () => void }) {
@@ -77,7 +85,10 @@ export function CrewScreen() {
     return <CrewDetail crewId={openId} onBack={() => setOpenId(null)} />;
   }
 
-  const roster = crewRoster(state);
+  const groups = crewGroups(state);
+  const headcount = state.crew.length;
+  const free = availableCount(state);
+  const payroll = crewPayrollLine(state);
   const recruitable = recruitableArchetypes(state);
 
   const recruit = (archetypeId: string) => {
@@ -98,24 +109,30 @@ export function CrewScreen() {
         }}
       >
         <span className="cg-kicker">Crew</span>
-        <span className="cg-label">
-          {roster.length} {roster.length === 1 ? 'person' : 'people'}
+        <span className="cg-label" data-testid="crew-summary">
+          {headcount} {headcount === 1 ? 'person' : 'people'} · {free} available
+          {payroll > 0 ? ` · payroll ${money(payroll)}/wk` : ''}
         </span>
       </header>
 
-      <Card heading="Your people">
-        {roster.length === 0 ? (
+      {headcount === 0 ? (
+        <Card heading="Your people">
           <p className="cg-label">
             You&apos;re running this alone. Bring someone on you can trust.
           </p>
-        ) : (
-          <div style={{ display: 'grid', gap: 8 }}>
-            {roster.map((row) => (
-              <RosterRow key={row.id} row={row} onOpen={() => setOpenId(row.id)} />
-            ))}
-          </div>
-        )}
-      </Card>
+        </Card>
+      ) : (
+        // Grouped by current duty so "who is free" reads at a glance (design/13 D).
+        groups.map((g) => (
+          <Card key={g.duty} heading={`${g.label} · ${g.rows.length}`}>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {g.rows.map((row) => (
+                <RosterRow key={row.id} row={row} onOpen={() => setOpenId(row.id)} />
+              ))}
+            </div>
+          </Card>
+        ))
+      )}
 
       {recruitable.length > 0 && (
         <Card heading="Bring someone on">
@@ -127,6 +144,7 @@ export function CrewScreen() {
                 </p>
                 <Button variant="secondary" fullWidth onClick={() => recruit(r.archetypeId)}>
                   + Recruit {r.name}
+                  <small>{money(r.wagePerWeek)}/wk wages</small>
                 </Button>
               </Panel>
             ))}

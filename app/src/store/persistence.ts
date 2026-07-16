@@ -384,6 +384,46 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
       state: { ...legacy, config, recentUse: legacy.recentUse ?? {} },
     };
   },
+  // 15 → 16: crew expansion + lieutenant span-of-control (design/13 D; Prompt 46).
+  // The single `assignment.kind === 'production'` slot becomes `productionOpIds`
+  // (up to 2 ops per lieutenant): a legacy production assignment MOVES into the new
+  // list and its `assignment` idles — so a legacy lieutenant keeps their one op and
+  // gains a free second slot. Every other member gets an empty list. Weekly crew
+  // wages (`chargeWages`) get `lastCrewPayrollWeek` seeded from the stored clock so a
+  // migrated run never back-charges, and the config gains `crew.LIEUTENANT_MAX_
+  // PRODUCTION_OPS` from the default (any other saved crew tuning survives). The
+  // bigger archetype roster is pure config CONTENT — new candidates just appear as
+  // hireable. Nothing owned changes: no cash, holdings, or RNG movement.
+  15: (env) => {
+    const legacy = env.state as GameState;
+    const crew: readonly CrewMember[] = legacy.crew.map((c) => {
+      const existing = (c as CrewMember & { productionOpIds?: readonly string[] })
+        .productionOpIds;
+      if (c.assignment.kind === 'production') {
+        const opId = c.assignment.targetId;
+        return {
+          ...c,
+          assignment: { kind: 'idle' as const },
+          productionOpIds: opId ? [opId] : (existing ?? []),
+        };
+      }
+      return { ...c, productionOpIds: existing ?? [] };
+    });
+    const config: GameConfig = {
+      ...legacy.config,
+      crew: { ...DEFAULT_GAME_CONFIG.crew, ...legacy.config.crew },
+    };
+    return {
+      ...env,
+      schemaVersion: 16,
+      state: {
+        ...legacy,
+        crew,
+        config,
+        lastCrewPayrollWeek: legacy.clock.week,
+      },
+    };
+  },
 };
 
 /**

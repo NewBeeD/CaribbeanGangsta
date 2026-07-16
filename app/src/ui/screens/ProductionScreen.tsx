@@ -245,9 +245,9 @@ export function ProductionScreen() {
   const store = useGameStore.getState;
   const upgrade = (opId: string) => store().upgradeProductionOp(opId);
   const buy = (type: BuyOpOption['type']) => store().buyProductionOp(type);
-  const assign = (opId: string, crewId: string) =>
-    store().assignCrew(crewId, { kind: 'production', targetId: opId });
-  const unassign = (crewId: string) => store().assignCrew(crewId, { kind: 'idle' });
+  const assign = (opId: string, crewId: string) => store().assignProductionOp(crewId, opId);
+  const unassign = (opId: string, crewId: string) =>
+    store().unassignProductionOp(crewId, opId);
   const togglePause = (row: OpRow) => store().setProductionPaused(row.id, !row.paused);
   const setDestination = (opId: string, stashId: string) =>
     store().setProductionStash(opId, stashId);
@@ -300,7 +300,7 @@ export function ProductionScreen() {
                 managers={managers}
                 onUpgrade={() => upgrade(row.id)}
                 onAssign={(crewId) => assign(row.id, crewId)}
-                onUnassign={(crewId) => unassign(crewId)}
+                onUnassign={(crewId) => unassign(row.id, crewId)}
                 onTogglePause={() => togglePause(row)}
                 onSetDestination={(stashId) => setDestination(row.id, stashId)}
               />

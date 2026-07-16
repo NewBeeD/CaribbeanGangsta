@@ -97,3 +97,17 @@ Ship a **small subset done well** (RimWorld lesson):
 
 Defer: large rosters, deep skill trees, faction politics — add once the core
 relatedness loop is proven in playtest (measure: do players name their crew?).
+
+> **Roster-size relaxation (design/13 D; Prompt 46 — recorded, not silent).** At
+> the user's explicit request ("I want you to add more crew members"), the roster
+> grew from ~7 to ~14 archetypes. The reason is mechanical, not cosmetic: fronts,
+> production ops, couriers, escorts, and street teams were all drawing from the
+> same three promotable lieutenants, so six production ops alone starved the pool.
+> This relaxes the "defer large rosters" line above **only for headcount** — the
+> relatedness pillar is untouched: every added member is a written person (bond,
+> hidden agenda, telegraphed betrayal voice), never a faceless merc, and no new
+> flag/disclosure gate was added (hiring stays money-gated and open from minute
+> one). "Deep skill trees / faction politics" remain deferred. Wages scale with the
+> bigger cast so payroll is a real weekly obligation, and a promoted lieutenant's
+> production span-of-control is capped (`LIEUTENANT_MAX_PRODUCTION_OPS`) so the
+> bigger roster is relief, not a one-back empire.

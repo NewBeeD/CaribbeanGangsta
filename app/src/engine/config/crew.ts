@@ -84,6 +84,13 @@ export interface CrewArchetype {
   readonly bond: string;
   /** Where loyalty starts (0–100, hidden). */
   readonly startingLoyalty: number;
+  /**
+   * The crew member's weekly wage in $ (design/13 D; Prompt 46 — "wages scale so a
+   * big payroll is a real weekly obligation"). Charged from CLEAN cash on the weekly
+   * boundary (`chargeWages`), shown before hiring, and summed into the payroll line.
+   * Wages skew by role and value: a lieutenant costs more than a corner runner.
+   */
+  readonly wagePerWeek: number;
   readonly dialogue: CrewDialogue;
   /** The family/personal high-stakes relationship (exactly one — design/02 §7). */
   readonly isFamily?: boolean;
@@ -101,13 +108,22 @@ export function emptyCrewSkills(): CrewSkills {
   return skills({}, 0);
 }
 
-// --- The MVP roster (design/02 §7) -------------------------------------------
+// --- The roster (design/02 §7; expanded design/13 D — Prompt 46) -------------
 
 /**
- * ~6 crew archetypes + one family relationship, each with traits + memory hooks
- * and a legible path into the single betrayal arc. Agendas are left as *implied*
- * gaps (design/02 §6): the player infers "Marco wants his own territory" from how
- * he behaves when passed over, we never print it. Deliberately small.
+ * The cast, each with traits + memory hooks and a legible path into the betrayal
+ * arc. Agendas are left as *implied* gaps (design/02 §6): the player infers "Marco
+ * wants his own territory" from how he behaves when passed over — we never print it.
+ *
+ * Roster size: design/02 §7 deliberately shipped a SMALL cast (~7). design/13 D
+ * relaxes that **at the user's request** ("I want you to add more crew members"),
+ * roughly doubling it to ~14 so fronts, production ops, couriers, escorts, and
+ * street teams stop starving each other for the same three lieutenants. The
+ * relatedness pillar is NOT relaxed: every added member is a written person — a
+ * bond, a hidden agenda, and telegraphed betrayal voice — never a faceless merc.
+ * The additions skew toward the duties the empire now runs: growers/cooks
+ * (production lieutenants), boat people (couriers/escorts), corner captains
+ * (street teams).
  */
 export const CREW_ARCHETYPES: readonly CrewArchetype[] = [
   {
@@ -119,6 +135,7 @@ export const CREW_ARCHETYPES: readonly CrewArchetype[] = [
     agenda: 'just-survive',
     bond: 'Came up with you on the same block; ran your first package on trust alone.',
     startingLoyalty: 72,
+    wagePerWeek: 3_000,
     dialogue: {
       greeting: '"Say the word, boss. I got you."',
       loyal: '"We started with nothing. I ain\'t going nowhere."',
@@ -135,6 +152,7 @@ export const CREW_ARCHETYPES: readonly CrewArchetype[] = [
     agenda: 'wants-own-territory',
     bond: 'Built the east-side routes for you and expects a seat at the table for it.',
     startingLoyalty: 58,
+    wagePerWeek: 9_000,
     dialogue: {
       greeting: '"I\'ve got moves lined up. When do I get to run them?"',
       loyal: '"Give me a territory and I\'ll double it. You know I\'m good for it."',
@@ -151,6 +169,7 @@ export const CREW_ARCHETYPES: readonly CrewArchetype[] = [
     agenda: 'in-it-for-money',
     bond: 'Your accountant — turns dirty weekends into clean quarterly filings.',
     startingLoyalty: 60,
+    wagePerWeek: 7_000,
     dialogue: {
       greeting: '"Numbers are clean this week. Keep them that way."',
       loyal: '"You pay right and you listen. That buys a lot of discretion."',
@@ -167,6 +186,7 @@ export const CREW_ARCHETYPES: readonly CrewArchetype[] = [
     agenda: 'wants-respect',
     bond: 'Took a bullet meant for you outside the docks and never lets you forget it.',
     startingLoyalty: 50,
+    wagePerWeek: 4_500,
     dialogue: {
       greeting: '"Who we hitting? I\'m ready."',
       loyal: '"I bled for this crew. Nobody touches you while I\'m standing."',
@@ -183,6 +203,7 @@ export const CREW_ARCHETYPES: readonly CrewArchetype[] = [
     agenda: 'climb-the-ranks',
     bond: 'Poached from a rival crew; loyal to opportunity more than to you.',
     startingLoyalty: 44,
+    wagePerWeek: 4_000,
     dialogue: {
       greeting: '"I switch teams for the right reasons. Keep giving me reasons."',
       loyal: '"You move up, I move up. That\'s the deal I like."',
@@ -199,6 +220,7 @@ export const CREW_ARCHETYPES: readonly CrewArchetype[] = [
     agenda: 'wants-respect',
     bond: 'Your comms and counter-surveillance; sees the whole board before you do.',
     startingLoyalty: 64,
+    wagePerWeek: 7_000,
     dialogue: {
       greeting: '"I\'ve got eyes on everything. You\'re clean for now."',
       loyal: '"I watch your back on the wire. Nobody snoops on us."',
@@ -216,6 +238,7 @@ export const CREW_ARCHETYPES: readonly CrewArchetype[] = [
     agenda: 'protect-family',
     bond: 'Your younger sister. She didn\'t choose this life — you pulled her into it.',
     startingLoyalty: 80,
+    wagePerWeek: 2_500,
     isFamily: true,
     dialogue: {
       greeting: '"Promise me you\'ll come home tonight."',
@@ -224,7 +247,150 @@ export const CREW_ARCHETYPES: readonly CrewArchetype[] = [
       betrayal: '"I\'m taking what\'s left and getting out before you bury us both."',
     },
   },
+
+  // --- Round-4 expansion (design/13 D; Prompt 46) ----------------------------
+  // Skewed toward the duties the empire now runs — growers/cooks for production,
+  // boat people for couriers/escorts, corner captains for street teams — so the
+  // lieutenant pool stops starving. Every one is a written character (design/02).
+
+  // Growers & cooks — the production lieutenants.
+  {
+    id: 'winston',
+    name: 'Winston',
+    role: 'specialist',
+    traits: ['proud', 'cautious'],
+    skills: skills({ tech: 65, driving: 40, laundering: 30 }),
+    agenda: 'wants-respect',
+    bond: 'Grew hill-country ganja before you were born; treats every plant like kin and expects the same care back.',
+    startingLoyalty: 62,
+    wagePerWeek: 6_000,
+    dialogue: {
+      greeting: '"The crop\'s coming in strong. Don\'t rush the harvest."',
+      loyal: '"You let me grow it right. That\'s worth more than the money."',
+      wary: '"You keep cutting corners on my grow. The plants know. So do I."',
+      betrayal: '"I\'ll take my seeds and my name somewhere they\'re respected."',
+    },
+  },
+  {
+    id: 'esme',
+    name: 'Esmé',
+    role: 'specialist',
+    traits: ['calculating', 'cautious'],
+    skills: skills({ tech: 78, laundering: 35 }),
+    agenda: 'in-it-for-money',
+    bond: 'A trained chemist who lost her licence and found your labs — precise, expensive, and discreet.',
+    startingLoyalty: 55,
+    wagePerWeek: 7_500,
+    dialogue: {
+      greeting: '"The yield is a function of the inputs. Pay for the good inputs."',
+      loyal: '"You fund the lab properly and I make you numbers nobody else can."',
+      wary: '"You want pharmaceutical purity on a street budget. It doesn\'t work."',
+      betrayal: '"My formulas walk out the door with me. Someone will pay for them."',
+    },
+  },
+
+  // Boat people — couriers and escorts across the cays.
+  {
+    id: 'benji',
+    name: 'Benji',
+    role: 'runner',
+    traits: ['hot-headed', 'greedy'],
+    skills: skills({ driving: 80, muscle: 45 }),
+    agenda: 'in-it-for-money',
+    bond: 'Smuggled through the cays since he was a teenager; knows every blind channel and coastguard shift.',
+    startingLoyalty: 52,
+    wagePerWeek: 5_000,
+    dialogue: {
+      greeting: '"Point me at the water. I\'ll get it there dry."',
+      loyal: '"Best boatman you\'ll ever have, and I know it. We\'re good."',
+      wary: '"I take all the risk on the water and you skim my end? Watch it."',
+      betrayal: '"Next run, the cargo goes to whoever pays the captain more."',
+    },
+  },
+  {
+    id: 'carlisle',
+    name: 'Carlisle',
+    role: 'soldier',
+    traits: ['loyal-to-a-fault', 'hot-headed'],
+    skills: skills({ muscle: 70, driving: 60 }),
+    agenda: 'wants-respect',
+    bond: 'Rode shotgun on your worst run and never flinched; the sea doesn\'t scare him, only snitches do.',
+    startingLoyalty: 58,
+    wagePerWeek: 5_500,
+    dialogue: {
+      greeting: '"Anybody comes at the boat, they go in the water. Simple."',
+      loyal: '"I\'ll guard your cargo like it\'s my own blood. Always have."',
+      wary: '"I keep your loads safe and you don\'t even say my name. Noted."',
+      betrayal: '"All that loyalty, and for what. I\'m done taking your risks."',
+    },
+  },
+
+  // Corner captains — the street teams.
+  {
+    id: 'dre',
+    name: 'Dre',
+    role: 'soldier',
+    traits: ['ambitious', 'greedy'],
+    skills: skills({ deal: 60, muscle: 55 }),
+    agenda: 'climb-the-ranks',
+    bond: 'Runs the block corners like a shift manager — every rock counted, every runner clocked.',
+    startingLoyalty: 48,
+    wagePerWeek: 4_500,
+    dialogue: {
+      greeting: '"Corners are moving product all day. When do I move up?"',
+      loyal: '"You\'re building something and I\'m building with you. Let\'s eat."',
+      wary: '"I run your best corner and stay a corner boy. That\'s a problem."',
+      betrayal: '"I can run corners for anybody. Maybe for myself."',
+    },
+  },
+  {
+    id: 'mireille',
+    name: 'Mireille',
+    role: 'runner',
+    traits: ['cautious', 'calculating'],
+    skills: skills({ deal: 55, tech: 35, driving: 40 }),
+    agenda: 'just-survive',
+    bond: 'Keeps the youngsters on the corner fed and quiet — a mother to the block, wary of the life for all of them.',
+    startingLoyalty: 66,
+    wagePerWeek: 4_000,
+    dialogue: {
+      greeting: '"The block\'s calm. Let\'s keep it that way, yeah?"',
+      loyal: '"You look out for my kids on the corner, I look out for you."',
+      wary: '"You\'re bringing heat to my block. These are children out here."',
+      betrayal: '"I\'m getting the young ones out before your war reaches us."',
+    },
+  },
+
+  // A fixer — logistics, papers, and quiet problems.
+  {
+    id: 'tobias',
+    name: 'Tobias',
+    role: 'specialist',
+    traits: ['calculating', 'proud'],
+    skills: skills({ laundering: 55, tech: 50, deal: 45 }),
+    agenda: 'wants-own-territory',
+    bond: 'Your logistics fixer — moves guns, papers, and bodies without a paper trail, and never lets you forget he can.',
+    startingLoyalty: 54,
+    wagePerWeek: 6_500,
+    dialogue: {
+      greeting: '"Whatever the problem is, I\'ve already got three ways to make it disappear."',
+      loyal: '"I keep the machine running clean. Give me room and it hums."',
+      wary: '"I fix everything and own nothing. That arithmetic is getting old."',
+      betrayal: '"I know where every body is buried. Time I dug my own plot."',
+    },
+  },
 ] as const;
+
+/**
+ * A promoted lieutenant can personally run up to this many production ops at once
+ * (design/13 D span-of-control; Prompt 46 user addition). Assigning a third op
+ * rejects `lieutenant-at-capacity` without mutation. Fronts stay one-per-lieutenant
+ * (that cap lives in the front/promotion path, not here). With the ~14-body roster
+ * this makes a fully-delegated six-op production layer cost exactly three
+ * lieutenants, not six — capacity relief AND a cap (never a whole industry on one
+ * back). The disclosed `LIEUTENANT_FRONT_BONUS` resolves per-op (no dilution).
+ */
+export const LIEUTENANT_MAX_PRODUCTION_OPS = 2;
 
 const ARCHETYPE_BY_ID: ReadonlyMap<string, CrewArchetype> = new Map(
   CREW_ARCHETYPES.map((a) => [a.id, a]),

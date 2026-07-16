@@ -81,7 +81,7 @@ describe('production.model — priced ops on the open-access curve', () => {
     const lt = spawnCrew(CREW_ARCHETYPES[0]!.id, {
       id: 'lt-1',
       role: 'lieutenant',
-      assignment: { kind: 'production', targetId: 'prod-backyard-grow' },
+      productionOpIds: ['prod-backyard-grow'],
     });
     const withLt: GameState = { ...bought, crew: [lt] };
     const row = opRows(withLt)[0]!;

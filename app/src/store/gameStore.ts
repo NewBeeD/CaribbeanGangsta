@@ -52,11 +52,14 @@ import type { OfficialId } from '@/engine/config/corruption';
 import type { ProductId } from '@/engine/config/countries';
 import {
   assign,
+  assignProduction,
+  unassignProduction,
   dismiss,
   loyaltyDelta,
   promote,
   recruit,
   train,
+  type AssignProductionResult,
   type LoyaltyEvent,
   type LoyaltyResult,
   type PromoteResult,
@@ -321,8 +324,9 @@ export interface GameStore {
    * Production actions (Prompt 39; Ideas2 item 3) — buy/upgrade a grow-op or drug
    * factory. Each wraps the pure `production.ts` engine, commits only when it lands
    * (funds sufficed, not owned/maxed), and autosaves so the ops survive a refresh.
-   * The UI authors no yield/cost math. Crew delegation reuses `assignCrew` with a
-   * `{ kind: 'production', targetId }` assignment — no new action needed.
+   * The UI authors no yield/cost math. Crew delegation goes through
+   * `assignProductionOp`/`unassignProductionOp` (design/13 D — a lieutenant runs up
+   * to two ops, so it's its own capacity-checked path, not the single `assignCrew`).
    */
   /** Buy the Level-1 grow-op/factory of `id`, paid from CLEAN cash (single-buy). */
   buyProductionOp(id: ProductionOpId): ProductionResult | null;
@@ -340,6 +344,15 @@ export interface GameStore {
   promoteCrew(npcId: string, target: PromoteTarget): PromoteResult | null;
   /** Set what a crew member is doing (guard wires them into the stash's seizure %). */
   assignCrew(npcId: string, assignment: CrewAssignment): void;
+  /**
+   * Put a lieutenant on a production op (design/13 D; Prompt 46). Up to two ops per
+   * lieutenant; a third rejects `lieutenant-at-capacity` (no commit). Returns the
+   * full `AssignProductionResult` (its `rejected` reason otherwise), or `null` when
+   * no run is loaded — the screen surfaces the readable reject copy.
+   */
+  assignProductionOp(npcId: string, opId: string): AssignProductionResult | null;
+  /** Pull a lieutenant off a production op, freeing a span-of-control slot. */
+  unassignProductionOp(npcId: string, opId: string): void;
   /**
    * Apply a loyalty/treatment event (raise pay, confront, …) — the betrayal-arc
    * intervention lever (design/02 §4). The engine walks the arc back on the next
@@ -817,6 +830,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   assignCrew(npcId, assignment) {
     withState(get, set, (state) => assign(state, npcId, assignment));
+    void get().persist(AUTOSAVE_SLOT).catch(() => {});
+  },
+
+  assignProductionOp(npcId, opId) {
+    const { state } = get();
+    if (!state) return null;
+    const result = assignProduction(state, npcId, opId);
+    if (!result.rejected) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  unassignProductionOp(npcId, opId) {
+    withState(get, set, (state) => unassignProduction(state, npcId, opId));
     void get().persist(AUTOSAVE_SLOT).catch(() => {});
   },
 

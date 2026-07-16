@@ -3,7 +3,8 @@ import {
   CREW_ARCHETYPES,
   LIEUTENANT_FRONT_BONUS,
   PRODUCTION_MAX_LEVEL,
-  assign,
+  assignProduction,
+  unassignProduction,
   buyProductionOp,
   convert,
   createInitialState,
@@ -230,12 +231,12 @@ describe('crew delegation — reuse the front-lieutenant path', () => {
     const op = withLt.productionOps[0]!;
     const base = productionYieldRate(withLt, op);
 
-    const assigned = assign(withLt, 'lt-1', { kind: 'production', targetId: op.id });
+    const assigned = assignProduction(withLt, 'lt-1', op.id).state;
     const boosted = productionYieldRate(assigned, assigned.productionOps[0]!);
     expect(boosted).toBeCloseTo(base * (1 + LIEUTENANT_FRONT_BONUS));
     expect(boosted).toBeGreaterThan(base);
 
-    const off = assign(assigned, 'lt-1', { kind: 'idle' });
+    const off = unassignProduction(assigned, 'lt-1', op.id);
     expect(productionYieldRate(off, off.productionOps[0]!)).toBeCloseTo(base);
   });
 
@@ -245,7 +246,7 @@ describe('crew delegation — reuse the front-lieutenant path', () => {
       id: 'lt-w',
       role: 'lieutenant',
       isWire: true,
-      assignment: { kind: 'production', targetId: 'prod-backyard-grow' },
+      productionOpIds: ['prod-backyard-grow'],
     });
     const s: GameState = { ...bought, crew: [wire] };
     const cfg = getProductionOp('backyard-grow');
