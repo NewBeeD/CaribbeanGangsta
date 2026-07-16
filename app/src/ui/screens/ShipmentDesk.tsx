@@ -272,7 +272,8 @@ export function ShipmentDesk() {
                   // The B4 disclosure (design/13): helming the run has teeth.
                   <p className="cg-label" data-testid="solo-arrest-risk" style={{ marginTop: 6 }}>
                     You&apos;re driving — if this is stopped, you&apos;re in the cuffs:
-                    post bond (~{money(quote.arrestBond)} clean) or the run ends.
+                    post bond (~{money(quote.arrestBond)} clean) or serve{' '}
+                    {Math.round(quote.arrestSentenceHours / 24)} days inside.
                   </p>
                 ) : null}
                 <div style={{ marginTop: 12 }}>

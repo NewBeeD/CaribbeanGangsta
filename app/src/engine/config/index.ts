@@ -214,6 +214,7 @@ import {
   ARREST_BOND_FRACTION,
   ARREST_BOND_MIN,
   ARREST_BOND_HEAT,
+  ARREST_SENTENCE_HOURS,
   type TransportConfig,
 } from './transport';
 import { CONVERSION_RECIPES, type ConversionRecipe } from './conversions';
@@ -486,10 +487,11 @@ export interface TransportTuning {
   readonly ESCORT_ODDS_REDUCTION: number;
   readonly COURIER_SKIM_PCT: number;
   readonly CONSIGNED_BUST_HEAT_FACTOR: number;
-  /** Self-run arrest — the bond-or-run-end consequence (design/13 B4). */
+  /** Self-run arrest — the bond-or-sentence consequence (design/13 B4). */
   readonly ARREST_BOND_FRACTION: number;
   readonly ARREST_BOND_MIN: number;
   readonly ARREST_BOND_HEAT: number;
+  readonly ARREST_SENTENCE_HOURS: number;
 }
 
 /** Product-conversion recipes (Ideas2 §4; design/11 §4). */
@@ -782,6 +784,7 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     ARREST_BOND_FRACTION,
     ARREST_BOND_MIN,
     ARREST_BOND_HEAT,
+    ARREST_SENTENCE_HOURS,
   },
   conversions: { CONVERSION_RECIPES },
   production: {

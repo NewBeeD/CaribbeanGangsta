@@ -275,9 +275,10 @@ export interface PostBondResult {
 /**
  * Post bond on a pending arrest (design/13 B4): pay `arrestBond` from CLEAN
  * cash, take the disclosed heat spike, and clear the arrest interrupt — the run
- * continues. Rejects without mutating when the choice isn't a pending arrest or
- * clean cash can't cover the bond (the other exit is `endRun('arrested')`,
- * dispatched by the store — this module never ends a run itself).
+ * continues, and you skip the time. Rejects without mutating when the choice
+ * isn't a pending arrest or clean cash can't cover the bond (the other exit is
+ * `clock.serveSentence` — the run resumes after the served week; nothing here
+ * ever ends a run).
  */
 export function postBond(state: GameState, choiceId: string): PostBondResult {
   const choice = state.pendingChoices.find((c) => c.id === choiceId);
@@ -331,10 +332,12 @@ export interface ShipmentQuote {
    * — already inside `interdictionChance`; broken out so the quote can say WHY). */
   readonly patternOddsSurcharge: number;
   /** True when no courier is consigned — YOU are driving, and an interdiction
-   * means arrest: post bond or the run ends (design/13 B4; disclosed here). */
+   * means arrest: post bond or serve the sentence (design/13 B4; disclosed here). */
   readonly soloRun: boolean;
   /** The bond an arrest would demand right now (the disclosed downside). */
   readonly arrestBond: number;
+  /** The sentence served if no bond is posted (the disclosed other downside). */
+  readonly arrestSentenceHours: number;
 }
 
 function validate(state: GameState, intent: ShipIntent): ShipRejectReason | null {
@@ -394,6 +397,7 @@ export function quoteShipment(state: GameState, intent: ShipIntent): ShipmentQuo
       patternOddsSurcharge: 0,
       soloRun: (intent.courierIds ?? []).length === 0,
       arrestBond: arrestBond(state),
+      arrestSentenceHours: state.config.transport.ARREST_SENTENCE_HOURS,
     };
   }
 
@@ -431,6 +435,7 @@ export function quoteShipment(state: GameState, intent: ShipIntent): ShipmentQuo
     patternOddsSurcharge: patternOddsSurcharge(state, intent),
     soloRun: couriers.length === 0 && (intent.courierIds ?? []).length === 0,
     arrestBond: arrestBond(state),
+    arrestSentenceHours: T.ARREST_SENTENCE_HOURS,
   };
 }
 
@@ -612,12 +617,13 @@ function resolveShipment(
     if (solo) {
       // YOU were driving (design/13 B4) — the launch quote said what this means.
       // The arrest presents as a consequential interrupt: post the disclosed
-      // bond (travel.postBond) or the run ends `arrested` (the store's call —
-      // this tick step never ends a run; GDD §8).
+      // bond (travel.postBond) or serve the disclosed sentence
+      // (clock.serveSentence) — either way the run continues; this tick step
+      // never ends a run (GDD §8).
       const arrest: PendingChoice = {
         id: `arrest-${shipment.id}`,
         kind: ARREST_CHOICE_KIND,
-        summary: `They boarded the ${modeName} with you at the helm. You're in the cuffs — post bond or the run ends here.`,
+        summary: `They boarded the ${modeName} with you at the helm. You're in the cuffs — post bond or do the time.`,
         createdAtHours: next.clock.hours,
       };
       return { ...next, pendingChoices: [...next.pendingChoices, arrest] };

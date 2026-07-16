@@ -208,9 +208,11 @@ describe('bounds, determinism & the freeze', () => {
     expect(impliedUp).toBeLessThanOrEqual(mod.max + 1e-9);
   });
 
-  it('the market-events tick step is ACTIVE-only and a dt<=0 no-op', () => {
+  it('the market-events tick step never runs offline and is a dt<=0 no-op', () => {
     const step = TICK_STEPS.find((s) => s.id === 'market-events');
-    expect(step?.modes).toEqual(['active']);
+    // Runs while incarcerated too (the B4 sentence — the world moves inside),
+    // but never on the frozen offline path (GDD §6).
+    expect(step?.modes).toEqual(['active', 'incarcerated']);
     const state = createInitialState('freeze');
     expect(marketEventStep(state, 0)).toBe(state);
   });

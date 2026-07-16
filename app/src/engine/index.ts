@@ -163,9 +163,10 @@ export type {
   MarkedEnforcement,
 } from './state';
 
-// Injected-time clock + per-tick pipeline (Prompt 03).
-export { tick, TICK_STEPS } from './clock';
-export type { TickMode, TickStep } from './clock';
+// Injected-time clock + per-tick pipeline (Prompt 03). `serveSentence` is the
+// B4 arrest's no-bond exit: fast-forward the incarcerated pipeline, resume.
+export { tick, TICK_STEPS, serveSentence } from './clock';
+export type { TickMode, TickStep, ServeSentenceResult } from './clock';
 
 // Deal loop — Loop 1 (Prompt 04; one-price + finite stock, Prompt 32).
 export {

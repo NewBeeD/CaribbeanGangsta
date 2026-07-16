@@ -6,7 +6,8 @@
  * B5: the six-source model replaces it, every source individually testable and
  * itemized (shown = applied). B2: busts seize only the table. B3: marked debt
  * means telegraphed collector pressure on a visible clock. B4: a self-run
- * interdiction is an arrest — bond or the run ends.
+ * interdiction is an arrest — post bond or serve the sentence (the run resumes
+ * either way; design/13 open decision 2, settled).
  */
 
 import { describe, expect, it } from 'vitest';
@@ -40,6 +41,7 @@ import {
   recentUseOf,
   repay,
   resolveDeal,
+  serveSentence,
   ship,
   spawnCrew,
   travelStep,
@@ -439,17 +441,19 @@ describe('B3 — marked must mean something: telegraphed collector pressure on a
     expect(enforcementStep(paid.state, 1).enforcement).toBeUndefined();
   });
 
-  it('is ACTIVE-only — no collector moves while the player is away', () => {
+  it('never runs offline — no collector moves while the player is away', () => {
     const step = TICK_STEPS.find((s) => s.id === 'marked-enforcement');
-    expect(step?.modes).toEqual(['active']);
-    // The passive heat step is frozen offline too.
-    expect(TICK_STEPS.find((s) => s.id === 'heat-sources')?.modes).toEqual(['active']);
+    expect(step?.modes).not.toContain('offline');
+    // The passive heat step is frozen offline too. (Both DO run while
+    // incarcerated — the B4 sentence's costs-and-threats rule.)
+    expect(TICK_STEPS.find((s) => s.id === 'heat-sources')?.modes).not.toContain('offline');
+    expect(step?.modes).toContain('incarcerated');
   });
 });
 
 // --- B4 · self-run arrest -------------------------------------------------------------
 
-describe('B4 — a self-run interdiction is an arrest: bond or the run ends', () => {
+describe('B4 — a self-run interdiction is an arrest: post bond or serve the sentence', () => {
   /** Thread the RNG until a SOLO interdiction lands; returns the arrested state. */
   function arrested(seedKey: string): GameState {
     const { intent } = fixture(seedKey);
@@ -473,6 +477,7 @@ describe('B4 — a self-run interdiction is an arrest: bond or the run ends', ()
     const solo = quoteShipment(state, intent);
     expect(solo.soloRun).toBe(true);
     expect(solo.arrestBond).toBe(arrestBond(state));
+    expect(solo.arrestSentenceHours).toBe(state.config.transport.ARREST_SENTENCE_HOURS);
 
     const consigned = quoteShipment(
       { ...state, crew: [spawnCrew('deon')] },
@@ -481,7 +486,7 @@ describe('B4 — a self-run interdiction is an arrest: bond or the run ends', ()
     expect(consigned.soloRun).toBe(false);
   });
 
-  it('always presents bond-or-run-end; the bond price is shown and charged exactly', () => {
+  it('always presents bond-or-sentence; the bond price is shown and charged exactly', () => {
     const state = arrested('b4-bond');
     const choice = state.pendingChoices.at(-1)!;
     expect(choice.kind).toBe(ARREST_CHOICE_KIND);
@@ -513,8 +518,60 @@ describe('B4 — a self-run interdiction is an arrest: bond or the run ends', ()
     expect(r.state).toBe(broke);
   });
 
-  it("surrendering ends the run with the 'arrested' cause through endRun", () => {
+  it('serving the sentence fast-forwards the disclosed hours and the run RESUMES', () => {
     const state = arrested('b4-fall');
+    const choice = state.pendingChoices.at(-1)!;
+    const served = serveSentence(state, choice.id);
+    expect(served.ok).toBe(true);
+    expect(served.servedHours).toBe(state.config.transport.ARREST_SENTENCE_HOURS);
+    expect(served.state.clock.hours).toBeCloseTo(
+      state.clock.hours + served.servedHours,
+      6,
+    );
+    expect(served.state.runStatus).toBe('active'); // no run-end — you did the time
+    expect(served.state.pendingChoices.some((c) => c.kind === ARREST_CHOICE_KIND)).toBe(false);
+    // A release note lands in the feed, stamped at the release hour.
+    const release = served.state.pendingChoices.find((c) => c.kind === 'sentence-served');
+    expect(release).toBeDefined();
+    expect(release!.createdAtHours).toBe(served.state.clock.hours);
+  });
+
+  it('serving rejects without mutating when the choice is not a pending arrest', () => {
+    const { state } = fixture('b4-no-arrest');
+    const r = serveSentence(state, 'not-an-arrest');
+    expect(r.ok).toBe(false);
+    expect(r.rejected).toBe('no-arrest');
+    expect(r.servedHours).toBe(0);
+    expect(r.state).toBe(state);
+  });
+
+  it('inside, costs and threats run while income freezes (the tick-mode contract)', () => {
+    const modesOf = (id: string) => TICK_STEPS.find((s) => s.id === id)!.modes;
+    // Costs & threats keep the pressure on while the boss is inside.
+    for (const id of [
+      'debt-interest',
+      'marked-enforcement',
+      'corruption',
+      'raid-roll',
+      'crew',
+      'heat-sources',
+      'heat-decay',
+      'travel',
+    ]) {
+      expect(modesOf(id), id).toContain('incarcerated');
+    }
+    // Income earns nothing inside — nobody moves product while you're away.
+    for (const id of ['laundering-accrual', 'production-yield', 'wash-queue', 'street-sales']) {
+      expect(modesOf(id), id).not.toContain('incarcerated');
+    }
+    // And the frozen-offline guarantee is untouched: nothing punishing runs offline.
+    for (const step of TICK_STEPS) {
+      expect(step.modes, step.id).not.toContain('offline');
+    }
+  });
+
+  it("the legacy 'arrested' cause from pre-sentence saves still maps onto a prison end", () => {
+    const state = arrested('b4-legacy');
     const ended = endRun(state, 'arrested');
     expect(ended.cause).toBe('arrested');
     expect(ended.sceneKey).toBe('runend.arrested');
@@ -582,6 +639,7 @@ describe('v14 → v15 migration — drops the transaction-heat knobs, seizes not
           'ARREST_BOND_FRACTION',
           'ARREST_BOND_MIN',
           'ARREST_BOND_HEAT',
+          'ARREST_SENTENCE_HOURS',
         ]),
       },
     } as unknown as GameState & { recentUse?: unknown };
@@ -607,6 +665,7 @@ describe('v14 → v15 migration — drops the transaction-heat knobs, seizes not
     expect(s.config.heat.INVESTIGATION_HOURS).toBeGreaterThan(0);
     expect(s.config.lenders.MARKED_CASH_CUT).toBeGreaterThan(0);
     expect(s.config.transport.ARREST_BOND_MIN).toBeGreaterThan(0);
+    expect(s.config.transport.ARREST_SENTENCE_HOURS).toBeGreaterThan(0);
     expect(s.config.crew.LOYALTY_EVENT_BASE.leanedOn).toBeLessThan(0);
     expect(s.recentUse).toEqual({});
 

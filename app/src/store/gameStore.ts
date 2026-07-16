@@ -64,7 +64,11 @@ import {
   type TrainResult,
 } from '@/engine/crew';
 import type { CrewSkill } from '@/engine/config/crew';
-import { tick } from '@/engine/clock';
+import {
+  tick,
+  serveSentence as serveSentenceEngine,
+  type ServeSentenceResult,
+} from '@/engine/clock';
 import {
   settleOffline,
   buyFront as buyFrontEngine,
@@ -409,12 +413,15 @@ export interface GameStore {
   shipCargo(intent: ShipIntent): ShipResult | null;
   /**
    * Resolve a pending self-run ARREST interrupt (design/13 B4; Prompt 44) —
-   * the bond-or-run-end choice the launch quote disclosed. `'bond'` pays the
+   * the bond-or-sentence choice the launch quote disclosed. `'bond'` pays the
    * shown `arrestBond` from clean cash (+ the heat spike) and the run
-   * continues; `'surrender'` ends the run through `endCurrentRun('arrested')`
-   * — the ONE banking path — so the fall banks like any other end.
+   * continues; `'serve'` fast-forwards the disclosed sentence through the
+   * engine's incarcerated pipeline (`clock.serveSentence` — costs and threats
+   * run, income freezes) and the run RESUMES. Neither path ends the run; the
+   * bond is the only reprieve from the time (a payrolled judge never buries an
+   * arrest — the bond was already the reprieve).
    */
-  resolveArrest(choiceId: string, choice: 'bond' | 'surrender'): Promise<PostBondResult | RunEndResult | null>;
+  resolveArrest(choiceId: string, choice: 'bond' | 'serve'): Promise<PostBondResult | ServeSentenceResult | null>;
   /**
    * Arms trade (Prompt 35; design/12 Item 1) — each wraps the pure `arms.ts`
    * engine, commits only when the operation lands, and autosaves. The UI authors
@@ -954,15 +961,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
       return result;
     }
-    // Surrender: clear the interrupt, then end the run through the ONE banking
-    // path with the `arrested` cause (design/13 B4).
-    set({
-      state: {
-        ...state,
-        pendingChoices: state.pendingChoices.filter((c) => c.id !== choiceId),
-      },
-    });
-    return get().endCurrentRun('arrested');
+    // Serve: the engine fast-forwards the disclosed sentence and the run
+    // resumes (design/13 B4, sentence variant). The served week is one giant
+    // tick, so telemetry sees everything it did (raids, arrivals, arcs).
+    const result = serveSentenceEngine(state, choiceId);
+    if (result.ok) {
+      set({ state: result.state });
+      trackTick(state, result.state);
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
   },
 
   async endCurrentRun(cause) {

@@ -13,9 +13,17 @@
  * and queues return hooks — it never advances heat, debt, or the death spiral,
  * never seizes, never kills. The active `TICK_STEPS` are all `'active'`-only for
  * anything that could punish absence; nothing runs on the frozen offline path.
+ *
+ * Incarcerated (design/13 B4, the served-sentence arrest outcome): `serveSentence`
+ * fast-forwards the sim through the disclosed sentence at the moment of the
+ * explicit choice — never wall-clock time, so the offline-freeze guarantee is
+ * untouched. The mode rule is one sentence: everything that COSTS or THREATENS
+ * keeps running (retainers, interest, raids, arcs, the world's markets);
+ * everything that EARNS freezes (fronts, production, wash mules, street teams) —
+ * nobody moves product while the boss is inside.
  */
 
-import type { GameState } from './state';
+import { ARREST_CHOICE_KIND, type GameState, type PendingChoice } from './state';
 import { restoreRng } from './rng';
 import { driftPrices, restockMarkets } from './deals';
 import { armsMarketStep } from './arms';
@@ -63,7 +71,7 @@ function periodHoursCrossed(oldHours: number, dt: number, period: number): numbe
   return crossings > 0 ? crossings * period : 0;
 }
 
-export type TickMode = 'active' | 'offline';
+export type TickMode = 'active' | 'offline' | 'incarcerated';
 
 export interface TickStep {
   readonly id: string;
@@ -93,7 +101,7 @@ export const TICK_STEPS: readonly TickStep[] = [
   // 3-hour boundary leaves prices and the RNG stream untouched.
   {
     id: 'price-drift',
-    modes: ['active'],
+    modes: ['active', 'incarcerated'],
     run: (s, dt) => {
       const hours = periodHoursCrossed(s.clock.hours - dt, dt, PRICE_INTEREST_PERIOD_HOURS);
       return hours > 0 ? driftPrices(s, restoreRng(s.rngState), hours) : s;
@@ -103,65 +111,71 @@ export const TICK_STEPS: readonly TickStep[] = [
   // Active-only: the street never re-ups while the world is frozen offline
   // (GDD §6). Deterministic — no randomness, so it sits after the drift walk
   // without touching the RNG stream.
-  { id: 'market-restock', modes: ['active'], run: (s, dt) => restockMarkets(s, dt) },
+  { id: 'market-restock', modes: ['active', 'incarcerated'], run: (s, dt) => restockMarkets(s, dt) },
   // Arms markets drift + restock (design/12 Item 1; Prompt 35). Active-only: arms
   // are frozen while away (GDD §6). Draws from an INDEPENDENT run-seeded stream
   // (like chaos / market events), so it never perturbs the main deal/raid RNG.
-  { id: 'arms-markets', modes: ['active'], run: (s, dt) => armsMarketStep(s, dt) },
+  { id: 'arms-markets', modes: ['active', 'incarcerated'], run: (s, dt) => armsMarketStep(s, dt) },
   // The six-source model's passive heat terms — storage concentration + empire
   // size — plus the repeated-pattern counter decay (design/13 B5; Prompt 44).
   // Active-only: a fat stash doesn't hum while away, and a pattern doesn't cool
   // either (GDD §6). Deterministic — never touches the RNG stream. Runs BEFORE
   // decay so a tick's accrual and cool-down settle in a fixed order.
-  { id: 'heat-sources', modes: ['active'], run: (s, dt) => heatSourcesStep(s, dt) },
+  { id: 'heat-sources', modes: ['active', 'incarcerated'], run: (s, dt) => heatSourcesStep(s, dt) },
   // Heat decays over online time (design/01 §4). Prompt 05. Active-only: offline
   // is frozen, so heat neither rises nor falls while away.
-  { id: 'heat-decay', modes: ['active'], run: (s, dt) => decayHeat(s, dt) },
+  { id: 'heat-decay', modes: ['active', 'incarcerated'], run: (s, dt) => decayHeat(s, dt) },
   // Telegraph an LE-tier crossing after decay/accrual shift heat (design/07 §5).
   // Prompt 05. Active-only, and fires each crossing exactly once.
-  { id: 'heat-escalation', modes: ['active'], run: (s) => applyHeatEscalation(s) },
+  { id: 'heat-escalation', modes: ['active', 'incarcerated'], run: (s) => applyHeatEscalation(s) },
   // Roll for a raid on a single stash and resolve the seizure (design/01 §4;
   // design/09 A). Prompt 05 (`rollRaid`) decides whether/where; Prompt 06
   // (`raidStep` → `resolveRaid`) applies the seizure and queues the scene.
   // Active-only: offline is safe (GDD §6) — no raid fires while the player is away.
-  { id: 'raid-roll', modes: ['active'], run: (s, dt) => raidStep(s, dt) },
+  // (Also runs while incarcerated — the empire sits exposed with the boss inside;
+  // that raid window is the sentence's teeth, disclosed on the arrest card.)
+  { id: 'raid-roll', modes: ['active', 'incarcerated'], run: (s, dt) => raidStep(s, dt) },
   // Shipments in flight resolve their arrivals/interdictions (design/11 §3;
   // Prompt 30). ACTIVE-only: in-flight cargo is frozen while the player is
   // away — never delivered, never seized offline (GDD §6). The roll compares
   // one RNG draw against the odds snapshotted at launch (fairness law).
-  { id: 'travel', modes: ['active'], run: (s, dt) => travelStep(s, dt) },
+  { id: 'travel', modes: ['active', 'incarcerated'], run: (s, dt) => travelStep(s, dt) },
   // Laundering fronts accrue clean cash + apply their passive heat footprint
   // (design/01 §3). Prompt 07. Active-only: the offline return payoff is settled
-  // separately by `laundering.settleOffline` on its own piecewise curve.
+  // separately by `laundering.settleOffline` on its own piecewise curve. Frozen
+  // while incarcerated too — income earns nothing inside (the B4 sentence rule).
   { id: 'laundering-accrual', modes: ['active'], run: (s, dt) => accrue(s, dt) },
   // Grow-ops & drug factories deposit product units into the home stash + apply
   // their passive heat footprint (Ideas2 item 3; Prompt 39). Active-only: the
   // offline path deposits nothing (frozen — GDD §6), so absence forgoes yield but
   // never seizes it. Runs AFTER laundering-accrual (both are idle-yield systems)
   // and is bounded by the same effectiveCapacity rule as every other producer.
-  // Deterministic — no randomness — so it never touches the RNG stream.
+  // Deterministic — no randomness — so it never touches the RNG stream. Frozen
+  // while incarcerated (B4): nobody runs the ops with the boss inside.
   { id: 'production-yield', modes: ['active'], run: (s, dt, mode) => productionStep(s, dt, mode) },
   // Money-mule wash queue: deposit committed dirty cash in sub-$10k batches over
   // time, landing clean at 1−cut (the batched dirty→clean converter). Active-only:
   // a batch never clears while the player is away (GDD §6) — absence neither
   // launders nor loses. Deterministic (no randomness), so it sits beside the
-  // accrual step without touching the RNG stream.
+  // accrual step without touching the RNG stream. Frozen while incarcerated (B4):
+  // the mules sit on the cash until you're out — delayed, never lost.
   { id: 'wash-queue', modes: ['active'], run: (s, dt, mode) => washStep(s, dt, mode) },
   // Street teams drip cooked crack back as dirty cash + a little corner heat
   // (design/12 Item 5d; Prompt 34). Active-only: the crew's hustle freezes while
   // the player is away, so absence never earns or heats (GDD §6). Deterministic —
   // no randomness — so it sits beside laundering without touching the RNG stream.
+  // Frozen while incarcerated too (B4) — the corners go quiet without the boss.
   { id: 'street-sales', modes: ['active'], run: (s, dt, mode) => streetStep(s, dt, mode) },
   // Crew: advance betrayal arcs one telegraphed stage, then apply any flipped-wire
   // heat (design/02 §4). Prompt 08. Active-only: offline never advances an arc or a
   // wire's heat (GDD §6). Deterministic — the arc uses no randomness.
-  { id: 'crew', modes: ['active'], run: (s, dt) => crewStep(s, dt) },
+  { id: 'crew', modes: ['active', 'incarcerated'], run: (s, dt) => crewStep(s, dt) },
   // Corruption: settle weekly retainers on the weekly boundary (from clean cash),
   // let officials ask for raises, advance flip arcs one telegraphed stage, then
   // apply flipped-official wire heat (design/09 B.2). Prompt 09. Active-only:
   // offline never charges a retainer or advances a flip, so absence is safe
   // (GDD §6). Deterministic — the flip arc uses no randomness.
-  { id: 'corruption', modes: ['active'], run: (s, dt) => corruptionStep(s, dt) },
+  { id: 'corruption', modes: ['active', 'incarcerated'], run: (s, dt) => corruptionStep(s, dt) },
   // Debt interest + default ladder (design/10). Prompt 10. Active-only AND only
   // when debt.active: accrues interest per in-game day played, then advances the
   // telegraphed default ladder one rung past the soft due date. Offline never runs
@@ -171,7 +185,7 @@ export const TICK_STEPS: readonly TickStep[] = [
   // is unchanged; it just lands in discrete steps under the live clock.
   {
     id: 'debt-interest',
-    modes: ['active'],
+    modes: ['active', 'incarcerated'],
     run: (s, dt) => {
       const hours = periodHoursCrossed(s.clock.hours - dt, dt, PRICE_INTEREST_PERIOD_HOURS);
       return hours > 0 ? debtStep(s, hours) : s;
@@ -182,28 +196,28 @@ export const TICK_STEPS: readonly TickStep[] = [
   // clock — warning first, always. Active-only AND right after the debt ladder
   // that sets the mark: no collector moves while the player is away (the Prompt
   // 21 tested guardrail). Deterministic — no RNG.
-  { id: 'marked-enforcement', modes: ['active'], run: (s, dt) => enforcementStep(s, dt) },
+  { id: 'marked-enforcement', modes: ['active', 'incarcerated'], run: (s, dt) => enforcementStep(s, dt) },
   // Procedural world events — the variable-reward core (design/05 §2; design/01
   // §4.7). Prompt 12. Active-only: offline is frozen/safe, so absence never
   // triggers chaos (GDD §6). Draws from an INDEPENDENT run-seeded stream, so it
   // never perturbs the main deal/raid RNG. Runs after the economic systems so a
   // shock lands on this tick's settled prices/heat.
-  { id: 'chaos-roll', modes: ['active'], run: (s, dt) => chaosStep(s, dt) },
+  { id: 'chaos-roll', modes: ['active', 'incarcerated'], run: (s, dt) => chaosStep(s, dt) },
   // World price events & the rumor ticker (design/12 Item 6; Prompt 33). ACTIVE-
   // only: the world is frozen offline, so no rumor posts, lands, or decays while
   // away (GDD §6). Draws from an INDEPENDENT run-seeded stream (like chaos), so
   // it never perturbs the main deal/raid RNG. Runs beside chaos so all the
   // world-event systems settle together before beats read the board.
-  { id: 'market-events', modes: ['active'], run: (s, dt) => marketEventStep(s, dt) },
+  { id: 'market-events', modes: ['active', 'incarcerated'], run: (s, dt) => marketEventStep(s, dt) },
   // Narrative-beat checks — state → beats, not a script (design/05 §0). Prompt 12
   // (Prompt 13 renders them). Active-only (offline never fires a beat, GDD §6),
   // and AFTER chaos so beats can key off the flags a fired event just stamped.
-  { id: 'beat-check', modes: ['active'], run: (s) => beatStep(s) },
+  { id: 'beat-check', modes: ['active', 'incarcerated'], run: (s) => beatStep(s) },
   // Peak trackers: bank net-worth / clean-cash / empire-composite peaks after every
   // system above has settled (design/01 §7). Prompt 11. Active-only and LAST, so the
   // banked height reflects this tick's true max. Offline peak banking is handled by
   // `laundering.settleOffline` (clean cash only; empire size can't grow while away).
-  { id: 'peak-tracking', modes: ['active'], run: (s) => bankPeaks(s) },
+  { id: 'peak-tracking', modes: ['active', 'incarcerated'], run: (s) => bankPeaks(s) },
 ];
 
 /** Recompute a clock advanced by `dtHours` (derives day/week from total hours). */
@@ -231,6 +245,57 @@ export function tick(state: GameState, dtHours: number): GameState {
   if (dtHours === 0) return state;
   const clock = advanceClock(state.clock.hours, dtHours);
   return runSteps({ ...state, clock }, dtHours, 'active');
+}
+
+// --- Serving the arrest sentence (design/13 B4, open decision 2 — settled) ------
+
+export interface ServeSentenceResult {
+  readonly state: GameState;
+  readonly ok: boolean;
+  /** In-game hours fast-forwarded (the disclosed sentence). 0 on rejection. */
+  readonly servedHours: number;
+  readonly rejected?: 'no-arrest';
+}
+
+/**
+ * Serve the sentence on a pending arrest (design/13 B4): the alternative to
+ * `travel.postBond` when the bond can't (or won't) be paid — the run RESUMES
+ * instead of ending. Clears the arrest interrupt, then fast-forwards
+ * `ARREST_SENTENCE_HOURS` of in-game time through the `'incarcerated'` pipeline
+ * in one-hour steps (the live clock's event cadence: raids, arcs, and weekly
+ * boundaries land as they would in lived time). Costs and threats run; income
+ * freezes; heat decays — you did the time. Everything settles at the moment of
+ * this explicit choice, so the offline-freeze guarantee is untouched, and no
+ * step in the pipeline can end the run (GDD §8 — absence never kills). Queues a
+ * release note for the Money feed and rejects without mutating when the choice
+ * isn't a pending arrest.
+ */
+export function serveSentence(state: GameState, choiceId: string): ServeSentenceResult {
+  const choice = state.pendingChoices.find((c) => c.id === choiceId);
+  if (!choice || choice.kind !== ARREST_CHOICE_KIND) {
+    return { state, ok: false, servedHours: 0, rejected: 'no-arrest' };
+  }
+  const sentence = state.config.transport.ARREST_SENTENCE_HOURS;
+  let next: GameState = {
+    ...state,
+    pendingChoices: state.pendingChoices.filter((c) => c.id !== choiceId),
+  };
+  for (let remaining = sentence; remaining > 0; remaining -= 1) {
+    const dt = Math.min(1, remaining);
+    next = runSteps({ ...next, clock: advanceClock(next.clock.hours, dt) }, dt, 'incarcerated');
+  }
+  const days = Math.round(sentence / HOURS_PER_DAY);
+  const release: PendingChoice = {
+    id: `sentence-served-${choiceId}`,
+    kind: 'sentence-served',
+    summary: `You did your ${days} days. The street kept moving while nobody earned — settle up and get back to it.`,
+    createdAtHours: next.clock.hours,
+  };
+  return {
+    state: { ...next, pendingChoices: [...next.pendingChoices, release] },
+    ok: true,
+    servedHours: sentence,
+  };
 }
 
 // Offline settlement (return-from-away payoff) lives in `laundering.ts` —

@@ -144,7 +144,8 @@ export function AppShell() {
   const scene = nextCardScene(state);
 
   // A self-run arrest presents as a consequential interrupt in the death-spiral
-  // style (design/13 B4): post the disclosed bond, or the run ends `arrested`.
+  // style (design/13 B4): post the disclosed bond, or serve the disclosed
+  // sentence — either way the run continues.
   const arrest = state.pendingChoices.find((c) => c.kind === ARREST_CHOICE_KIND) ?? null;
 
   const navItems: BottomNavItem[] = SCREEN_NODES.filter((n) => n.inNav).map(
@@ -233,8 +234,8 @@ export function AppShell() {
           state={state}
           summary={arrest.summary}
           onBond={() => void useGameStore.getState().resolveArrest(arrest.id, 'bond')}
-          onSurrender={() =>
-            void useGameStore.getState().resolveArrest(arrest.id, 'surrender')
+          onServe={() =>
+            void useGameStore.getState().resolveArrest(arrest.id, 'serve')
           }
         />
       ) : null}
@@ -256,24 +257,27 @@ export function AppShell() {
 
 /**
  * The self-run arrest interrupt (design/13 B4; Prompt 44) — the telegraphed,
- * consensual bond-or-run-end choice. The bond price is SHOWN before choosing
+ * consensual bond-or-sentence choice. Both prices are SHOWN before choosing
  * (the launch quote already disclosed the risk: "You're driving — if this is
- * stopped, you're in the cuffs"). Unaffordable bond = the run ends; that's the
- * teeth the player signed up for by helming the run. Never fires consigned.
+ * stopped, you're in the cuffs"). Unaffordable bond = you're doing the time;
+ * that's the teeth the player signed up for by helming the run. Serving
+ * fast-forwards the disclosed sentence (costs and threats run, income freezes)
+ * and the run resumes. Never fires consigned.
  */
 function ArrestModal({
   state,
   summary,
   onBond,
-  onSurrender,
+  onServe,
 }: {
   readonly state: GameState;
   readonly summary: string;
   readonly onBond: () => void;
-  readonly onSurrender: () => void;
+  readonly onServe: () => void;
 }) {
   const bond = arrestBond(state);
   const canAfford = state.cleanCash >= bond;
+  const sentenceDays = Math.round(state.config.transport.ARREST_SENTENCE_HOURS / 24);
   return (
     <div
       className="cg-modal__scrim"
@@ -298,7 +302,7 @@ function ArrestModal({
         </p>
         <p className="cg-label" style={{ margin: '10px 0' }}>
           Bond is ${Math.round(bond).toLocaleString('en-US')}, clean cash only
-          {canAfford ? '.' : " — and you can't cover it. The run ends here."}
+          {canAfford ? '.' : " — and you can't cover it. You're doing the time."}
         </p>
         <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
           <Button
@@ -311,9 +315,9 @@ function ArrestModal({
             Post bond
             <small>${Math.round(bond).toLocaleString('en-US')} clean · heat spikes</small>
           </Button>
-          <Button variant="ghost" fullWidth onClick={onSurrender} data-testid="arrest-surrender">
-            Take the fall
-            <small>the run ends — the score banks</small>
+          <Button variant="ghost" fullWidth onClick={onServe} data-testid="arrest-serve">
+            Serve the sentence
+            <small>{sentenceDays} days inside — costs run, income freezes</small>
           </Button>
         </div>
       </div>

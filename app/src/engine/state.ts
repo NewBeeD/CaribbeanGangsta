@@ -746,14 +746,16 @@ export function empireSize(state: GameState): number {
 /**
  * The `kind` of the self-run arrest interrupt (design/13 B4; Prompt 44), queued
  * by `travel.ts` when a shipment YOU helmed is interdicted. It presents as a
- * bond-or-run-end choice in the death-spiral style — consequential by nature.
+ * bond-or-sentence choice in the death-spiral style — consequential by nature:
+ * post the disclosed bond (`travel.postBond`) or serve the disclosed sentence
+ * (`clock.serveSentence`); either way the run continues.
  */
 export const ARREST_CHOICE_KIND = 'arrest';
 
 /**
  * Whether dismissing this pending choice is CONSEQUENTIAL — it carries a story
  * card with real branches (`beatId`/`cardId`), or it is the arrest interrupt
- * (bond or run-end — design/13 B4), so clearing it would silently pick one.
+ * (bond or sentence — design/13 B4), so clearing it would silently pick one.
  * These present as interrupt scenes (Prompt 22), are excluded from the Money
  * feed, and survive `dismissAllPendingChoices` (design/13 A5 guardrail: Clear all
  * never silently picks a consequential branch).

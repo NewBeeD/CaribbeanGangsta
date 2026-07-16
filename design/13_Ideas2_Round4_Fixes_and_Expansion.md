@@ -453,9 +453,18 @@ coupling. Cocaine dominance is a spread/eventing tune, not a missing system.
    disclosed surcharge (soft, money-mediated). A hard "cannot launch without an
    official" lock violates open access — implement only with an explicit
    sign-off recorded like the territory override.
-2. **Prison sentence vs. run-end on arrest (B4).** Shipped as bond-or-run-ends.
-   A third option — a served *sentence* (frozen calendar time, empire exposed) —
-   is juicier but touches the offline-freeze guarantee; parked until wanted.
+2. **Prison sentence vs. run-end on arrest (B4).** ~~Shipped as
+   bond-or-run-ends.~~ **DECIDED (user, 2026-07-15): serve the sentence and
+   resume, and the bond stays the ONLY lifeline (a payrolled judge never buries
+   an arrest — the bond was already the reprieve).** Implemented as
+   `clock.serveSentence`: choosing to serve fast-forwards
+   `transport.ARREST_SENTENCE_HOURS` (one in-game week) through a new
+   `'incarcerated'` tick mode at the moment of the explicit choice — never
+   wall-clock time, so the offline-freeze guarantee is untouched. Inside, costs
+   and threats run (retainers, debt interest, raids, betrayal arcs, the world's
+   markets) while income freezes (fronts, production, wash mules, street
+   teams); heat decays — you did the time. The `arrested` run-end cause is now
+   legacy (kept so old recaps/leaderboard lines render).
 3. **Roster ceiling (D).** ~14 keeps every member a written character. A
    procedurally-generated unlimited pool would break the relatedness pillar —
    recommend against; flag if the user wants numbers over names.

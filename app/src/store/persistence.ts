@@ -432,18 +432,23 @@ function normalizeState(state: GameState): GameState {
   // vulnerability window, consolidation hold, crew gate). A save written before it
   // lacks the group, which the territory engine reads — patch it in from the
   // default so nothing reads `undefined` (an in-place v12 extension, no schema bump).
+  // The B4 sentence rework added `transport.ARREST_SENTENCE_HOURS`, which
+  // `serveSentence` reads — a v15 save written before it gets the default
+  // patched in the same way (an in-place v15 extension, no schema bump).
   const legacyConfig = s.config as GameConfig & {
     arms?: unknown;
     territory?: unknown;
     production?: unknown;
     heat?: { PAYROLLED_COP_DECAY_MULTIPLIER?: number };
+    transport?: { ARREST_SENTENCE_HOURS?: number };
   };
   const needsArms = legacyConfig.arms === undefined;
   const needsTerritory = legacyConfig.territory === undefined;
   const needsProduction = legacyConfig.production === undefined;
   const needsCopDecay = legacyConfig.heat?.PAYROLLED_COP_DECAY_MULTIPLIER === undefined;
+  const needsSentence = legacyConfig.transport?.ARREST_SENTENCE_HOURS === undefined;
   const config: GameConfig =
-    needsArms || needsTerritory || needsProduction || needsCopDecay
+    needsArms || needsTerritory || needsProduction || needsCopDecay || needsSentence
       ? {
           ...s.config,
           ...(needsArms ? { arms: DEFAULT_GAME_CONFIG.arms } : {}),
@@ -455,6 +460,15 @@ function normalizeState(state: GameState): GameState {
                   ...s.config.heat,
                   PAYROLLED_COP_DECAY_MULTIPLIER:
                     DEFAULT_GAME_CONFIG.heat.PAYROLLED_COP_DECAY_MULTIPLIER,
+                },
+              }
+            : {}),
+          ...(needsSentence
+            ? {
+                transport: {
+                  ...s.config.transport,
+                  ARREST_SENTENCE_HOURS:
+                    DEFAULT_GAME_CONFIG.transport.ARREST_SENTENCE_HOURS,
                 },
               }
             : {}),

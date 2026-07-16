@@ -146,12 +146,23 @@ export const CONSIGNED_BUST_HEAT_FACTOR = 0.25;
 // A shipment with NO courier consigned is a run YOU helmed — the launch quote
 // says so ("You're driving — if this is stopped, you're in the cuffs"). If it's
 // interdicted, you're arrested: a telegraphed, consensual interrupt — post bond
-// (a clean-cash hit scaled to net worth, plus a heat spike) or the run ends with
-// the `arrested` cause. Consigned runs never fire this (the courier takes the
-// fall — `CONSIGNED_BUST_HEAT_FACTOR` above).
+// (a clean-cash hit scaled to net worth, plus a heat spike) or serve the
+// sentence (`clock.serveSentence`: the sim fast-forwards `ARREST_SENTENCE_HOURS`
+// in the incarcerated tick mode — costs and threats keep running, income
+// freezes — then the run resumes). The bond is the ONLY reprieve: a payrolled
+// judge never buries an arrest (design/13 open decision 2, settled). Consigned
+// runs never fire this (the courier takes the fall —
+// `CONSIGNED_BUST_HEAT_FACTOR` above).
 
 /** Bond = max(`net worth × this`, `ARREST_BOND_MIN`), payable from CLEAN cash. */
 export const ARREST_BOND_FRACTION = 0.15;
 export const ARREST_BOND_MIN = 25_000;
 /** Heat spike on posting bond — you walked, but they printed your name. */
 export const ARREST_BOND_HEAT = 15;
+/**
+ * The sentence when no bond is posted: one in-game week, served as an instant
+ * fast-forward at the moment of the choice (never wall-clock time — the
+ * offline-freeze guarantee holds). A week guarantees at least one corruption
+ * retainer cycle bills while nobody's earning.
+ */
+export const ARREST_SENTENCE_HOURS = 168;

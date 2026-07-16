@@ -22,6 +22,7 @@
  */
 
 import { washRatePerHour, WASH_CUT } from './config/fronts';
+import type { TickMode } from './clock';
 import type { GameState, PendingChoice, Stash } from './state';
 
 // --- Rates (shown = charged) -------------------------------------------------
@@ -154,7 +155,7 @@ export function cancelWash(state: GameState): GameState {
 export function washStep(
   state: GameState,
   dtHours: number,
-  mode: 'active' | 'offline' = 'active',
+  mode: TickMode = 'active',
 ): GameState {
   if (mode !== 'active' || dtHours <= 0 || state.wash.queuedDirty <= 0) return state;
   const deposited = Math.min(state.wash.queuedDirty, washRate(state) * dtHours);

@@ -273,6 +273,13 @@ export function evaluatePrestige(stats: RunStats): readonly string[] {
 
 // --- Ending a run (design/01 §7; design/07 §6 run-end) -----------------------
 
+/**
+ * `'arrested'` is LEGACY: since the served-sentence rework (design/13 open
+ * decision 2, settled), an unbonded arrest fast-forwards through
+ * `clock.serveSentence` and the run resumes — nothing dispatches this cause
+ * anymore. It stays in the union so recaps/leaderboard lines banked by older
+ * builds still render.
+ */
 export type RunEndCause = 'killed' | 'prison' | 'arrested' | 'retired' | 'abandoned';
 
 /** The run-recap tally shown at the end — a fall, then the numbers that dare the next run. */
@@ -304,8 +311,8 @@ export interface RunEndResult {
 
 /** Map an end cause onto the persisted `RunStatus`. Abandoning banks like a
  * retirement — the player chose to reset; that choice costs nothing (design/12
- * Item 2; the retire guarantee, design/01 §7). An arrest (design/13 B4 — a
- * self-run interdiction with no bond posted) lands you inside like `prison`. */
+ * Item 2; the retire guarantee, design/01 §7). The legacy `arrested` cause
+ * (pre-sentence saves) lands inside like `prison`. */
 function statusForCause(cause: RunEndCause): RunStatus {
   return cause === 'killed'
     ? 'dead'
