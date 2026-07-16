@@ -14,9 +14,11 @@ import {
 import { LocalSaveStore, useGameStore, type SaveStore } from '@/store';
 import { StorageScreen } from '@/ui/screens/StorageScreen';
 import {
+  buildCountries,
   buildOptions,
   diversificationCue,
   stashRows,
+  stashRowsByCountry,
 } from '@/ui/screens/storageScreen.model';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -152,6 +154,128 @@ describe('StorageScreen — managing where product lives (Prompt 20)', () => {
     const seizure = view.container.querySelector('[data-testid="stash-seizure"]');
     expect(seizure).not.toBeNull();
     expect(seizure!.textContent).toContain('%');
+    view.unmount();
+  });
+});
+
+describe('build a stash anywhere you hold ground (not just home)', () => {
+  /** Home run + a floor foothold manually held in a foreign country (`miami`). */
+  function withForeignFloor(seed: string, clean = 100_000): GameState {
+    const base = run(seed, clean);
+    const home = base.stashes[0]!;
+    return {
+      ...base,
+      stashes: [
+        ...base.stashes,
+        {
+          ...home,
+          id: 'stash-floor-miami',
+          name: 'Miami floor',
+          countryId: 'miami',
+          type: 'floor',
+          dirtyCash: 0,
+        },
+      ],
+    };
+  }
+
+  it('buildCountries lists every held country, home first', () => {
+    const state = withForeignFloor('build-list');
+    const countries = buildCountries(state);
+    expect(countries[0]!.isHome).toBe(true);
+    expect(countries.map((c) => c.countryId)).toContain('miami');
+    // Home already holds its starting floor, so a floor is no longer buildable there.
+    expect(countries.find((c) => c.isHome)!.buildableTypes).toBeLessThan(5);
+  });
+
+  it('buildOptions targets the chosen country’s own slate', () => {
+    // Give home a safehouse; the foreign floor-only country should still offer one.
+    const withVault = addStash(run('build-target', 100_000), 'safehouse');
+    const home = withVault.state.stashes[0]!;
+    const state: GameState = {
+      ...withVault.state,
+      stashes: [
+        ...withVault.state.stashes,
+        { ...home, id: 'stash-floor-miami', name: 'Miami floor', countryId: 'miami', type: 'floor', dirtyCash: 0 },
+      ],
+    };
+    const homeId = state.world.startingCountry.id;
+    expect(buildOptions(state, homeId).map((o) => o.type)).not.toContain('safehouse');
+    expect(buildOptions(state, 'miami').map((o) => o.type)).toContain('safehouse');
+  });
+
+  it('buildStash plants a safehouse in a held non-home country (reinforce — no gate)', () => {
+    useGameStore.setState({ state: withForeignFloor('build-foreign') });
+    const result = useGameStore.getState().buildStash({ stashType: 'safehouse', countryId: 'miami' });
+    expect(result?.stash).not.toBeNull();
+    const stashes = useGameStore.getState().state!.stashes;
+    expect(stashes.some((s) => s.countryId === 'miami' && s.type === 'safehouse')).toBe(true);
+  });
+
+  it('every stash row carries its country name and home flag', () => {
+    const state = withForeignFloor('rows-country');
+    const homeId = state.world.startingCountry.id;
+    for (const r of stashRows(state)) {
+      expect(r.countryName.length).toBeGreaterThan(0);
+      expect(r.isHome).toBe(r.countryId === homeId);
+    }
+    expect(stashRows(state).some((r) => r.countryId === 'miami')).toBe(true);
+  });
+
+  it('stashRowsByCountry groups stashes under their country, home first', () => {
+    const state = withForeignFloor('groups');
+    const groups = stashRowsByCountry(state);
+    expect(groups[0]!.isHome).toBe(true); // home leads
+    expect(groups.map((g) => g.countryId)).toContain('miami');
+    // Every row in a group actually belongs to that group's country.
+    for (const g of groups) {
+      expect(g.rows.every((r) => r.countryId === g.countryId)).toBe(true);
+    }
+    // No stash is dropped or duplicated across groups.
+    const grouped = groups.flatMap((g) => g.rows.map((r) => r.id)).sort();
+    expect(grouped).toEqual(state.stashes.map((s) => s.id).sort());
+  });
+
+  it('the screen labels each stash with its country', () => {
+    useGameStore.setState({ state: withForeignFloor('ui-country') });
+    const view = mount(<StorageScreen />);
+    const headings = [...view.container.querySelectorAll('[data-testid="country-heading"]')].map(
+      (h) => h.textContent,
+    );
+    // A home heading and the foreign country both show up as section headers.
+    expect(headings.some((t) => t?.includes('Home'))).toBe(true);
+    expect(headings.length).toBeGreaterThanOrEqual(2);
+    view.unmount();
+  });
+
+  it('the screen offers a country selector and builds into the picked country', () => {
+    useGameStore.setState({ state: withForeignFloor('build-ui') });
+    const view = mount(<StorageScreen />);
+
+    const select = view.container.querySelector<HTMLSelectElement>(
+      '[data-testid="build-country"]',
+    )!;
+    expect(select).not.toBeNull();
+    expect([...select.options].map((o) => o.value)).toContain('miami');
+
+    // Point the build card at the foreign country, then build — the new stash must
+    // land in the PICKED country, not home.
+    act(() => {
+      select.value = 'miami';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    const miamiBefore = useGameStore
+      .getState()
+      .state!.stashes.filter((s) => s.countryId === 'miami').length;
+    const buildBtn = [...view.container.querySelectorAll('[data-testid="build-stash"]')].find(
+      (b) => !(b as HTMLButtonElement).disabled,
+    )!;
+    view.click(buildBtn);
+
+    const miamiStashes = useGameStore
+      .getState()
+      .state!.stashes.filter((s) => s.countryId === 'miami');
+    expect(miamiStashes.length).toBe(miamiBefore + 1);
     view.unmount();
   });
 });

@@ -19,6 +19,7 @@ import { Button, Card, Panel, SceneText } from '@/ui/components';
 import { navigate } from '@/ui/shell/useHash';
 import type { ProductId } from '@/engine';
 import {
+  buildCountries,
   buildOptions,
   cashMoveRejectProse,
   diversificationCue,
@@ -27,7 +28,7 @@ import {
   moveRejectProse,
   moveTargets,
   raidScenes,
-  stashRows,
+  stashRowsByCountry,
   type StashRow,
 } from './storageScreen.model';
 
@@ -131,7 +132,12 @@ function StashCard({ row, others }: { readonly row: StashRow; readonly others: r
       heading={
         <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
           <span>
-            {row.name} · {row.typeName}
+            {/* Type, then the country it belongs to — never a bare generic name. */}
+            {row.name === row.typeName ? row.typeName : `${row.name} · ${row.typeName}`}
+            <small className="cg-label cg-tone-dim" style={{ marginLeft: 6 }}>
+              {row.countryName}
+              {row.isHome ? ' (home)' : ''}
+            </small>
           </span>
           <span
             className={row.seizurePct >= 0.5 ? 'cg-tone-red' : 'cg-label'}
@@ -145,10 +151,41 @@ function StashCard({ row, others }: { readonly row: StashRow; readonly others: r
       style={row.unguardedRisk ? { outline: '2px solid var(--cg-brass)' } : undefined}
     >
       <div className="cg-label">
-        {row.capacityUsed} / {row.capacityTotal} units · {accessLabel(row.travelDelayHours)} ·
-        heat {row.heatFootprintPct}%
+        {row.capacityUsed} / {row.capacityTotal} units · Lvl {row.level}/{row.maxLevel} ·{' '}
+        {accessLabel(row.travelDelayHours)} · heat {row.heatFootprintPct}%
       </div>
       <CapacityBar used={row.capacityUsed} total={row.capacityTotal} />
+
+      {/* Upgrade for space — the depth play now that stacking is gone (design/13 G). */}
+      {!row.isDecoy ? (
+        <div style={{ marginBottom: 10 }}>
+          {row.maxed ? (
+            <p className="cg-label cg-tone-dim" style={{ margin: 0 }}>
+              Fully upgraded — Lvl {row.level}, {row.capacityTotal} units.
+            </p>
+          ) : (
+            <Button
+              variant="secondary"
+              fullWidth
+              disabled={!row.upgradeAffordable}
+              onClick={() => {
+                const result = store.upgradeStash(row.id);
+                if (result && result.rejected === undefined) {
+                  setFeedback(`Upgraded to Lvl ${row.level + 1} — ${row.nextCapacityTotal} units of room.`);
+                }
+              }}
+              data-testid="upgrade-stash"
+            >
+              Upgrade · {row.capacityTotal} → {row.nextCapacityTotal} units
+              <small>
+                {row.upgradeAffordable
+                  ? money(row.upgradeCost ?? 0)
+                  : `${money(row.upgradeCost ?? 0)} · short`}
+              </small>
+            </Button>
+          )}
+        </div>
+      ) : null}
 
       {row.dirtyCash > 0 ? (
         <p className="cg-label" style={{ marginBottom: 8 }}>
@@ -229,7 +266,7 @@ function StashCard({ row, others }: { readonly row: StashRow; readonly others: r
                     (design/13 A4) — the outcome is predictable, never a surprise. */}
                 {others.map((o) => (
                   <option key={o.id} value={o.id}>
-                    → {o.name} · {Math.floor(o.capacityFree)} free
+                    → {o.typeName} ({o.countryName}) · {Math.floor(o.capacityFree)} free
                   </option>
                 ))}
               </select>
@@ -266,7 +303,7 @@ function StashCard({ row, others }: { readonly row: StashRow; readonly others: r
               >
                 {others.map((o) => (
                   <option key={o.id} value={o.id}>
-                    → {o.name}
+                    → {o.typeName} ({o.countryName})
                   </option>
                 ))}
               </select>
@@ -289,18 +326,27 @@ function StashCard({ row, others }: { readonly row: StashRow; readonly others: r
 
 export function StorageScreen() {
   const state = useGameState();
+  // Which held country the Build card targets (null → home). Hook stays above the
+  // guard so it's unconditional; `null` resolves to home once we have state.
+  const [buildCountry, setBuildCountry] = useState<string | null>(null);
 
   // The shell only routes here with a live run; guard so hooks stay unconditional.
   if (!state) return null;
 
-  const rows = stashRows(state);
-  const options = buildOptions(state);
+  const countryGroups = stashRowsByCountry(state);
   const cue = diversificationCue(state);
   const scenes = raidScenes(state);
   const homeCountry = homeCountryId(state);
 
+  // Build targets: every country you already hold. If the remembered pick has since
+  // emptied out (never mid-session today), fall back to home.
+  const countries = buildCountries(state);
+  const activeCountry =
+    countries.find((c) => c.countryId === buildCountry)?.countryId ?? homeCountry;
+  const options = buildOptions(state, activeCountry);
+
   const build = (type: StashRow['type']) =>
-    useGameStore.getState().buildStash({ stashType: type, countryId: homeCountry });
+    useGameStore.getState().buildStash({ stashType: type, countryId: activeCountry });
 
   return (
     <div>
@@ -341,14 +387,75 @@ export function StorageScreen() {
       </Card>
 
       <Card heading="Your stashes">
-        <div style={{ display: 'grid', gap: 8 }}>
-          {rows.map((row) => (
-            <StashCard key={row.id} row={row} others={moveTargets(state, row.id)} />
+        {/* Grouped by country so every stash reads as belonging to a place — no more
+            wall of generically named cards with no home. */}
+        <div style={{ display: 'grid', gap: 16 }}>
+          {countryGroups.map((group) => (
+            <section key={group.countryId} data-testid="country-group">
+              <header
+                style={{
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  marginBottom: 8,
+                  paddingBottom: 4,
+                  borderBottom: '1px solid var(--cg-ink-750)',
+                }}
+              >
+                <span className="cg-kicker" data-testid="country-heading">
+                  {group.countryName}
+                  {group.isHome ? ' · Home' : ''}
+                </span>
+                <span className="cg-label cg-tone-dim">
+                  {group.rows.length} stash{group.rows.length === 1 ? '' : 'es'} ·{' '}
+                  {group.capacityUsed}/{group.capacityTotal} units
+                </span>
+              </header>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {group.rows.map((row) => (
+                  <StashCard key={row.id} row={row} others={moveTargets(state, row.id)} />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       </Card>
 
       <Card heading="Build a stash">
+        {/* Pick which held country to build in — safehouses, containers and decoys
+            can be planted anywhere you already hold ground, not just home. Opening
+            NEW ground stays the Empire map's job. */}
+        {countries.length > 1 ? (
+          <div style={{ marginBottom: 10 }}>
+            <label className="cg-label" htmlFor="build-country" style={{ marginRight: 8 }}>
+              Build in:
+            </label>
+            <select
+              id="build-country"
+              className="cg-select"
+              aria-label="Country to build a stash in"
+              value={activeCountry}
+              data-testid="build-country"
+              onChange={(e) => setBuildCountry(e.target.value)}
+            >
+              {countries.map((c) => (
+                <option key={c.countryId} value={c.countryId}>
+                  {c.name}
+                  {c.isHome ? ' (home)' : ''} · {c.stashCount} spot
+                  {c.stashCount === 1 ? '' : 's'}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+        {options.length === 0 ? (
+          <p className="cg-label">
+            Every stash type is set up in{' '}
+            {countries.find((c) => c.countryId === activeCountry)?.name ?? 'this country'} —
+            upgrade the ones above for more space, or open new ground on the Empire map.
+          </p>
+        ) : null}
         <div style={{ display: 'grid', gap: 8 }}>
           {options.map((o) => (
             <Panel

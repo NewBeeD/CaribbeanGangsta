@@ -18,6 +18,7 @@ import {
   GUARD_CASH_THRESHOLD,
   PRODUCTS,
   PRODUCT_IDS,
+  STASH_MAX_LEVEL,
   STASH_TYPES,
   countryName,
   diversificationIndex,
@@ -25,7 +26,9 @@ import {
   effectiveCapacityRemaining,
   effectiveSeizurePct,
   getStashType,
+  nextUpgradeCost,
   stashCost,
+  stashLevel,
   stashUnits,
   type GameState,
   type ProductId,
@@ -63,6 +66,21 @@ export interface StashRow {
   readonly typeName: string;
   readonly isDecoy: boolean;
   readonly countryId: string;
+  /** Display name of the country this stash sits in (the "which country" cue). */
+  readonly countryName: string;
+  /** True when this stash is in the run's home country. */
+  readonly isHome: boolean;
+  /** Current upgrade level and the cap (design/13 G; Prompt 49). */
+  readonly level: number;
+  readonly maxLevel: number;
+  /** At `STASH_MAX_LEVEL` — no further upgrade (a migrated fold can read this true above the cap). */
+  readonly maxed: boolean;
+  /** Cost of the NEXT level, $ (`null` when maxed) — exactly what `upgradeStash` charges. */
+  readonly upgradeCost: number | null;
+  /** Effective capacity AFTER the next upgrade (the "current → next" readout). */
+  readonly nextCapacityTotal: number;
+  /** Clean cash covers the next upgrade (money is the only gate — open access). */
+  readonly upgradeAffordable: boolean;
   /** Product units held / total capacity, and the glanceable fill 0..1. */
   readonly capacityUsed: number;
   readonly capacityTotal: number;
@@ -89,6 +107,7 @@ export interface StashRow {
 }
 
 export function stashRows(state: GameState): readonly StashRow[] {
+  const homeId = homeCountryId(state);
   return state.stashes.map((stash) => {
     const cfg = getStashType(stash.type);
     // Effective (crew-scaled) capacity — the real holding limit (design/12 Item 4).
@@ -104,6 +123,14 @@ export function stashRows(state: GameState): readonly StashRow[] {
       (id) => stash.inventory[id] > 0,
     ).map((id) => ({ id, name: productName(id), qty: Math.floor(stash.inventory[id]) }));
 
+    // Upgrade readout — the "current → next capacity" at its live price (design/13 G).
+    const level = stashLevel(stash);
+    const upgradeCost = nextUpgradeCost(state, stash);
+    const maxed = upgradeCost === null;
+    const nextCapacityTotal = maxed
+      ? Math.floor(total)
+      : Math.floor(effectiveCapacity(state, { ...stash, level: level + 1 }));
+
     return {
       id: stash.id,
       name: stash.name,
@@ -111,6 +138,14 @@ export function stashRows(state: GameState): readonly StashRow[] {
       typeName: cfg.name,
       isDecoy: cfg.isDecoy,
       countryId: stash.countryId,
+      countryName: countryName(stash.countryId),
+      isHome: stash.countryId === homeId,
+      level,
+      maxLevel: STASH_MAX_LEVEL,
+      maxed,
+      upgradeCost,
+      nextCapacityTotal,
+      upgradeAffordable: upgradeCost !== null && state.cleanCash >= upgradeCost,
       // Shown as whole units (fill keeps the exact ratio for a smooth bar).
       capacityUsed: Math.floor(used),
       capacityTotal: Math.floor(total),
@@ -127,6 +162,49 @@ export function stashRows(state: GameState): readonly StashRow[] {
       heldProducts,
     };
   });
+}
+
+/** A country's stashes, grouped for a "which stash belongs to which country" readout. */
+export interface CountryStashGroup {
+  readonly countryId: string;
+  readonly countryName: string;
+  readonly isHome: boolean;
+  /** Product units held / total capacity across this country's stashes. */
+  readonly capacityUsed: number;
+  readonly capacityTotal: number;
+  readonly rows: readonly StashRow[];
+}
+
+/**
+ * Every stash grouped under its country, home first (design/09 — the survival read
+ * is per-place). Makes the "this stash is in THIS country" mapping explicit instead
+ * of leaving a wall of generically named cards. Countries keep roster order after home.
+ */
+export function stashRowsByCountry(state: GameState): readonly CountryStashGroup[] {
+  const homeId = homeCountryId(state);
+  const rows = stashRows(state);
+  const order: string[] = [];
+  const byCountry = new Map<string, StashRow[]>();
+  for (const row of rows) {
+    if (!byCountry.has(row.countryId)) {
+      byCountry.set(row.countryId, []);
+      order.push(row.countryId);
+    }
+    byCountry.get(row.countryId)!.push(row);
+  }
+  return order
+    .map((countryId) => {
+      const groupRows = byCountry.get(countryId)!;
+      return {
+        countryId,
+        countryName: countryName(countryId),
+        isHome: countryId === homeId,
+        capacityUsed: groupRows.reduce((sum, r) => sum + r.capacityUsed, 0),
+        capacityTotal: groupRows.reduce((sum, r) => sum + r.capacityTotal, 0),
+        rows: groupRows,
+      };
+    })
+    .sort((a, b) => (a.isHome ? -1 : b.isHome ? 1 : 0));
 }
 
 /** A stash type the player can build, priced along the upgrade curve (design/09 A.5). */
@@ -148,9 +226,26 @@ export interface BuildOption {
   readonly isDecoy: boolean;
 }
 
-/** The whole stash roster as build options — every type live from minute one (open access). */
-export function buildOptions(state: GameState): readonly BuildOption[] {
-  return STASH_TYPES.map((cfg) => {
+/**
+ * The stash types NOT yet built at `countryId` (default: home), as build options —
+ * each is a FIRST-of-its-kind foothold to open in that country (design/13 G; Prompt
+ * 49). A type already there is dropped from the list (the "add another stash here"
+ * affordance is gone — you UPGRADE the one you have via its stash card instead).
+ * Every remaining type is live from minute one (open access — the price is the only
+ * gate). Restrict the target to a HELD country (see `buildCountries`): building a new
+ * archetype where you already have a foothold is a reinforce, so `stashCost` (shown)
+ * equals `footholdCost` (paid) — the fairness law. `nOwned` counts this type across
+ * ALL countries, so opening the next one anywhere steps up the same shared curve.
+ */
+export function buildOptions(
+  state: GameState,
+  countryId?: string,
+): readonly BuildOption[] {
+  const target = countryId ?? homeCountryId(state);
+  const presentHere = new Set(
+    state.stashes.filter((s) => s.countryId === target).map((s) => s.type),
+  );
+  return STASH_TYPES.filter((cfg) => !presentHere.has(cfg.id)).map((cfg) => {
     const nOwned = state.stashes.filter((s) => s.type === cfg.id).length;
     const cost = stashCost(cfg.id, nOwned);
     return {
@@ -171,6 +266,44 @@ export function buildOptions(state: GameState): readonly BuildOption[] {
       isDecoy: cfg.isDecoy,
     };
   });
+}
+
+/** A country you hold territory in — a valid target to plant a new stash type. */
+export interface BuildCountryOption {
+  readonly countryId: string;
+  readonly name: string;
+  readonly isHome: boolean;
+  /** How many distinct stash spots you already hold here (for the "3 spots" cue). */
+  readonly stashCount: number;
+  /** Stash types NOT yet built here — 0 means the country's slate is full. */
+  readonly buildableTypes: number;
+}
+
+/**
+ * The countries you can build a new stash in — every country you already hold a
+ * foothold in (home + opened routes), home first. You plant new archetypes on ground
+ * you control; OPENING fresh ground stays the Empire Map's job (`addStash` as a
+ * foothold, with its reach price + exposure). Restricting builds to held countries is
+ * what keeps `buildOptions`' shown price equal to the paid `footholdCost` (reinforce).
+ */
+export function buildCountries(state: GameState): readonly BuildCountryOption[] {
+  const homeId = homeCountryId(state);
+  const heldIds = [...new Set(state.stashes.map((s) => s.countryId))];
+  return heldIds
+    .map((id) => {
+      const here = state.stashes.filter((s) => s.countryId === id);
+      const present = new Set(here.map((s) => s.type));
+      return {
+        countryId: id,
+        name: countryName(id),
+        isHome: id === homeId,
+        stashCount: here.length,
+        buildableTypes: STASH_TYPES.filter((cfg) => !present.has(cfg.id)).length,
+      };
+    })
+    .sort((a, b) =>
+      a.isHome ? -1 : b.isHome ? 1 : a.name.localeCompare(b.name),
+    );
 }
 
 /**

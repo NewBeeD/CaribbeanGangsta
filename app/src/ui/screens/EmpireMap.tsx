@@ -46,6 +46,8 @@ export function EmpireMap() {
 
   const build = (countryId: string) =>
     useGameStore.getState().buildStash({ stashType: EXPANSION_TYPE, countryId });
+  // Held districts REINFORCE by upgrading their lead stash for space (design/13 G).
+  const reinforce = (stashId: string) => useGameStore.getState().upgradeStash(stashId);
 
   return (
     <div>
@@ -73,13 +75,17 @@ export function EmpireMap() {
             const isOpen = d.status === 'unowned';
             const blocked = d.blockedByCrew;
             const affordable = cleanCash >= d.openCost;
-            const canAct = affordable && !blocked;
-            const actionLabel = isOpen ? 'Open route' : 'Reinforce';
-            const costNote = !affordable
-              ? `${money(d.openCost)} · short`
-              : blocked
-                ? `${money(d.openCost)} · needs a lieutenant`
-                : money(d.openCost);
+            const canAct = isOpen
+              ? affordable && !blocked
+              : affordable && !d.reinforceMaxed;
+            const actionLabel = isOpen ? 'Open route' : d.reinforceMaxed ? 'Maxed' : 'Reinforce';
+            const costNote = d.reinforceMaxed
+              ? 'fully upgraded'
+              : !affordable
+                ? `${money(d.openCost)} · short`
+                : blocked
+                  ? `${money(d.openCost)} · needs a lieutenant`
+                  : money(d.openCost);
 
             return (
               <Panel
@@ -165,7 +171,13 @@ export function EmpireMap() {
                   variant={highlighted ? 'primary' : 'secondary'}
                   fullWidth
                   disabled={!canAct}
-                  onClick={() => build(d.countryId)}
+                  onClick={() =>
+                    isOpen
+                      ? build(d.countryId)
+                      : d.reinforceStashId
+                        ? reinforce(d.reinforceStashId)
+                        : undefined
+                  }
                 >
                   {actionLabel}
                   <small>{costNote}</small>

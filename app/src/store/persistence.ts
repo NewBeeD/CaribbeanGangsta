@@ -48,6 +48,7 @@ import {
   type WorldWithLegacyBoards,
 } from '@/engine/world';
 import { tierForHeat, type LeTier } from '@/engine/heat';
+import { foldStashesOnePerSpot } from '@/engine/storage';
 import { STARTING_STASH_TYPE } from '@/engine/config/stashes';
 import { hydrateLegacyCrew } from '@/engine/crew';
 import { hydrateLegacyOfficial } from '@/engine/corruption';
@@ -463,6 +464,38 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
       corruption: { ...DEFAULT_GAME_CONFIG.corruption, ...legacy.config.corruption },
     };
     return { ...env, schemaVersion: 18, state: { ...legacy, config } };
+  },
+  // 18 → 19: the stash upgrade model — one stash per spot, LEVELS for space
+  // (design/13 G; Prompt 49). The saved `config.stashes` gains the level knobs
+  // (`STASH_MAX_LEVEL`, `STASH_CAPACITY_GROWTH`) from the default FIRST (any other
+  // saved stash tuning wins on top), then `foldStashesOnePerSpot` collapses every
+  // legacy stacked (country, type) spot into a single stash: inventories and dirty
+  // cash merged unit-for-unit and dollar-for-dollar, the survivor's level rounded UP
+  // so its capacity holds at least the folded stashes' combined capacity, and
+  // production/guard/collateral references re-pointed to the survivor id. The fold
+  // rounds EVERY quantity in the player's favor — units, dirty cash, and total
+  // capacity never decrease (property-tested). No cash created or destroyed, no RNG
+  // movement; a save already holding one stash per spot folds to itself (idempotent).
+  18: (env) => {
+    const legacy = env.state as GameState;
+    const config: GameConfig = {
+      ...legacy.config,
+      stashes: { ...DEFAULT_GAME_CONFIG.stashes, ...legacy.config.stashes },
+    };
+    const folded = foldStashesOnePerSpot({ ...legacy, config });
+    return { ...env, schemaVersion: 19, state: folded };
+  },
+  // 19 → 20: crew back-wages accrual (design/13 D). A weekly payroll settled short now
+  // carries its unpaid remainder as `crewBackWages` instead of forgiving it. A pre-v20
+  // run never tracked this, so it starts SQUARE — seed `crewBackWages: 0`. Nothing owned
+  // changes: no cash, holdings, config, or RNG movement (a pure additive liability field).
+  19: (env) => {
+    const legacy = env.state as GameState & { crewBackWages?: number };
+    return {
+      ...env,
+      schemaVersion: 20,
+      state: { ...legacy, crewBackWages: legacy.crewBackWages ?? 0 },
+    };
   },
 };
 

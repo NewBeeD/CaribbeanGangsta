@@ -30,6 +30,7 @@ import {
 } from '@/engine/arms';
 import {
   addStash,
+  upgradeStash as upgradeStashEngine,
   moveProduct as moveProductEngine,
   storeCash as storeCashEngine,
   setStashGuard as setStashGuardEngine,
@@ -266,6 +267,13 @@ export interface GameStore {
    * expanded empire.
    */
   buildStash(intent: BuildStashIntent): AddStashResult | null;
+  /**
+   * Upgrade a stash by one LEVEL for more space (design/13 G; Prompt 49) — the depth
+   * play now that stacking a second stash on a spot is gone. Paid from CLEAN cash;
+   * returns the `AddStashResult` (its `rejected` reason when maxed / short), or `null`
+   * when no run is loaded. Autosaves on success so the deeper hold survives a refresh.
+   */
+  upgradeStash(stashId: string): AddStashResult | null;
   /**
    * Storage actions (Prompt 20) — each wraps the pure `storage.ts` engine, commits
    * only when the operation lands (valid + funds/inventory sufficed), and autosaves
@@ -656,6 +664,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const result = addStash(state, intent.stashType, opts);
     // Only commit + autosave when a stash was actually built (funds sufficed).
     if (result.stash) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  upgradeStash(stashId) {
+    const { state } = get();
+    if (!state) return null;
+    const result = upgradeStashEngine(state, stashId);
+    // Only commit + autosave when the upgrade actually landed (level < max, funds ok).
+    if (result.stash && result.rejected === undefined) {
       set({ state: result.state });
       void get().persist(AUTOSAVE_SLOT).catch(() => {});
     }

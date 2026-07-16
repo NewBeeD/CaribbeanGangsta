@@ -34,10 +34,12 @@ import {
   footholdCost,
   hasAvailableLieutenant,
   isCountryConsolidated,
+  nextUpgradeCost,
   requiresLieutenant,
   stashUnits,
   stashVulnerability,
   type GameState,
+  type Stash,
   type StashType,
 } from '@/engine';
 
@@ -59,7 +61,7 @@ export interface DistrictView {
   /** 'home' = the seat you control; 'route' = a foothold opened elsewhere;
    *  'unowned' = a buyable route (shows its price, actionable when affordable). */
   readonly status: DistrictStatus;
-  /** How many stashes the player holds in this country. */
+  /** How many stashes (distinct spots) the player holds in this country. */
   readonly stashCount: number;
   /** Product units stored across this country's stashes. */
   readonly capacityUsed: number;
@@ -70,11 +72,19 @@ export interface DistrictView {
   /** Shown-to-player opening hooks (flavour for an unopened route). */
   readonly hooks: readonly string[];
   /**
-   * Cost, $, of the next foothold here — the reach-and-region OPEN price when
-   * unowned, the plain reinforce step when held. Exactly what `addStash` charges
-   * (fairness law: shown = paid), so each district prices its own step (Prompt 41).
+   * Cost, $, of this district's next STEP — the reach-and-region OPEN price when
+   * unowned (exactly what `addStash` charges), or the UPGRADE price of its lead
+   * stash when held (exactly what `upgradeStash` charges — design/13 G; Prompt 49).
+   * `0` when held but its lead stash is maxed (nothing to reinforce; `reinforceMaxed`).
    */
   readonly openCost: number;
+  /**
+   * The stash this district's "Reinforce" UPGRADES (its lead spot — the floor stash
+   * if present, else the first held), or `null` when unowned (design/13 G; Prompt 49).
+   */
+  readonly reinforceStashId: string | null;
+  /** Held but its lead stash is already at `STASH_MAX_LEVEL` — no further upgrade. */
+  readonly reinforceMaxed: boolean;
   /**
    * Held but not yet FULLY CONTROLLED — a freshly opened district still inside its
    * consolidation hold (Ideas2 item 5). Doesn't count toward empire reach yet.
@@ -115,6 +125,15 @@ export function canAffordExpansion(state: GameState): boolean {
   return state.cleanCash >= expansionCost(state);
 }
 
+/**
+ * The stash a held district's "Reinforce" UPGRADES — its lead spot (design/13 G;
+ * Prompt 49): the floor/home stash if present (the cheap, instant foothold every
+ * route opens as), else the first held stash. `null` for an unowned country.
+ */
+function leadStash(here: readonly Stash[]): Stash | null {
+  return here.find((s) => s.type === EXPANSION_TYPE) ?? here[0] ?? null;
+}
+
 /** Every country as a district row, in roster order — the whole map, from minute one. */
 export function districtViews(state: GameState): readonly DistrictView[] {
   const homeId = state.world.startingCountry.id;
@@ -135,6 +154,13 @@ export function districtViews(state: GameState): readonly DistrictView[] {
     const consolidationPct = owned
       ? Math.max(...here.map((s) => consolidationProgress(state, s)))
       : 0;
+    // Held → the next step is an UPGRADE of the lead stash; unowned → the open price.
+    const lead = leadStash(here);
+    const upgradeCost = lead ? nextUpgradeCost(state, lead) : null;
+    const reinforceMaxed = owned && upgradeCost === null;
+    const openCost = owned
+      ? (upgradeCost ?? 0)
+      : footholdCost(state, EXPANSION_TYPE, c.id);
     return {
       countryId: c.id,
       name: c.name,
@@ -146,7 +172,9 @@ export function districtViews(state: GameState): readonly DistrictView[] {
       capacityTotal: Math.floor(capacityTotal),
       fill: capacityTotal > 0 ? capacityUsed / capacityTotal : 0,
       hooks: c.openingHooks,
-      openCost: footholdCost(state, EXPANSION_TYPE, c.id),
+      openCost,
+      reinforceStashId: lead?.id ?? null,
+      reinforceMaxed,
       contested,
       consolidationPct,
       exposed: here.some((s) => stashVulnerability(state, s) > 0),
@@ -222,7 +250,9 @@ export function nextAffordableStep(state: GameState): NextStep | null {
   }
 
   const reinforce = districts
-    .filter((d) => d.status !== 'unowned' && state.cleanCash >= d.openCost)
+    .filter(
+      (d) => d.status !== 'unowned' && !d.reinforceMaxed && state.cleanCash >= d.openCost,
+    )
     .sort((a, b) => a.fill - b.fill)[0];
   return reinforce
     ? { countryId: reinforce.countryId, kind: 'reinforce', cost: reinforce.openCost }

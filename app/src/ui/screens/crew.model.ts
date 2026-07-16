@@ -254,6 +254,14 @@ export function crewPayrollLine(state: GameState): number {
   return crewPayrollPerWeek(state);
 }
 
+/**
+ * Unpaid crew wages carried as arrears (design/13 D; v20) — surfaced so a short week
+ * reads as a debt you still owe, not a bill that vanished. `0` when payroll is current.
+ */
+export function crewBackWagesOwed(state: GameState): number {
+  return state.crewBackWages;
+}
+
 /** A roster section: a duty bucket, its label, and the people in it (design/13 D). */
 export interface CrewGroup {
   readonly duty: CrewDuty;

@@ -16,6 +16,7 @@ import { Button, Card, Panel, StampBadge } from '@/ui/components';
 import { CrewDetail } from './CrewDetail';
 import {
   availableCount,
+  crewBackWagesOwed,
   crewGroups,
   crewPayrollLine,
   recruitableArchetypes,
@@ -89,6 +90,7 @@ export function CrewScreen() {
   const headcount = state.crew.length;
   const free = availableCount(state);
   const payroll = crewPayrollLine(state);
+  const backWages = crewBackWagesOwed(state);
   const recruitable = recruitableArchetypes(state);
 
   const recruit = (archetypeId: string) => {
@@ -112,6 +114,7 @@ export function CrewScreen() {
         <span className="cg-label" data-testid="crew-summary">
           {headcount} {headcount === 1 ? 'person' : 'people'} · {free} available
           {payroll > 0 ? ` · payroll ${money(payroll)}/wk` : ''}
+          {backWages > 0 ? ` · back-wages owed ${money(backWages)}` : ''}
         </span>
       </header>
 

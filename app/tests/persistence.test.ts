@@ -2,11 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { IDBFactory } from 'fake-indexeddb';
 import {
   createInitialState,
+  createRng,
   DEFAULT_GAME_CONFIG,
+  effectiveCapacity,
   rngFor,
   spawnCrew,
+  totalDirtyCash,
+  totalUnits,
   SCHEMA_VERSION,
   type GameState,
+  type Stash,
 } from '@/engine';
 import {
   LocalSaveStore,
@@ -358,6 +363,103 @@ describe('migrateEnvelope — schema version + migration hook', () => {
     expect(migrated?.config.territory.TERRITORY_REACH_GROWTH).toBeGreaterThan(1);
     // …and legacy stashes stay established (absent openedAtHours = fully controlled).
     expect(migrated?.stashes.every((s) => s.openedAtHours === undefined)).toBe(true);
+  });
+
+  it('migrates a v18 save to the stash upgrade model (v19: FOLD one stash per spot)', () => {
+    // A pre-Prompt-49 save that STACKED stashes on spots (the model being reversed):
+    // two floors + a buried at home, two containers in Miami. Production, a guard
+    // assignment, and debt collateral point at stashes that will fold away.
+    const home = state.world.startingCountry.id;
+    const inv = (over: Partial<Stash['inventory']>): Stash['inventory'] => ({
+      ...state.stashes[0]!.inventory,
+      ...over,
+    });
+    const legacyStashes = [
+      { id: 'stash-home', name: 'Home', countryId: home, type: 'floor', dirtyCash: 1_000, inventory: inv({ weed: 10 }) },
+      { id: 'stash-floor-2', name: 'Backroom', countryId: home, type: 'floor', dirtyCash: 500, inventory: inv({ weed: 20 }) },
+      { id: 'stash-buried-1', name: 'Cache', countryId: home, type: 'buried', dirtyCash: 0, inventory: inv({ weed: 30 }) },
+      { id: 'stash-cont-1', name: 'Box A', countryId: 'miami', type: 'container', dirtyCash: 200, inventory: inv({ cocaine: 5 }), openedAtHours: 100 },
+      { id: 'stash-cont-2', name: 'Box B', countryId: 'miami', type: 'container', dirtyCash: 300, inventory: inv({ cocaine: 7 }), openedAtHours: 50 },
+    ] as unknown as Stash[];
+    const legacy = {
+      ...state,
+      stashes: legacyStashes,
+      productionOps: [{ id: 'prod-x', type: 'backyard-grow', level: 1, stashId: 'stash-floor-2' }],
+      crew: [spawnCrew('deon', { id: 'g', assignment: { kind: 'guard', targetId: 'stash-cont-2' } })],
+      debt: { ...state.debt, collateralRef: 'stash-floor-2' },
+    } as unknown as GameState;
+
+    const unitsBefore = totalUnits(legacy);
+    const dirtyBefore = totalDirtyCash(legacy);
+    const capBefore = legacy.stashes.reduce((s, st) => s + effectiveCapacity(legacy, st), 0);
+
+    const migrated = migrateEnvelope({ ...envelope, schemaVersion: 18, state: legacy });
+    expect(migrated).not.toBeNull();
+    const m = migrated!;
+
+    // One stash per (country, type) spot: 5 stacked → 3 (home floor, home buried, Miami container).
+    expect(m.stashes).toHaveLength(3);
+    expect(new Set(m.stashes.map((s) => `${s.countryId}::${s.type}`)).size).toBe(3);
+    const homeFloor = m.stashes.find((s) => s.id === 'stash-home')!;
+    const miamiBox = m.stashes.find((s) => s.type === 'container')!;
+
+    // Inventories + dirty cash merged unit-for-unit and dollar-for-dollar (no seizure).
+    expect(homeFloor.inventory.weed).toBe(30);
+    expect(homeFloor.dirtyCash).toBe(1_500);
+    expect(miamiBox.inventory.cocaine).toBe(12);
+    expect(miamiBox.dirtyCash).toBe(500);
+    // Most-consolidated openedAtHours wins (the oldest 50, least exposed).
+    expect(miamiBox.openedAtHours).toBe(50);
+    // The survivor's level rose so its capacity holds at least the folded pair.
+    expect(homeFloor.level).toBeGreaterThan(1);
+
+    // Nothing shrinks — units, dirty cash, and total capacity all ≥ before.
+    expect(totalUnits(m)).toBe(unitsBefore);
+    expect(totalDirtyCash(m)).toBe(dirtyBefore);
+    expect(m.stashes.reduce((s, st) => s + effectiveCapacity(m, st), 0)).toBeGreaterThanOrEqual(capBefore);
+
+    // References re-pointed to the survivor id (never left dangling).
+    expect(m.productionOps[0]?.stashId).toBe('stash-home');
+    expect(m.crew[0]?.assignment.targetId).toBe('stash-cont-1');
+    expect(m.debt.collateralRef).toBe('stash-home');
+    // Cash and the RNG stream are untouched.
+    expect(m.cleanCash).toBe(state.cleanCash);
+    expect(m.rngState).toEqual(state.rngState);
+  });
+
+  it('the fold never loses a unit, a dollar, or capacity (property — generated saves)', () => {
+    const types = ['floor', 'buried', 'safehouse', 'container'] as const;
+    const countries = [state.world.startingCountry.id, 'miami', 'jamaica'];
+    const rng = createRng('fold-property');
+    const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(rng.next() * arr.length)]!;
+
+    for (let trial = 0; trial < 40; trial++) {
+      const n = 2 + Math.floor(rng.next() * 8); // 2–9 stacked stashes
+      const stashes: Stash[] = [];
+      for (let i = 0; i < n; i++) {
+        stashes.push({
+          id: `s-${trial}-${i}`,
+          name: `s${i}`,
+          countryId: pick(countries),
+          type: pick(types),
+          dirtyCash: Math.floor(rng.next() * 5_000),
+          inventory: { ...state.stashes[0]!.inventory, weed: Math.floor(rng.next() * 50) },
+        } as unknown as Stash);
+      }
+      const legacy = { ...state, stashes } as unknown as GameState;
+      const unitsBefore = totalUnits(legacy);
+      const dirtyBefore = totalDirtyCash(legacy);
+      const capBefore = legacy.stashes.reduce((s, st) => s + effectiveCapacity(legacy, st), 0);
+
+      const m = migrateEnvelope({ ...envelope, schemaVersion: 18, state: legacy })!;
+      // One stash per spot, and nothing shrank.
+      expect(new Set(m.stashes.map((s) => `${s.countryId}::${s.type}`)).size).toBe(m.stashes.length);
+      expect(totalUnits(m)).toBe(unitsBefore);
+      expect(totalDirtyCash(m)).toBe(dirtyBefore);
+      expect(m.stashes.reduce((s, st) => s + effectiveCapacity(m, st), 0)).toBeGreaterThanOrEqual(
+        capBefore,
+      );
+    }
   });
 });
 

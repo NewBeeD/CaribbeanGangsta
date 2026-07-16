@@ -21,7 +21,11 @@ import { restoreRng } from './rng';
 import { PRODUCT_IDS, type ProductId } from './config/countries';
 import {
   STASH_TYPES,
+  STASH_CAPACITY_GROWTH,
   getStashType,
+  smallestLevelForCapacity,
+  stashLevelCapacity,
+  stashUpgradeCost,
   type StashType,
   type StashTypeConfig,
 } from './config/stashes';
@@ -59,13 +63,23 @@ export function totalUnits(state: GameState): number {
   return state.stashes.reduce((sum, s) => sum + stashUnits(s), 0);
 }
 
-/** The BASE unit capacity of a stash, from its archetype (config/stashes.ts) —
- * before the crew-carry bonus. Prefer `effectiveCapacity` for any real limit. */
+/** A stash's current upgrade level (design/13 G; Prompt 49). Absent reads as 1. */
+export function stashLevel(stash: Stash): number {
+  return stash.level ?? 1;
+}
+
+/**
+ * The BASE unit capacity of a stash, from its archetype scaled by its upgrade LEVEL
+ * (config/stashes.ts `stashLevelCapacity` — design/13 G; Prompt 49) — before the
+ * crew-carry bonus. Level 1 is the archetype base; each level multiplies it by
+ * `STASH_CAPACITY_GROWTH`. Prefer `effectiveCapacity` for any real limit.
+ */
 export function stashCapacity(
   stash: Stash,
   types: readonly StashTypeConfig[] = STASH_TYPES,
+  growth: number = STASH_CAPACITY_GROWTH,
 ): number {
-  return getStashType(stash.type, types).capacity;
+  return stashLevelCapacity(getStashType(stash.type, types).capacity, stashLevel(stash), growth);
 }
 
 /**
@@ -79,7 +93,10 @@ export function stashCapacity(
  */
 export function effectiveCapacity(state: GameState, stash: Stash): number {
   const tuning = state.config.stashes;
-  return stashCapacity(stash, tuning.STASH_TYPES) + tuning.CREW_CARRY_PER_MEMBER * state.crew.length;
+  return (
+    stashCapacity(stash, tuning.STASH_TYPES, tuning.STASH_CAPACITY_GROWTH) +
+    tuning.CREW_CARRY_PER_MEMBER * state.crew.length
+  );
 }
 
 /** Free EFFECTIVE unit capacity left in a stash (never negative) — the crew-scaled
@@ -188,6 +205,14 @@ export type StorageRejectReason =
   | 'insufficient-inventory'
   | 'insufficient-capacity'
   | 'insufficient-funds'
+  /**
+   * A spot already holds a stash of this type — build the FIRST of a type per
+   * (country, spot), then UPGRADE it for space (design/13 G; Prompt 49). Opening a
+   * NEW country/port is unchanged (money only).
+   */
+  | 'already-present'
+  /** `upgradeStash` on a stash already at `STASH_MAX_LEVEL` (design/13 G; Prompt 49). */
+  | 'max-level'
   /** Cross-country product moves route through shipments (travel.ts, Prompt 30). */
   | 'cross-country'
   /**
@@ -205,13 +230,17 @@ export interface AddStashResult {
 }
 
 /**
- * Build a new stash of `type`, paid from CLEAN cash (storage is a clean-cash sink
- * — design/09 Integration/Economy). Cost comes from `footholdCost` (territory.ts):
- * REINFORCING a country already held (or the home country) pays the plain upgrade
- * curve `base × 1.15^n`; OPENING a NEW country pays the reach-and-region surcharge
- * (Ideas2 item 5; Prompt 41). Rejects without mutating on insufficient funds — or,
- * when opening past the free reach tier with no lieutenant to run it, on the crew
- * gate (`needs-lieutenant`). New stashes start empty.
+ * Build a new stash of `type` in `countryId` — the FIRST stash of that type at that
+ * spot, paid from CLEAN cash (storage is a clean-cash sink — design/09 Integration/
+ * Economy). A spot holds exactly ONE stash of a type (design/13 G; Prompt 49): a
+ * second build of a type already present in the country rejects `already-present`
+ * WITHOUT mutating — you UPGRADE the one you have (`upgradeStash`) for more space,
+ * you don't stack another. Cost comes from `footholdCost` (territory.ts): the FIRST
+ * spot of a type in a country already held (or home) pays the plain `base × 1.15^n`
+ * open step; OPENING a NEW country pays the reach-and-region surcharge (Ideas2 item
+ * 5; Prompt 41). Rejects without mutating on insufficient funds — or, when opening
+ * past the free reach tier with no lieutenant to run it, on the crew gate
+ * (`needs-lieutenant`). New stashes start empty at level 1.
  *
  * Opening a new country also (a) stamps `openedAtHours` so the foothold reads as
  * EXPOSED (raid-risk window) and CONTESTED (consolidation hold) — territory.ts;
@@ -229,6 +258,12 @@ export function addStash(
   const target = opts.countryId ?? state.world.startingCountry.id;
   const opening = !isHeldCountry(state, target);
 
+  // One stash per (country, type) spot (design/13 G; Prompt 49) — a second build of
+  // a type already here rejects; upgrade the existing one for space instead.
+  if (state.stashes.some((s) => s.countryId === target && s.type === type)) {
+    return { state, stash: null, rejected: 'already-present' };
+  }
+
   // The crew gate is the one non-money rejection (territory relaxes open access).
   if (opening && crewGateBlocksOpen(state, target)) {
     return { state, stash: null, rejected: 'needs-lieutenant' };
@@ -244,6 +279,7 @@ export function addStash(
     name: opts.name ?? cfg.name,
     countryId: target,
     type,
+    level: 1,
     dirtyCash: 0,
     inventory: emptyInventory(),
     // A fresh foothold is dated so it reads as exposed + contested; reinforcing an
@@ -269,6 +305,155 @@ export function addStash(
   }
 
   return { state: next, stash };
+}
+
+// --- Upgrade a stash for space (design/13 G; Prompt 49) ----------------------
+
+/** The cost, $, of the NEXT upgrade for `stash` (its live price), or `null` if maxed. */
+export function nextUpgradeCost(state: GameState, stash: Stash): number | null {
+  if (stashLevel(stash) >= state.config.stashes.STASH_MAX_LEVEL) return null;
+  return stashUpgradeCost(stash.type, stashLevel(stash), state.config.stashes);
+}
+
+/**
+ * Raise a stash by one LEVEL, paid from CLEAN cash at `base × 1.15^level` (design/13
+ * G; Prompt 49 — `stashUpgradeCost`). This is depth in ground you already hold: it
+ * lifts `effectiveCapacity` up the `STASH_CAPACITY_GROWTH` curve (the crew-carry
+ * bonus still stacks on top), and is the ONLY way to grow a spot now that stacking a
+ * second stash is gone. Money is the only gate (open access) — the price is always
+ * shown and always actionable the moment it's affordable. Rejects WITHOUT mutating
+ * on an unknown stash, a stash already at `STASH_MAX_LEVEL`, or insufficient funds.
+ */
+export function upgradeStash(state: GameState, stashId: string): AddStashResult {
+  const stash = findStash(state, stashId);
+  if (!stash) return { state, stash: null, rejected: 'no-stash' };
+  if (stashLevel(stash) >= state.config.stashes.STASH_MAX_LEVEL) {
+    return { state, stash, rejected: 'max-level' };
+  }
+  const cost = stashUpgradeCost(stash.type, stashLevel(stash), state.config.stashes);
+  if (state.cleanCash < cost) return { state, stash, rejected: 'insufficient-funds' };
+
+  const upgraded: Stash = { ...stash, level: stashLevel(stash) + 1 };
+  return {
+    state: withStash({ ...state, cleanCash: state.cleanCash - cost }, upgraded),
+    stash: upgraded,
+  };
+}
+
+// --- Migration fold: one stash per spot (design/13 G; Prompt 49) -------------
+
+/** The stash-carry bonus per crew member for the run (config), read once for the fold. */
+function crewCarryTotal(state: GameState): number {
+  return state.config.stashes.CREW_CARRY_PER_MEMBER * state.crew.length;
+}
+
+/**
+ * Fold every (country, type) SPOT down to a SINGLE stash (design/13 G; Prompt 49 —
+ * the v18→v19 migration's heart, kept in the engine so it's pure and property-
+ * testable). Where a legacy save stacked multiple stashes on one spot, the survivor
+ * is the first in roster order (so `stash-home` stays home and first), and:
+ *
+ *  - inventories are merged unit-for-unit and dirty cash dollar-for-dollar (nothing
+ *    seized);
+ *  - the survivor's LEVEL is rounded UP to the smallest level whose capacity holds
+ *    at least the folded stashes' COMBINED `effectiveCapacity` — so total capacity
+ *    never shrinks (a fold can push level past `STASH_MAX_LEVEL`; that's fine —
+ *    `upgradeStash` won't, but the fold must never take space away);
+ *  - a guard carries over (the survivor's, else any folded member's);
+ *  - `openedAtHours` reads as the most-consolidated of the group (established wins,
+ *    else the oldest stamp — always in the player's favor: least exposed);
+ *  - production destinations, guard assignments, and debt collateral pointing at a
+ *    folded-away id are re-pointed to the survivor.
+ *
+ * Idempotent: a save that already holds one stash per spot folds to itself (each
+ * group has one member, so nothing merges and no id changes).
+ */
+export function foldStashesOnePerSpot(state: GameState): GameState {
+  const growth = state.config.stashes.STASH_CAPACITY_GROWTH;
+  const carry = crewCarryTotal(state);
+
+  // Group by spot, preserving first-seen order (keeps stash-home first).
+  const order: string[] = [];
+  const groups = new Map<string, Stash[]>();
+  for (const s of state.stashes) {
+    const key = `${s.countryId}::${s.type}`;
+    const group = groups.get(key);
+    if (group) {
+      group.push(s);
+    } else {
+      order.push(key);
+      groups.set(key, [s]);
+    }
+  }
+
+  // No spot has more than one stash — nothing to fold (fast idempotent path).
+  if (order.every((k) => groups.get(k)!.length === 1)) return state;
+
+  const idRemap = new Map<string, string>();
+  const folded: Stash[] = order.map((key) => {
+    const group = groups.get(key)!;
+    const survivor = group[0]!;
+    for (const s of group) idRemap.set(s.id, survivor.id);
+    if (group.length === 1) return survivor;
+
+    // Merge inventories + dirty cash; sum the combined effective capacity so the
+    // survivor's new level holds at least what the whole group did.
+    const inventory: Record<ProductId, number> = { ...emptyInventory() };
+    let dirtyCash = 0;
+    let combinedCapacity = 0;
+    let guardCrewId: string | undefined;
+    let openedAtHours: number | undefined = Infinity;
+    let anyEstablished = false;
+    for (const s of group) {
+      for (const id of PRODUCT_IDS) inventory[id] += s.inventory[id];
+      dirtyCash += s.dirtyCash;
+      combinedCapacity += effectiveCapacity(state, s);
+      if (guardCrewId === undefined && s.guardCrewId !== undefined) guardCrewId = s.guardCrewId;
+      if (s.openedAtHours === undefined) anyEstablished = true;
+      else openedAtHours = Math.min(openedAtHours, s.openedAtHours);
+    }
+
+    const base = getStashType(survivor.type, state.config.stashes.STASH_TYPES).capacity;
+    // Target the survivor's BASE level-capacity (the level curve excludes crew carry,
+    // which the survivor still gets once): combined effective − the one carry it keeps.
+    const level = smallestLevelForCapacity(base, Math.max(0, combinedCapacity - carry), growth);
+    // Established (undefined) wins outright — least exposed; else the oldest stamp.
+    const finalOpened =
+      anyEstablished || openedAtHours === Infinity ? undefined : openedAtHours;
+
+    // Strip the survivor's optionals, then re-add each only when it stays defined
+    // (exactOptionalPropertyTypes-safe — never assign `undefined`).
+    const { openedAtHours: _o, guardCrewId: _g, ...rest } = survivor;
+    return {
+      ...rest,
+      level,
+      dirtyCash,
+      inventory,
+      ...(guardCrewId !== undefined ? { guardCrewId } : {}),
+      ...(finalOpened !== undefined ? { openedAtHours: finalOpened } : {}),
+    };
+  });
+
+  // Re-point any reference to a folded-away id onto its survivor.
+  const remap = (id: string | undefined): string | undefined =>
+    id === undefined ? undefined : (idRemap.get(id) ?? id);
+
+  const productionOps = state.productionOps.map((op) =>
+    op.stashId && remap(op.stashId) !== op.stashId
+      ? { ...op, stashId: remap(op.stashId)! }
+      : op,
+  );
+  const crew = state.crew.map((c) =>
+    c.assignment.kind === 'guard' && c.assignment.targetId && remap(c.assignment.targetId) !== c.assignment.targetId
+      ? { ...c, assignment: { ...c.assignment, targetId: remap(c.assignment.targetId)! } }
+      : c,
+  );
+  const debt =
+    state.debt.collateralRef && remap(state.debt.collateralRef) !== state.debt.collateralRef
+      ? { ...state.debt, collateralRef: remap(state.debt.collateralRef)! }
+      : state.debt;
+
+  return { ...state, stashes: folded, productionOps, crew, debt };
 }
 
 /**

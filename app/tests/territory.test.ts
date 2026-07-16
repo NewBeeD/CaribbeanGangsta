@@ -92,14 +92,16 @@ describe('opening a route — takeover heat, exposure, telegraph', () => {
     expect(res.state.pendingChoices.some((p) => p.kind === 'territory-exposed')).toBe(true);
   });
 
-  it('reinforcing a held country stamps nothing and adds no heat', () => {
+  it('a second stash of a type already held rejects — one stash per spot (Prompt 49)', () => {
     const base = { ...funded('reinforce-open'), heat: 10 };
     const home = base.world.startingCountry.id;
+    // Home already holds its floor stash; building another floor there rejects,
+    // stamps nothing, spikes no heat, and never mutates (you upgrade instead).
     const res = addStash(base, 'floor', { countryId: home });
 
-    expect(res.stash?.openedAtHours).toBeUndefined();
-    expect(res.state.heat).toBe(10);
-    expect(res.state.pendingChoices).toHaveLength(base.pendingChoices.length);
+    expect(res.rejected).toBe('already-present');
+    expect(res.stash).toBeNull();
+    expect(res.state).toBe(base);
   });
 });
 

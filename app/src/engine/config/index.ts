@@ -81,6 +81,8 @@ import {
 import {
   STASH_TYPES,
   STASH_COST_GROWTH,
+  STASH_MAX_LEVEL,
+  STASH_CAPACITY_GROWTH,
   CREW_CARRY_PER_MEMBER,
   GUARD_CASH_THRESHOLD,
   GUARD_MAX_PENALTY,
@@ -364,6 +366,9 @@ export interface HeatTuning {
 export interface StashesTuning {
   readonly STASH_TYPES: readonly StashTypeConfig[];
   readonly STASH_COST_GROWTH: number;
+  /** Stash upgrade LEVELS — the one-stash-per-spot depth model (design/13 G; Prompt 49). */
+  readonly STASH_MAX_LEVEL: number;
+  readonly STASH_CAPACITY_GROWTH: number;
   readonly CREW_CARRY_PER_MEMBER: number;
   readonly GUARD_CASH_THRESHOLD: number;
   readonly GUARD_MAX_PENALTY: number;
@@ -702,6 +707,8 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   stashes: {
     STASH_TYPES,
     STASH_COST_GROWTH,
+    STASH_MAX_LEVEL,
+    STASH_CAPACITY_GROWTH,
     CREW_CARRY_PER_MEMBER,
     GUARD_CASH_THRESHOLD,
     GUARD_MAX_PENALTY,

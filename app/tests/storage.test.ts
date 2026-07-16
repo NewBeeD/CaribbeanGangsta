@@ -4,17 +4,21 @@ import {
   rngFor,
   settleOffline,
   addStash,
+  upgradeStash,
   moveProduct,
   storeCash,
   setStashGuard,
   effectiveSeizurePct,
+  effectiveCapacity,
   diversificationIndex,
   capacityRemaining,
   stashUnits,
   stashCapacity,
   resolveRaid,
   stashCost,
+  stashUpgradeCost,
   getStashType,
+  STASH_MAX_LEVEL,
   WIPED_CAPITAL_FLAG,
   spawnCrew,
   type GameState,
@@ -72,16 +76,18 @@ describe('addStash — build cost & upgrade curve (design/09 A.5)', () => {
     expect((result.stash as Stash).dirtyCash).toBe(0);
   });
 
-  it('grows the cost by ×1.15 per already-owned stash of that type', () => {
-    const start: GameState = { ...createInitialState('curve'), cleanCash: 1_000_000 };
+  it('a second build on the same spot rejects without mutating (one stash per spot)', () => {
+    const start: GameState = { ...createInitialState('spot'), cleanCash: 1_000_000 };
     const first = addStash(start, 'buried');
+    expect(first.rejected).toBeUndefined();
+    // A second buried in the SAME country is rejected — upgrade the one you have.
     const second = addStash(first.state, 'buried');
-
-    const spentFirst = start.cleanCash - first.state.cleanCash;
-    const spentSecond = first.state.cleanCash - second.state.cleanCash;
-    expect(spentFirst).toBe(stashCost('buried', 0));
-    expect(spentSecond).toBe(stashCost('buried', 1));
-    expect(spentSecond).toBeGreaterThan(spentFirst);
+    expect(second.rejected).toBe('already-present');
+    expect(second.stash).toBeNull();
+    expect(second.state).toBe(first.state); // no mutation
+    // Home already holds a floor stash — building another floor rejects too.
+    const dupFloor = addStash(start, 'floor');
+    expect(dupFloor.rejected).toBe('already-present');
   });
 
   it('rejects an unaffordable build without mutating', () => {
@@ -90,6 +96,40 @@ describe('addStash — build cost & upgrade curve (design/09 A.5)', () => {
     expect(result.rejected).toBe('insufficient-funds');
     expect(result.stash).toBeNull();
     expect(result.state).toBe(broke);
+  });
+});
+
+describe('upgradeStash — levels for space (design/13 G; Prompt 49)', () => {
+  it('raises effective capacity on the shown curve and charges base × 1.15^level', () => {
+    const start: GameState = { ...createInitialState('upg'), cleanCash: 1_000_000 };
+    const home = start.stashes[0] as Stash;
+    const capL1 = effectiveCapacity(start, home);
+    const cost = stashUpgradeCost('floor', 1, start.config.stashes);
+
+    const up = upgradeStash(start, home.id);
+    expect(up.rejected).toBeUndefined();
+    expect(up.stash?.level).toBe(2);
+    expect(start.cleanCash - up.state.cleanCash).toBe(cost);
+    const capL2 = effectiveCapacity(up.state, up.state.stashes[0] as Stash);
+    expect(capL2).toBeGreaterThan(capL1); // steeper hold at level 2
+  });
+
+  it('rejects an unaffordable or maxed upgrade without mutating', () => {
+    const broke = { ...createInitialState('upg-broke'), cleanCash: 0 };
+    const short = upgradeStash(broke, broke.stashes[0]!.id);
+    expect(short.rejected).toBe('insufficient-funds');
+    expect(short.state).toBe(broke);
+    expect(upgradeStash(broke, 'nope').rejected).toBe('no-stash');
+
+    // A stash already at the cap can't be upgraded further.
+    const maxed: GameState = {
+      ...createInitialState('upg-max'),
+      cleanCash: 1_000_000,
+      stashes: [{ ...(createInitialState('upg-max').stashes[0] as Stash), level: STASH_MAX_LEVEL }],
+    };
+    const res = upgradeStash(maxed, maxed.stashes[0]!.id);
+    expect(res.rejected).toBe('max-level');
+    expect(res.state).toBe(maxed);
   });
 });
 

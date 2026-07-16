@@ -743,35 +743,48 @@ export function crewPayrollPerWeek(state: GameState): number {
 
 export interface WageChargeResult {
   readonly state: GameState;
-  /** Total clean cash paid out this settlement. */
+  /** Total clean cash paid out this settlement (arrears + this week's wages). */
   readonly charged: number;
   /** Whole in-game weeks this settlement covered. */
   readonly weeks: number;
+  /** Unpaid remainder carried forward as arrears AFTER this settlement, $. */
+  readonly backWages: number;
 }
 
 /**
- * Settle crew wages on the weekly boundary (design/13 D; Prompt 46). Charges
- * `crewPayrollPerWeek × weeksElapsed` from CLEAN cash, paying what's affordable and
- * NEVER going negative — a material weekly obligation, not a run-ender (a short week
- * simply pays what it can). Advances `lastCrewPayrollWeek` so the same week is never
- * charged twice. Called only from `crewStep`, an active-only tick step, so wages
- * never draw while the player is away (GDD §6). Wages are pure clean-cash cost here —
- * loyalty consequences stay with the explicit pay/short treatment levers.
+ * Settle crew wages on the weekly boundary (design/13 D; Prompt 46; arrears v20).
+ * The bill owed is `carried back-wages + crewPayrollPerWeek × weeksElapsed`, paid down
+ * from CLEAN cash, NEVER going negative — a material weekly obligation, not a run-ender.
+ * A short week pays what it can and the REMAINDER accrues as `crewBackWages` rather than
+ * being forgiven: the debt follows you and is settled first next time cash is on hand.
+ * Advances `lastCrewPayrollWeek` so the same week is never charged twice. Called only
+ * from `crewStep`, an active-only tick step, so wages never draw while the player is
+ * away (GDD §6). No interest — the arrears are pure unpaid principal; loyalty
+ * consequences stay with the explicit pay/short treatment levers.
  */
 export function chargeWages(state: GameState): WageChargeResult {
-  const weeks = state.clock.week - state.lastCrewPayrollWeek;
-  if (weeks <= 0 || state.crew.length === 0) {
-    return { state: { ...state, lastCrewPayrollWeek: state.clock.week }, charged: 0, weeks: 0 };
+  const weeks = Math.max(0, state.clock.week - state.lastCrewPayrollWeek);
+  const newWages = weeks > 0 ? crewPayrollPerWeek(state) * weeks : 0;
+  const owed = state.crewBackWages + newWages;
+  if (owed <= 0) {
+    return {
+      state: { ...state, lastCrewPayrollWeek: state.clock.week },
+      charged: 0,
+      weeks,
+      backWages: 0,
+    };
   }
-  const owed = crewPayrollPerWeek(state) * weeks;
   const charged = Math.min(owed, state.cleanCash);
+  const backWages = owed - charged;
   return {
     state: {
       ...state,
       cleanCash: state.cleanCash - charged,
+      crewBackWages: backWages,
       lastCrewPayrollWeek: state.clock.week,
     },
     charged,
     weeks,
+    backWages,
   };
 }

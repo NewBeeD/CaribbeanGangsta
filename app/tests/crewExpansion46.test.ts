@@ -199,9 +199,61 @@ describe('crew wages — a material, never-bankrupting weekly obligation', () =>
       lastCrewPayrollWeek: 1,
       clock: { hours: 24 * 7, day: 8, week: 2 },
     };
+    const payroll = crewPayrollPerWeek(base);
     const r = chargeWages(base);
     expect(r.charged).toBe(1_000);
     expect(r.state.cleanCash).toBe(0); // clamped at zero, never below
+    // The unpaid remainder is NOT forgiven — it accrues as arrears (v20).
+    expect(r.backWages).toBe(payroll - 1_000);
+    expect(r.state.crewBackWages).toBe(payroll - 1_000);
+  });
+
+  it('accrues an unpaid shortfall as back-wages, then settles it first when cash returns', () => {
+    const base: GameState = {
+      ...createInitialState('arrears'),
+      cleanCash: 0, // dead broke — the whole week goes unpaid
+      crew: [spawnCrew('marco')], // $9,000/wk
+      lastCrewPayrollWeek: 1,
+      clock: { hours: 24 * 7, day: 8, week: 2 },
+    };
+    const wk = crewPayrollPerWeek(base);
+    const short = chargeWages(base);
+    expect(short.charged).toBe(0);
+    expect(short.state.crewBackWages).toBe(wk); // the whole week is now owed
+
+    // A second unpaid week stacks the arrears (still no cash).
+    const wk3 = chargeWages({
+      ...short.state,
+      clock: { hours: 24 * 14, day: 15, week: 3 },
+    });
+    expect(wk3.state.crewBackWages).toBe(wk * 2);
+
+    // Cash arrives: the bill owed is arrears + this week's wages, paid down first.
+    const flush = chargeWages({
+      ...wk3.state,
+      cleanCash: 1_000_000,
+      clock: { hours: 24 * 21, day: 22, week: 4 },
+    });
+    expect(flush.state.crewBackWages).toBe(0); // square again
+    expect(flush.charged).toBe(wk * 3); // two carried weeks + the current one
+    expect(flush.state.cleanCash).toBe(1_000_000 - wk * 3);
+  });
+
+  it('settles standing arrears even after the whole crew is let go', () => {
+    // You owe back-wages, then fire everyone. The debt is still yours to clear.
+    const owed = 25_000;
+    const base: GameState = {
+      ...createInitialState('fired'),
+      cleanCash: 40_000,
+      crew: [],
+      crewBackWages: owed,
+      lastCrewPayrollWeek: 1,
+      clock: { hours: 24 * 7, day: 8, week: 2 },
+    };
+    const r = chargeWages(base);
+    expect(r.charged).toBe(owed);
+    expect(r.state.crewBackWages).toBe(0);
+    expect(r.state.cleanCash).toBe(40_000 - owed);
   });
 
   it('a FULL-roster payroll is material yet never bankrupts a run to the horizon', () => {

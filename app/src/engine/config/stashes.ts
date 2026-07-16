@@ -22,7 +22,11 @@ export type StashType = 'floor' | 'buried' | 'safehouse' | 'container' | 'decoy'
 export interface StashTypeConfig {
   readonly id: StashType;
   readonly name: string;
-  /** Max units of product this location can hold. Decoys hold nothing (0). */
+  /**
+   * Base (Level-1) unit capacity this location holds; upgrade LEVELS scale it up
+   * the `STASH_CAPACITY_GROWTH` curve (`stashLevelCapacity` — design/13 G; Prompt
+   * 49). Decoys hold nothing (0) at every level.
+   */
   readonly capacity: number;
   /**
    * Base seizure probability if this location is raided, 0..1 (design/09 A.3).
@@ -152,8 +156,76 @@ export function getStashType(
 
 // --- Upgrade curve & seizure adjustment tuning -------------------------------
 
-/** Each additional stash of a type costs 15% more than the last (design/09 A.5). */
+/**
+ * Each UPGRADE of a stash costs 15% more than the last, along the classic idle
+ * geometric curve (design/09 A.5; design/13 G — the `cost × 1.15^level` family
+ * shared by fronts/production/vessels). Prompt 49 repurposes this: it no longer
+ * prices a stacked second stash (that model is gone) but the next LEVEL on the one
+ * stash a spot holds.
+ */
 export const STASH_COST_GROWTH = 1.15;
+
+/**
+ * Levels run 1–8 for every stash (design/13 G; Prompt 49) — the depth you can buy
+ * into ground you already hold. Level 1 is the archetype's base capacity; each
+ * upgrade multiplies it by `STASH_CAPACITY_GROWTH`. A migrated legacy save that
+ * folded many stacked stashes into one can carry a level ABOVE this cap (the fold
+ * never shrinks capacity — `foldStashesOnePerSpot`); the cap only bounds live
+ * `upgradeStash` purchases.
+ */
+export const STASH_MAX_LEVEL = 8;
+
+/**
+ * Capacity multiplier per level (design/13 G; Prompt 49) — `capacity =
+ * baseCapacity × STASH_CAPACITY_GROWTH^(level-1)`. STEEP by design so investing in
+ * one spot's depth is a real alternative to spreading out: a maxed (L8) FLOOR holds
+ * `50 × 1.7^7 ≈ 2,051` base units — about 7× the old ~290-unit home ceiling the
+ * round-4 feedback called out ("production maxes out at 290 units") — and a maxed
+ * CONTAINER holds `3,000 × 1.7^7 ≈ 123k`, swallowing many container-ship manifests
+ * (2,000 units each — Prompt 47 synergy). The crew-carry bonus still stacks on top.
+ */
+export const STASH_CAPACITY_GROWTH = 1.7;
+
+/**
+ * A stash's BASE unit capacity at `level` (before crew-carry): `baseCapacity ×
+ * STASH_CAPACITY_GROWTH^(level-1)`, rounded to whole units (design/13 G; Prompt
+ * 49). Level 1 is exactly `baseCapacity`; a 0-capacity archetype (a decoy) stays 0
+ * at every level. `growth` injects an alternate curve (`state.config.stashes`).
+ */
+export function stashLevelCapacity(
+  baseCapacity: number,
+  level: number,
+  growth: number = STASH_CAPACITY_GROWTH,
+): number {
+  if (baseCapacity <= 0) return 0;
+  return Math.round(baseCapacity * Math.pow(growth, Math.max(1, level) - 1));
+}
+
+/**
+ * The smallest level whose base capacity is ≥ `targetCapacity` (round UP — design/13
+ * G; Prompt 49): the level a fold needs so the survivor never holds LESS than the
+ * stashes it absorbed. NOT bounded by `STASH_MAX_LEVEL` — a fold must preserve every
+ * unit of capacity even past the live upgrade cap. Returns 1 for a 0-capacity
+ * archetype (a decoy can't grow) or a non-positive target.
+ */
+export function smallestLevelForCapacity(
+  baseCapacity: number,
+  targetCapacity: number,
+  growth: number = STASH_CAPACITY_GROWTH,
+): number {
+  if (baseCapacity <= 0 || targetCapacity <= baseCapacity) return 1;
+  // level = 1 + ceil(log_growth(target / base)); guard the (theoretically
+  // impossible) growth ≤ 1 with a bounded linear fallback.
+  if (growth <= 1) {
+    let level = 1;
+    while (stashLevelCapacity(baseCapacity, level, growth) < targetCapacity && level < 10_000) {
+      level++;
+    }
+    return level;
+  }
+  const level = 1 + Math.ceil(Math.log(targetCapacity / baseCapacity) / Math.log(growth));
+  return Math.max(1, level);
+}
 
 /**
  * Extra unit capacity every crew member adds to a stash's archetype base
@@ -165,22 +237,44 @@ export const STASH_COST_GROWTH = 1.15;
  */
 export const CREW_CARRY_PER_MEMBER = 40;
 
+/** Injected stash tuning shape shared by the cost helpers (a subset of `StashesTuning`). */
+export interface StashCostTuning {
+  readonly STASH_TYPES?: readonly StashTypeConfig[];
+  readonly STASH_COST_GROWTH?: number;
+}
+
 /**
- * Cost to build the `nOwned`-th+1 stash of `type`: `base × 1.15^nOwned`
- * (design/09 A.5). Deterministic, non-gambling progression. `tuning` injects an
- * alternate roster/growth (e.g. `state.config.stashes` — Prompt 26).
+ * Cost to open the `nOwned`-th+1 stash-SPOT of `type`: `base × 1.15^nOwned`
+ * (design/09 A.5). A "spot" is one (country, type) foothold (Prompt 49) — so
+ * `nOwned` is how many countries already hold this type, and opening the next one
+ * costs 15% more. Deterministic, non-gambling progression. `tuning` injects an
+ * alternate roster/growth (e.g. `state.config.stashes` — Prompt 26). For the
+ * per-country reach/region surcharge on a NEW country see `territoryExpansionCost`.
  */
 export function stashCost(
   type: StashType,
   nOwned: number,
-  tuning?: {
-    readonly STASH_TYPES?: readonly StashTypeConfig[];
-    readonly STASH_COST_GROWTH?: number;
-  },
+  tuning?: StashCostTuning,
 ): number {
   const base = getStashType(type, tuning?.STASH_TYPES ?? STASH_TYPES).baseCost;
   const growth = tuning?.STASH_COST_GROWTH ?? STASH_COST_GROWTH;
   return Math.round(base * Math.pow(growth, nOwned));
+}
+
+/**
+ * Cost to raise a stash from `level` → `level + 1`: `base × 1.15^level` (design/13
+ * G; Prompt 49 — the same `cost × 1.15^level` family fronts/production/vessels use,
+ * anchored to the archetype's `baseCost`). Level 1→2 costs `base × 1.15`. `tuning`
+ * injects an alternate roster/growth (`state.config.stashes`).
+ */
+export function stashUpgradeCost(
+  type: StashType,
+  level: number,
+  tuning?: StashCostTuning,
+): number {
+  const base = getStashType(type, tuning?.STASH_TYPES ?? STASH_TYPES).baseCost;
+  const growth = tuning?.STASH_COST_GROWTH ?? STASH_COST_GROWTH;
+  return Math.round(base * Math.pow(growth, Math.max(1, level)));
 }
 
 /**

@@ -166,8 +166,26 @@ import type {
  *     cap/ceiling/cooldown, major-port tiering, favor, and massive-shipment surcharge
  *     knobs (backfilled from the default). Migration seeds nothing owned — no player
  *     cash, holdings, or the RNG move (the new fields are absent-is-safe optionals).
+ * v19: the stash upgrade model — ONE stash per spot, LEVELS for space (design/13 G;
+ *     Prompt 49). `Stash.level` (optional, absent = 1) replaces stacking a second
+ *     stash on a (country, type) spot with `upgradeStash` levels that scale
+ *     `effectiveCapacity` up the `STASH_CAPACITY_GROWTH` curve; `config.stashes`
+ *     gains `STASH_MAX_LEVEL` + `STASH_CAPACITY_GROWTH`. The migration FOLDS every
+ *     legacy spot's stacked stashes into a single survivor — inventories and dirty
+ *     cash merged unit-for-unit and dollar-for-dollar, the level rounded UP to hold
+ *     at least the folded stashes' combined capacity, and production destinations /
+ *     guard / collateral references re-pointed to the survivor id. The fold rounds
+ *     EVERY quantity in the player's favor: units, dirty cash, and total capacity
+ *     never decrease (property-tested — `foldStashesOnePerSpot`). Territory footholds
+ *     (new districts, countries, ports) are untouched — money-gated as ever.
+ * v20: crew back-wages accrual (design/13 D). `GameState.crewBackWages` carries the
+ *     unpaid remainder of any weekly payroll settled short — a real liability, not a
+ *     forgiven shortfall. `chargeWages` now owes `carried arrears + this week's wages`
+ *     and pays it down first from clean cash (floored at zero), carrying whatever's
+ *     still unpaid forward. Migration seeds `crewBackWages: 0` (a migrated run starts
+ *     square) — never player cash, holdings, or the RNG stream.
  */
-export const SCHEMA_VERSION = 18 as const;
+export const SCHEMA_VERSION = 20 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -205,6 +223,15 @@ export interface Stash {
   readonly type: StashType;
   readonly dirtyCash: number;
   readonly inventory: Inventory;
+  /**
+   * Upgrade level 1–`STASH_MAX_LEVEL` (design/13 G; Prompt 49). A spot holds ONE
+   * stash whose capacity grows by LEVEL — `effectiveCapacity` scales the archetype
+   * base by `STASH_CAPACITY_GROWTH^(level-1)` (storage.ts). Level 1 is the base
+   * capacity; ABSENT reads as 1 (a fresh build, or a pre-v19 stash before the fold).
+   * A migrated save that folded stacked stashes into one can carry a level ABOVE the
+   * cap — the fold never shrinks capacity (`foldStashesOnePerSpot`).
+   */
+  readonly level?: number;
   /** Crew member guarding this stash (design/09 A.3a). Absent = unguarded. */
   readonly guardCrewId?: string;
   /**
@@ -731,6 +758,15 @@ export interface GameState {
    * never draw while the player is away (GDD §6).
    */
   readonly lastCrewPayrollWeek: number;
+  /**
+   * Unpaid crew wages carried as ARREARS, $ (design/13 D; v20). When a weekly payroll
+   * settles short (clean cash floors at zero), the remainder accrues here instead of
+   * being forgiven — a real liability. The next settlement owes `crewBackWages +
+   * this week's wages` and pays it down first. `0` on a fresh run and on a migrated
+   * pre-v20 save (which starts square). No interest: the debt is the unpaid principal,
+   * and loyalty consequences stay with the explicit pay/short-treatment levers.
+   */
+  readonly crewBackWages: number;
   readonly corruption: Corruption;
   readonly debt: Debt;
   /**
@@ -928,6 +964,7 @@ export function createInitialState(
     name: 'Home Stash',
     countryId: country.id,
     type: STARTING_STASH_TYPE,
+    level: 1,
     dirtyCash: country.startingCash,
     inventory: emptyInventory(),
   };
@@ -973,6 +1010,7 @@ export function createInitialState(
     vessels: [],
     crew: [],
     lastCrewPayrollWeek: 1,
+    crewBackWages: 0,
     corruption: { officials: [], payrollPerWeek: 0, paidPorts: [], lastPayrollWeek: 1 },
     debt: emptyDebt(),
     loansTaken: 0,
