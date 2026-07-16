@@ -233,6 +233,8 @@ export {
   productionStep,
   buyProductionOp,
   upgradeProductionOp,
+  setProductionPaused,
+  setProductionStash,
 } from './production';
 export type { ProductionResult, ProductionRejectReason } from './production';
 

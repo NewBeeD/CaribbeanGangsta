@@ -75,19 +75,39 @@ export interface OpRow {
   readonly manager: { readonly id: string; readonly name: string } | null;
   /** The disclosed delegation bonus a lieutenant adds (0 when none is on it). */
   readonly managerBonus: number;
+  /** True when the op is paused — a cold lab: no yield, no heat (design/13 C). */
+  readonly paused: boolean;
+  /** The stash id this op deposits into (home `stashes[0]` when unassigned). */
+  readonly destinationStashId: string;
+  /** The destination stash's display name (for the picker's current selection). */
+  readonly destinationName: string;
+  /**
+   * Same-country stashes this op may deposit into — production is physical, so the
+   * picker never offers a cross-border destination (design/13 C). Includes the
+   * current destination; `≤ 1` entry means there is nowhere else to route it.
+   */
+  readonly destinations: readonly { readonly id: string; readonly name: string }[];
 }
 
 export function opRows(state: GameState): readonly OpRow[] {
-  const country = homeCountryId(state);
   const tuning = state.config.production;
+  const home = state.stashes[0];
   return state.productionOps.map((op) => {
     const type = op.type as ProductionOpId;
     const cfg = getProductionOp(type, tuning.PRODUCTION_OPS);
     const maxed = op.level >= tuning.PRODUCTION_MAX_LEVEL;
     const upgradeCost = maxed ? 0 : productionUpgradeCost(type, op.level, tuning);
     const unitsPerHour = productionYieldRate(state, op);
-    const price = getMarketPrice(state, cfg.product, country).price;
     const manager = opManager(state, op.id);
+    // Where this op deposits (its assigned stash, else home) — yield is valued at
+    // THAT stash's country market, since production is physical (design/13 C).
+    const dest =
+      (op.stashId ? state.stashes.find((s) => s.id === op.stashId) : undefined) ?? home;
+    const country = dest?.countryId ?? homeCountryId(state);
+    const price = getMarketPrice(state, cfg.product, country).price;
+    const destinations = state.stashes
+      .filter((s) => s.countryId === country)
+      .map((s) => ({ id: s.id, name: s.name }));
     return {
       id: op.id,
       type,
@@ -105,6 +125,10 @@ export function opRows(state: GameState): readonly OpRow[] {
       affordable: !maxed && state.cleanCash >= upgradeCost,
       manager,
       managerBonus: manager ? state.config.crew.LIEUTENANT_FRONT_BONUS : 0,
+      paused: op.paused ?? false,
+      destinationStashId: dest?.id ?? '',
+      destinationName: dest?.name ?? 'Home stash',
+      destinations,
     };
   });
 }

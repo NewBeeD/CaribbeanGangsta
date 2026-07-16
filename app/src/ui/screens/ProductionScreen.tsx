@@ -57,6 +57,8 @@ function OpCard({
   onUpgrade,
   onAssign,
   onUnassign,
+  onTogglePause,
+  onSetDestination,
 }: {
   readonly row: OpRow;
   readonly highlighted: boolean;
@@ -64,6 +66,8 @@ function OpCard({
   readonly onUpgrade: () => void;
   readonly onAssign: (crewId: string) => void;
   readonly onUnassign: (crewId: string) => void;
+  readonly onTogglePause: () => void;
+  readonly onSetDestination: (stashId: string) => void;
 }) {
   return (
     <Panel
@@ -72,16 +76,52 @@ function OpCard({
           <span>
             {row.name} <KindTag kind={row.kind} />
           </span>
-          <span className="cg-tone-green" aria-label={`${product(row.unitsPerHour)} ${row.productName} per hour`}>
-            {product(row.unitsPerHour)} {row.productName}/h
-          </span>
+          {row.paused ? (
+            <span className="cg-label" style={{ opacity: 0.7 }} aria-label="Paused — no yield, no heat">
+              Paused
+            </span>
+          ) : (
+            <span className="cg-tone-green" aria-label={`${product(row.unitsPerHour)} ${row.productName} per hour`}>
+              {product(row.unitsPerHour)} {row.productName}/h
+            </span>
+          )}
         </span>
       }
       style={highlighted ? { outline: '2px solid var(--cg-brass)' } : undefined}
     >
       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 8 }}>
-        <Stat label="Worth / h (home market)" value={`${money(row.valuePerHour)}`} tone="gold" />
-        <Stat label="Heat / h" value={units(row.heatPerHour)} tone="default" />
+        <Stat label={`Worth / h (${row.destinationName})`} value={`${money(row.valuePerHour)}`} tone="gold" />
+        <Stat label="Heat / h" value={row.paused ? '0' : units(row.heatPerHour)} tone="default" />
+      </div>
+
+      {/* Destination (design/13 C) — deposits into this stash; picker is same-country
+          only (production is physical, no teleporting yield). Hidden when there's
+          nowhere else to route it. */}
+      {row.destinations.length > 1 ? (
+        <div style={{ marginBottom: 10 }}>
+          <span className="cg-label">Deposit into:</span>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+            {row.destinations.map((d) => (
+              <Button
+                key={d.id}
+                variant={d.id === row.destinationStashId ? 'secondary' : 'ghost'}
+                data-testid="op-destination"
+                disabled={d.id === row.destinationStashId}
+                onClick={() => onSetDestination(d.id)}
+              >
+                {d.name}
+              </Button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Pause (design/13 C) — free and instant both ways; a paused op is a cold lab. */}
+      <div style={{ marginBottom: 10 }}>
+        <Button variant="ghost" fullWidth data-testid="op-pause" onClick={onTogglePause}>
+          {row.paused ? 'Resume production' : 'Pause production'}
+          <small>{row.paused ? 'Paused — no yield, no heat' : 'Free to pause or resume'}</small>
+        </Button>
       </div>
       <div className="cg-label" style={{ marginBottom: 6 }}>
         Level {row.level} / {row.maxLevel}
@@ -208,6 +248,9 @@ export function ProductionScreen() {
   const assign = (opId: string, crewId: string) =>
     store().assignCrew(crewId, { kind: 'production', targetId: opId });
   const unassign = (crewId: string) => store().assignCrew(crewId, { kind: 'idle' });
+  const togglePause = (row: OpRow) => store().setProductionPaused(row.id, !row.paused);
+  const setDestination = (opId: string, stashId: string) =>
+    store().setProductionStash(opId, stashId);
 
   return (
     <div>
@@ -230,10 +273,14 @@ export function ProductionScreen() {
 
       <Card heading="Supply">
         <p className="cg-label">
-          Grows and factories turn time into product in your home stash — the units
-          you own outright, to sell into any market or feed the corners. Bounded by
-          your stash space; a full stash idles the op until you make room. While
-          you're away it freezes — nothing is produced, nothing is lost.
+          Grows and factories turn time into product in the stash you point them at —
+          the units you own outright, to sell into any market or feed the corners.
+          Bounded by that stash's space; a full destination idles the op until you
+          make room. Pause any op anytime — a paused lab is cold: no yield, no heat.
+        </p>
+        <p className="cg-label" style={{ marginTop: 6, opacity: 0.8 }}>
+          Runs while you play. Frozen while you're away — nothing accrues, nothing is
+          lost.
         </p>
       </Card>
 
@@ -254,6 +301,8 @@ export function ProductionScreen() {
                 onUpgrade={() => upgrade(row.id)}
                 onAssign={(crewId) => assign(row.id, crewId)}
                 onUnassign={(crewId) => unassign(crewId)}
+                onTogglePause={() => togglePause(row)}
+                onSetDestination={(stashId) => setDestination(row.id, stashId)}
               />
             ))}
           </div>

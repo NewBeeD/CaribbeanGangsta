@@ -72,8 +72,19 @@ export const PRODUCTION_COST_GROWTH = 1.15;
 
 /**
  * The fixed production roster (Ideas2 item 3), ordered by buy-in. Grow-ops first
- * (cheap, low heat), factories second (steep, hot). Rates/buy-ins are v1
- * HYPOTHESES — retune against the Prompt 25 batch sim.
+ * (cheap, low heat), factories second (steep, hot).
+ *
+ * PACING — v2 live-clock retune (design/13 C; Prompt 45). The v1 rates
+ * (0.8–3.0 units/hr/level) were tuned before the live clock landed. Under it
+ * (30 real sec = 1 game hr ⇒ 1 real min = 2 game hrs) a L5 hydro-farm at the old
+ * 2.0/hr/level minted ~20 weed per REAL minute — a faucet that overflowed the
+ * home stash in a sitting ("production is too fast"). Every rate is cut ÷5 (the
+ * design's ÷4–6 hypothesis) so a maxed op reads as a supply LINE, not a spill:
+ * a L5 hydro-farm now runs 0.4 × 5 = 2.0 units/hr ⇒ ~4 weed per real minute,
+ * a steady feed you sell down rather than a pile you can't move. Validated against
+ * the Prompt 25 batch sim (session yields land in the sell-through band, no seed
+ * pins its home stash) and a timed live-clock run. Numbers stay here — the group
+ * (`state.config.production.PRODUCTION_OPS`) is the single source (Prompt 26).
  *
  * Strain design (yield AND profit, all disclosed):
  *  - `backyard-grow`     grows cheap `weed` fast — the broke player's first op.
@@ -88,7 +99,7 @@ export const PRODUCTION_OPS: readonly ProductionOpConfig[] = [
     kind: 'grow',
     product: 'weed',
     buyIn: 3_000,
-    unitsPerHourPerLevel: 0.8,
+    unitsPerHourPerLevel: 0.16,
     heatPerHour: 0.05,
     blurb: 'A few lights in a back room. Cheap green, and plenty of it.',
   },
@@ -98,7 +109,7 @@ export const PRODUCTION_OPS: readonly ProductionOpConfig[] = [
     kind: 'grow',
     product: 'weed',
     buyIn: 12_000,
-    unitsPerHourPerLevel: 2.0,
+    unitsPerHourPerLevel: 0.4,
     heatPerHour: 0.15,
     blurb: 'Racks, nutrients, and timers — serious weight of weed every day.',
   },
@@ -108,7 +119,7 @@ export const PRODUCTION_OPS: readonly ProductionOpConfig[] = [
     kind: 'grow',
     product: 'exotic',
     buyIn: 40_000,
-    unitsPerHourPerLevel: 1.2,
+    unitsPerHourPerLevel: 0.24,
     heatPerHour: 0.25,
     blurb: 'Boutique high-THC strains. Slower to grow, but the buyers pay a premium.',
   },
@@ -118,7 +129,7 @@ export const PRODUCTION_OPS: readonly ProductionOpConfig[] = [
     kind: 'factory',
     product: 'crack',
     buyIn: 60_000,
-    unitsPerHourPerLevel: 2.5,
+    unitsPerHourPerLevel: 0.5,
     heatPerHour: 0.5,
     blurb: 'A stove that never cools, cooking rock for the corners.',
   },
@@ -128,7 +139,7 @@ export const PRODUCTION_OPS: readonly ProductionOpConfig[] = [
     kind: 'factory',
     product: 'pills',
     buyIn: 90_000,
-    unitsPerHourPerLevel: 3.0,
+    unitsPerHourPerLevel: 0.6,
     heatPerHour: 0.6,
     blurb: 'Binders, dyes, a stolen die set — pressing product by the thousand.',
   },
@@ -138,7 +149,7 @@ export const PRODUCTION_OPS: readonly ProductionOpConfig[] = [
     kind: 'factory',
     product: 'meth',
     buyIn: 120_000,
-    unitsPerHourPerLevel: 2.0,
+    unitsPerHourPerLevel: 0.4,
     heatPerHour: 0.9,
     blurb: 'Industrial glassware in the desert. The purest product — and the hottest.',
   },

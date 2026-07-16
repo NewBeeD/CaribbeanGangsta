@@ -319,6 +319,10 @@ export function MoneyScreen() {
       <WashCard state={state} />
 
       <Card heading="Fronts">
+        <p className="cg-label" style={{ marginBottom: 10, opacity: 0.8 }}>
+          Runs while you play. Frozen while you're away — nothing accrues, nothing is
+          lost.
+        </p>
         {rows.length === 0 ? (
           <p className="cg-label">
             No fronts yet. Open one below to start turning time into clean cash.

@@ -13,11 +13,14 @@ import {
   productionUpgradeCost,
   productionYieldRate,
   productionStep,
+  setProductionPaused,
+  setProductionStash,
   spawnCrew,
   stashUnits,
   tick,
   upgradeProductionOp,
   type GameState,
+  type Stash,
 } from '@/engine';
 
 /** A run with `clean` clean cash on hand (rest of the state fresh). */
@@ -92,14 +95,16 @@ describe('upgradeProductionOp — the buy_in × 1.15^level curve', () => {
 });
 
 describe('productionStep — ACTIVE-only yield into the home stash, capped', () => {
-  it('deposits units/hr × level × dtHours of the op product and adds heat', () => {
+  it('deposits floor(units/hr × level × dtHours) of the op product and adds heat', () => {
     const s = withClean('grow', 50_000);
-    const bought = buyProductionOp(s, 'backyard-grow').state; // weed, 0.8/h
+    const cfg = getProductionOp('backyard-grow');
+    const bought = buyProductionOp(s, 'backyard-grow').state;
     const out = productionStep(bought, 20, 'active');
 
-    expect(out.stashes[0]!.inventory.weed).toBeCloseTo(0.8 * 20);
-    // Heat tracks output — a running grow smells (0.05/h × 20h).
-    expect(out.heat).toBeCloseTo(bought.heat + 0.05 * 20);
+    // Rates come from config (retunes stay in config/production.ts); integer units.
+    expect(out.stashes[0]!.inventory.weed).toBe(Math.floor(cfg.unitsPerHourPerLevel * 20));
+    // Heat tracks output — a running grow smells (heatPerHour × 20h).
+    expect(out.heat).toBeCloseTo(bought.heat + cfg.heatPerHour * 20);
   });
 
   it('never exceeds effectiveCapacity — overflow is simply not produced', () => {
@@ -125,18 +130,27 @@ describe('productionStep — ACTIVE-only yield into the home stash, capped', () 
     expect(productionStep(bought, 0, 'active')).toBe(bought);
     const empty = withClean('none', 50_000);
     expect(productionStep(empty, 10, 'active')).toBe(empty);
+
+    // Re-assert the freeze with the new op field present (design/13 C): a running,
+    // home-routed op still deposits NOTHING while offline.
+    const withFields: GameState = {
+      ...bought,
+      productionOps: bought.productionOps.map((o) => ({ ...o, paused: false })),
+    };
+    expect(productionStep(withFields, 100, 'offline')).toBe(withFields);
   });
 
   it('is driven by the live clock — tick() deposits product', () => {
     const bought = buyProductionOp(withClean('tick', 50_000), 'backyard-grow').state;
-    const t = tick(bought, 5);
+    const t = tick(bought, 20); // enough game-hours to bank a whole unit at the v2 rate
     expect(t.stashes[0]!.inventory.weed).toBeGreaterThan(0);
   });
 });
 
 describe('integer inventory (design/13 A1) — whole units only, remainder carried', () => {
   it('deposits only whole units over fractional ticks; the remainder carries, not drops', () => {
-    let s = buyProductionOp(withClean('int', 50_000), 'backyard-grow').state; // weed, 0.8/h
+    const cfg = getProductionOp('backyard-grow');
+    let s = buyProductionOp(withClean('int', 50_000), 'backyard-grow').state;
     for (let i = 0; i < 40; i++) s = productionStep(s, 0.5, 'active'); // 20h in 0.5h ticks
 
     const weed = s.stashes[0]!.inventory.weed;
@@ -145,7 +159,7 @@ describe('integer inventory (design/13 A1) — whole units only, remainder carri
     expect(pending).toBeGreaterThanOrEqual(0);
     expect(pending).toBeLessThan(1); // the carry is always sub-unit
     // Total yield over time equals the shown rate — deposited + carried, no loss.
-    expect(weed + pending).toBeCloseTo(0.8 * 20);
+    expect(weed + pending).toBeCloseTo(cfg.unitsPerHourPerLevel * 20);
   });
 
   it('every inventory quantity stays an integer through the live clock', () => {
@@ -197,7 +211,7 @@ describe('press-hash still consumes grown weed exactly as today (no regression)'
   it('grows weed, then presses it into hash 10:1', () => {
     let s = withClean('press', 50_000);
     s = buyProductionOp(s, 'backyard-grow').state;
-    s = productionStep(s, 20, 'active'); // ~16 weed grown
+    s = productionStep(s, 100, 'active'); // grow well past a 10-weed press batch
     const weedBefore = s.stashes[0]!.inventory.weed;
     expect(weedBefore).toBeGreaterThan(10);
 
@@ -236,6 +250,106 @@ describe('crew delegation — reuse the front-lieutenant path', () => {
     const s: GameState = { ...bought, crew: [wire] };
     const cfg = getProductionOp('backyard-grow');
     expect(productionYieldRate(s, s.productionOps[0]!)).toBeCloseTo(cfg.unitsPerHourPerLevel);
+  });
+});
+
+/** Append a second stash in `countryId` (empty inventory) so destination tests have
+ *  somewhere to route yield. Mirrors the home stash's shape. */
+function withExtraStash(s: GameState, id: string, countryId: string): GameState {
+  const home = s.stashes[0]!;
+  const empty = Object.fromEntries(
+    Object.keys(home.inventory).map((k) => [k, 0]),
+  ) as Stash['inventory'];
+  const stash: Stash = { ...home, id, name: id, countryId, dirtyCash: 0, inventory: empty };
+  return { ...s, stashes: [...s.stashes, stash] };
+}
+
+describe('pause (design/13 C) — a cold lab yields nothing and emits no heat', () => {
+  it('a paused op deposits nothing and adds no heat over any dtHours', () => {
+    const bought = buyProductionOp(withClean('pause', 100_000), 'crack-lab').state;
+    const paused = setProductionPaused(bought, 'prod-crack-lab', true);
+    expect(paused.productionOps[0]!.paused).toBe(true);
+
+    const out = productionStep(paused, 50, 'active');
+    expect(stashUnits(out.stashes[0]!)).toBe(0); // no yield
+    expect(out.heat).toBe(paused.heat); // no heat — the lab is cold
+  });
+
+  it('unpausing resumes at the same accumulator — the carried remainder is not lost', () => {
+    const bought = buyProductionOp(withClean('resume', 50_000), 'backyard-grow').state;
+    const seeded: GameState = {
+      ...bought,
+      productionOps: bought.productionOps.map((o) => ({ ...o, pendingYield: 0.9, paused: true })),
+    };
+    // Paused: a step changes nothing (yield frozen, carry untouched).
+    const idle = productionStep(seeded, 3, 'active');
+    expect(idle.productionOps[0]!.pendingYield).toBeCloseTo(0.9);
+
+    // Resume, then a tiny step tips the 0.9 carry over 1.0 → one whole unit banks.
+    const resumed = setProductionPaused(idle, 'prod-backyard-grow', false);
+    expect(resumed.productionOps[0]!.paused).toBe(false);
+    const out = productionStep(resumed, 1, 'active'); // + ~0.16 → 1.06
+    expect(out.stashes[0]!.inventory.weed).toBe(1);
+  });
+
+  it('setProductionPaused no-ops on an unknown op or a redundant set (no mutation)', () => {
+    const bought = buyProductionOp(withClean('pause-noop', 50_000), 'backyard-grow').state;
+    expect(setProductionPaused(bought, 'prod-nope', true)).toBe(bought);
+    expect(setProductionPaused(bought, 'prod-backyard-grow', false)).toBe(bought);
+  });
+});
+
+describe('destination (design/13 C) — physical yield, same-country only', () => {
+  it('an assigned op deposits into its stash and only there; home stays empty', () => {
+    const home = (s: GameState) => s.stashes[0]!;
+    const base = buyProductionOp(withClean('dest', 50_000), 'backyard-grow').state;
+    const country = home(base).countryId;
+    const withStash = withExtraStash(base, 'stash-2', country);
+    const routed = setProductionStash(withStash, 'prod-backyard-grow', 'stash-2');
+    expect(routed.productionOps[0]!.stashId).toBe('stash-2');
+
+    const out = productionStep(routed, 100, 'active');
+    expect(stashUnits(out.stashes[0]!)).toBe(0); // home untouched
+    expect(out.stashes.find((s) => s.id === 'stash-2')!.inventory.weed).toBeGreaterThan(0);
+  });
+
+  it('selecting home clears the assignment; unassigned deposits home exactly as before', () => {
+    const base = buyProductionOp(withClean('dest-home', 50_000), 'backyard-grow').state;
+    const country = base.stashes[0]!.countryId;
+    const withStash = withExtraStash(base, 'stash-2', country);
+    const routed = setProductionStash(withStash, 'prod-backyard-grow', 'stash-2');
+    const back = setProductionStash(routed, 'prod-backyard-grow', base.stashes[0]!.id);
+    expect(back.productionOps[0]!.stashId).toBeUndefined(); // home stored as absent
+
+    const out = productionStep(back, 100, 'active');
+    expect(out.stashes[0]!.inventory.weed).toBeGreaterThan(0);
+    expect(stashUnits(out.stashes.find((s) => s.id === 'stash-2')!)).toBe(0);
+  });
+
+  it('rejects a cross-country destination without mutating — yield never teleports', () => {
+    const base = buyProductionOp(withClean('dest-far', 50_000), 'backyard-grow').state;
+    const foreign = base.stashes[0]!.countryId === 'colombia' ? 'jamaica' : 'colombia';
+    const withStash = withExtraStash(base, 'stash-far', foreign);
+    const out = setProductionStash(withStash, 'prod-backyard-grow', 'stash-far');
+    expect(out).toBe(withStash); // rejected, no mutation
+    expect(out.productionOps[0]!.stashId).toBeUndefined();
+  });
+
+  it('a full destination idles the op without spilling into another stash', () => {
+    const base = buyProductionOp(withClean('dest-full', 200_000), 'hydro-farm').state;
+    const country = base.stashes[0]!.countryId;
+    const withStash = withExtraStash(base, 'stash-2', country);
+    const routed = setProductionStash(withStash, 'prod-hydro-farm', 'stash-2');
+    const cap = effectiveCapacity(routed, routed.stashes[0]!);
+    const full: GameState = {
+      ...routed,
+      stashes: routed.stashes.map((x) =>
+        x.id === 'stash-2' ? { ...x, inventory: { ...x.inventory, weed: cap } } : x,
+      ),
+    };
+    const out = productionStep(full, 1_000, 'active');
+    expect(stashUnits(out.stashes.find((s) => s.id === 'stash-2')!)).toBe(cap); // never past cap
+    expect(stashUnits(out.stashes[0]!)).toBe(0); // no spill to home
   });
 });
 

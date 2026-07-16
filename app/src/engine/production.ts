@@ -27,7 +27,7 @@ import {
   type ProductionOpId,
 } from './config/production';
 import type { TickMode } from './clock';
-import type { GameState, ProductionOp, Stash } from './state';
+import type { GameState, Inventory, ProductionOp, Stash } from './state';
 
 export type { ProductionOpId } from './config/production';
 
@@ -49,44 +49,71 @@ export function productionYieldRate(state: GameState, op: ProductionOp): number 
 // --- Active yield (the `production-yield` tick step) --------------------------
 
 /**
- * Deposit each op's yield into the home stash over `dtHours` of ONLINE time and
- * apply its passive heat footprint. Product units are INTEGERS everywhere
- * (design/13 A1): each op accrues fractional yield into its own `pendingYield`
- * accumulator and deposits only `Math.floor` WHOLE units — the sub-unit remainder
- * carries to the next tick, so total yield over time equals the shown rate while
- * nothing fractional ever lands in an inventory. Deposits are bounded by
- * `effectiveCapacity`: once the stash is full, overflow is NOT produced (never
- * past the cap, never a spoil; blocked whole units don't bank into the
- * accumulator either — a full destination idles the op). Heat accrues in
- * proportion to what was actually produced/accrued — an idled op emits no wasted
- * heat, which nudges the player to expand or sell rather than punishing a full
- * stash. Adds only; a run with no ops (or no home stash) is a no-op. Registered
+ * The stash an op deposits into (design/13 C; Prompt 45). Its assigned `stashId`
+ * when that stash still exists, else the home stash `stashes[0]` — the default and
+ * every legacy op's behavior. Returns `null` only when there is no home stash at
+ * all (a run with no stashes), so callers can short-circuit.
+ */
+function opDestination(state: GameState, op: ProductionOp): Stash | null {
+  const home = state.stashes[0] ?? null;
+  if (op.stashId) {
+    const assigned = state.stashes.find((s) => s.id === op.stashId);
+    if (assigned) return assigned;
+  }
+  return home;
+}
+
+/**
+ * Deposit each op's yield into its DESTINATION stash over `dtHours` of ONLINE time
+ * and apply its passive heat footprint. The destination is the op's assigned
+ * `stashId` (default: the home stash — design/13 C); ops sharing a destination
+ * share one capacity budget, so a full stash idles all of them in turn. Product
+ * units are INTEGERS everywhere (design/13 A1): each op accrues fractional yield
+ * into its own `pendingYield` accumulator and deposits only `Math.floor` WHOLE
+ * units — the sub-unit remainder carries to the next tick, so total yield over
+ * time equals the shown rate while nothing fractional ever lands in an inventory.
+ * Deposits are bounded by `effectiveCapacity`: once the stash is full, overflow is
+ * NOT produced (never past the cap, never a spoil; blocked whole units don't bank
+ * into the accumulator either — a full destination idles the op). A PAUSED op is a
+ * cold lab — it yields nothing and adds no heat (design/13 C). Heat otherwise
+ * accrues in proportion to what was actually produced/accrued — an idled op emits
+ * no wasted heat, which nudges the player to expand or sell rather than punishing a
+ * full stash. Adds only; a run with no ops (or no home stash) is a no-op. Registered
  * active-only in `clock.ts`, so the offline path deposits nothing (frozen — GDD §6).
  */
 export function productionStep(state: GameState, dtHours: number, mode: TickMode): GameState {
   if (mode !== 'active' || dtHours <= 0 || state.productionOps.length === 0) return state;
-  const home = state.stashes[0];
-  if (!home) return state;
+  if (!state.stashes[0]) return state;
 
-  const cap = effectiveCapacity(state, home);
-  let units = stashUnits(home);
-  let inventory = home.inventory;
-  let deposited = false;
+  // Per-destination running budgets so ops targeting the same stash share one
+  // capacity (and a full stash idles them all). Seeded lazily off live state.
+  const budgets = new Map<string, { inventory: Inventory; units: number; cap: number }>();
+  const budgetFor = (stash: Stash) => {
+    let b = budgets.get(stash.id);
+    if (!b) {
+      b = { inventory: stash.inventory, units: stashUnits(stash), cap: effectiveCapacity(state, stash) };
+      budgets.set(stash.id, b);
+    }
+    return b;
+  };
   let heat = 0;
 
   const ops = state.productionOps.map((op) => {
+    if (op.paused) return op; // cold lab — no yield, no heat
     const cfg = getProductionOp(op.type as ProductionOpId, state.config.production.PRODUCTION_OPS);
     const produced = productionYieldRate(state, op) * dtHours;
     if (produced <= 0) return op;
+    const dest = opDestination(state, op);
+    if (!dest) return op;
+    const budget = budgetFor(dest);
     const carried = op.pendingYield ?? 0;
     const accrued = carried + produced;
     const whole = Math.floor(accrued);
-    const room = Math.max(0, Math.floor(cap - units));
+    const room = Math.max(0, Math.floor(budget.cap - budget.units));
     const put = Math.min(whole, room);
     if (put > 0) {
-      inventory = { ...inventory, [cfg.product]: inventory[cfg.product] + put };
-      units += put;
-      deposited = true;
+      budget.inventory = { ...budget.inventory, [cfg.product]: budget.inventory[cfg.product] + put };
+      budget.units += put;
     }
     // The sub-unit remainder carries (always < 1); whole units blocked by a full
     // stash are simply not produced (as before — never past the cap, never a
@@ -100,9 +127,14 @@ export function productionStep(state: GameState, dtHours: number, mode: TickMode
   });
 
   let next: GameState = { ...state, productionOps: ops };
-  if (deposited) {
-    const nextHome: Stash = { ...home, inventory };
-    next = { ...next, stashes: next.stashes.map((s) => (s.id === home.id ? nextHome : s)) };
+  if (budgets.size > 0) {
+    next = {
+      ...next,
+      stashes: next.stashes.map((s) => {
+        const b = budgets.get(s.id);
+        return b && b.inventory !== s.inventory ? { ...s, inventory: b.inventory } : s;
+      }),
+    };
   }
   return heat > 0 ? addHeat(next, heat, 'production.op') : next;
 }
@@ -172,4 +204,56 @@ export function upgradeProductionOp(state: GameState, opId: string): ProductionR
     },
     op: upgraded,
   };
+}
+
+// --- Pause & destination (design/13 C; Prompt 45) -----------------------------
+
+/**
+ * Pause or resume op `opId` (design/13 C). A paused op is a cold lab: it yields
+ * nothing and emits no heat (`productionStep` skips it), and pausing never touches
+ * the `pendingYield` carry, so resuming picks up at the same accumulator — pause is
+ * free and instant both ways, never a trap or a fee (ethical guardrail). No-op
+ * (returns the same state) on an unknown op or a redundant set.
+ */
+export function setProductionPaused(state: GameState, opId: string, paused: boolean): GameState {
+  const op = state.productionOps.find((o) => o.id === opId);
+  if (!op || (op.paused ?? false) === paused) return state;
+  return {
+    ...state,
+    productionOps: state.productionOps.map((o) => (o.id === opId ? { ...o, paused } : o)),
+  };
+}
+
+/**
+ * Assign op `opId`'s yield to destination stash `stashId` (design/13 C). Production
+ * is PHYSICAL: the destination must be a stash in the op's own country (its current
+ * destination's country, home by default), so yield can never teleport across
+ * borders — a cross-country target is REJECTED without mutating. Selecting the home
+ * stash clears the assignment (stored as absent), so an op deposited to home reads
+ * identically to a legacy/unassigned op. No-op on an unknown op or stash.
+ */
+export function setProductionStash(state: GameState, opId: string, stashId: string): GameState {
+  const op = state.productionOps.find((o) => o.id === opId);
+  if (!op) return state;
+  const target = state.stashes.find((s) => s.id === stashId);
+  const current = opDestination(state, op);
+  if (!target || !current) return state;
+  // No teleporting yield — same country as where the op already deposits.
+  if (target.countryId !== current.countryId) return state;
+  const home = state.stashes[0];
+  const nextStashId = home && target.id === home.id ? undefined : target.id;
+  if ((op.stashId ?? undefined) === nextStashId) return state;
+  return {
+    ...state,
+    productionOps: state.productionOps.map((o) =>
+      o.id === opId ? { ...withoutStashId(o), ...(nextStashId ? { stashId: nextStashId } : {}) } : o,
+    ),
+  };
+}
+
+/** Strip `stashId` so an op reassigned to home carries no dangling destination. */
+function withoutStashId(op: ProductionOp): ProductionOp {
+  if (op.stashId === undefined) return op;
+  const { stashId: _drop, ...rest } = op;
+  return rest;
 }

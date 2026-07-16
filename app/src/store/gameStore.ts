@@ -85,6 +85,8 @@ import {
 import {
   buyProductionOp as buyProductionOpEngine,
   upgradeProductionOp as upgradeProductionOpEngine,
+  setProductionPaused as setProductionPausedEngine,
+  setProductionStash as setProductionStashEngine,
   type ProductionResult,
 } from '@/engine/production';
 import type { ProductionOpId } from '@/engine/config/production';
@@ -326,6 +328,10 @@ export interface GameStore {
   buyProductionOp(id: ProductionOpId): ProductionResult | null;
   /** Upgrade a production op one level, paid from CLEAN cash at `buy_in × 1.15^level`. */
   upgradeProductionOp(opId: string): ProductionResult | null;
+  /** Pause or resume an op — a paused op yields nothing and emits no heat (free both ways). */
+  setProductionPaused(opId: string, paused: boolean): void;
+  /** Route an op's yield to a same-country destination stash (home when it's `stashes[0]`). */
+  setProductionStash(opId: string, stashId: string): void;
   /** Bring an archetype onto the crew (open access — money/relationships gate it, never a flag). */
   recruitCrew(archetypeId: string): CrewMember | null;
   /** Train a skill by a fixed step, paid from clean cash. Rejects (no commit) if maxed/short. */
@@ -765,6 +771,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
       void get().persist(AUTOSAVE_SLOT).catch(() => {});
     }
     return result;
+  },
+
+  setProductionPaused(opId, paused) {
+    withState(get, set, (state) => setProductionPausedEngine(state, opId, paused));
+    void get().persist(AUTOSAVE_SLOT).catch(() => {});
+  },
+
+  setProductionStash(opId, stashId) {
+    withState(get, set, (state) => setProductionStashEngine(state, opId, stashId));
+    void get().persist(AUTOSAVE_SLOT).catch(() => {});
   },
 
   recruitCrew(archetypeId) {

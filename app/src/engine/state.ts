@@ -130,6 +130,13 @@ import type {
  *     (`BUY_HEAT_FACTOR`, `ARMS_BUY_HEAT_FACTOR`, `ARMS_CONFLICT_HEAT_MULT`) are
  *     DROPPED and the six-source/enforcement/arrest knobs backfilled from the
  *     default. Never player cash, holdings, or the RNG stream.
+ *
+ *     v15 is EXTENDED IN PLACE by Prompt 45 (design/13 C — production v2) with NO
+ *     further schema bump: `ProductionOp.stashId` (optional — absent = home stash
+ *     `stashes[0]`, the legacy behavior) and `ProductionOp.paused` (optional —
+ *     absent = running). Both are absent-is-safe on an older save: a legacy op
+ *     deposits into home and always runs, exactly as before. The live-clock pacing
+ *     retune is config-only (`config/production.ts`), no shape change.
  */
 export const SCHEMA_VERSION = 15 as const;
 
@@ -199,6 +206,11 @@ export interface Front {
  * the assigned crew is the single source of truth and an op never holds a dangling
  * crew ref. A single array covers BOTH kinds; `kind` lives on the config, not the
  * saved op (config/production.ts).
+ *
+ * `stashId` and `paused` (design/13 C; Prompt 45) extend the shape IN PLACE on
+ * schema v15 — both optional and absent-is-safe, so no schema bump: a legacy op
+ * with neither field reads exactly as before (deposits into the home stash,
+ * always running). See the v15 note above.
  */
 export interface ProductionOp {
   readonly id: string;
@@ -211,6 +223,21 @@ export interface ProductionOp {
    * fractional ever lands in a stash. Absent (legacy save) reads as 0.
    */
   readonly pendingYield?: number;
+  /**
+   * Destination stash for this op's yield (design/13 C; Prompt 45). Production is
+   * PHYSICAL — the destination must be a stash in the op's own country, so yield
+   * never teleports (`setProductionStash` enforces it). ABSENT (default, and every
+   * legacy op) deposits into the home stash `stashes[0]`, exactly as before. A full
+   * destination idles the op just like a full home stash always has.
+   */
+  readonly stashId?: string;
+  /**
+   * When true the op is PAUSED — a cold lab: it yields nothing and emits no heat
+   * over any tick (design/13 C; Prompt 45). Pausing is free and instant both ways
+   * and never touches the `pendingYield` carry, so unpausing resumes at the same
+   * accumulator. ABSENT (default, and every legacy op) reads as running.
+   */
+  readonly paused?: boolean;
 }
 
 /**
