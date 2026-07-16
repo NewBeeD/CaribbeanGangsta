@@ -100,7 +100,10 @@ import type { RecipeId } from '@/engine/config/conversions';
 import {
   ship as shipEngine,
   postBond as postBondEngine,
+  callFavor as callFavorEngine,
+  declineFavor as declineFavorEngine,
   type PostBondResult,
+  type FavorResult,
   type ShipIntent,
   type ShipResult,
 } from '@/engine/travel';
@@ -456,6 +459,15 @@ export interface GameStore {
    * arrest — the bond was already the reprieve).
    */
   resolveArrest(choiceId: string, choice: 'bond' | 'serve'): Promise<PostBondResult | ServeSentenceResult | null>;
+  /**
+   * Resolve a pending "call in a favor" interrupt (design/13 F; Prompt 48) — the
+   * choice queued when a payrolled official could pull an interdicted load back.
+   * `'call'` pays the disclosed favor fee from clean cash + spends the official's
+   * loyalty and DELIVERS the exact load; `'let-go'` declines and takes today's
+   * seizure. Commits + autosaves only when the resolution lands; returns the
+   * `FavorResult` or `null`.
+   */
+  resolveFavor(choiceId: string, choice: 'call' | 'let-go'): FavorResult | null;
   /**
    * Arms trade (Prompt 35; design/12 Item 1) — each wraps the pure `arms.ts`
    * engine, commits only when the operation lands, and autosaves. The UI authors
@@ -1052,6 +1064,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (result.ok) {
       set({ state: result.state });
       trackTick(state, result.state);
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  resolveFavor(choiceId, choice) {
+    const { state } = get();
+    if (!state) return null;
+    const result =
+      choice === 'call'
+        ? callFavorEngine(state, choiceId)
+        : declineFavorEngine(state, choiceId);
+    if (result.ok) {
+      set({ state: result.state });
       void get().persist(AUTOSAVE_SLOT).catch(() => {});
     }
     return result;

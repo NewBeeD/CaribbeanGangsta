@@ -37,6 +37,8 @@ import {
   OFFICIAL_LOYALTY_MIN,
   PORT_GREED_MAX,
   PORT_GREED_MIN,
+  FAVOR_OFFICIAL_IDS,
+  isMajorPort,
   findOfficial,
   getOfficial,
   type OfficialId,
@@ -130,12 +132,17 @@ export function portDriftFactor(state: GameState, portId: string): number {
  */
 export interface BribeQuote {
   readonly portId: string;
-  /** The asking price, $ — the documented formula, rounded. */
+  /** The asking price, $ — the documented formula, rounded (× major-port multiple). */
   readonly ask: number;
   /** Seizure % for shipments through this port once paid (~3%). */
   readonly resultingSeizurePct: number;
   /** Seizure % if you DON'T pay (design/09 B.1 base ~30%). */
   readonly baseSeizurePct: number;
+  /** True for a MAJOR gateway (Miami/Rotterdam class) — pricier, shorter (design/13 F). */
+  readonly isMajorPort: boolean;
+  /** How long paying holds the reduced seizure — a FRACTION of the standing
+   * duration at a major port, the full duration at a minor one (design/13 F). */
+  readonly paidDurationHours: number;
 }
 
 /**
@@ -148,6 +155,11 @@ export interface BribeQuote {
  * `base_bribe` starts at 8% of shipment value (clamped to the 5–20% band). Pure
  * and RNG-free, so the shown number is the charged number (fairness law). The
  * resulting seizure % is the paid floor (~3%); the base is ~30% if you walk.
+ *
+ * Ports everywhere, priced by weight (design/13 F; Prompt 48): EVERY port country
+ * quotes — a MAJOR gateway (Miami/Rotterdam class) charges `PORT_MAJOR_ASK_MULTIPLE ×`
+ * the ask for `PORT_MAJOR_DURATION_FRACTION ×` the hold; a minor port keeps the
+ * cheap, long deal. The per-port greed/drift factors still give each its personality.
  */
 export function quoteBribe(
   state: GameState,
@@ -162,6 +174,7 @@ export function quoteBribe(
     cfg.PORT_BRIBE_MIN_FRACTION,
     cfg.PORT_BRIBE_MAX_FRACTION,
   );
+  const major = isMajorPort(portId);
   const ask =
     fraction *
     value *
@@ -169,7 +182,11 @@ export function quoteBribe(
     (1 + rivalPressure(state)) *
     portGreed(portId, cfg.PORT_GREED_MIN, cfg.PORT_GREED_MAX) *
     repDiscount(state) *
-    portDriftFactor(state, portId);
+    portDriftFactor(state, portId) *
+    (major ? cfg.PORT_MAJOR_ASK_MULTIPLE : 1);
+  const paidDurationHours = major
+    ? cfg.PORT_PAID_DURATION_HOURS * cfg.PORT_MAJOR_DURATION_FRACTION
+    : cfg.PORT_PAID_DURATION_HOURS;
 
   return {
     portId,
@@ -178,6 +195,8 @@ export function quoteBribe(
     baseSeizurePct: state.corruption.paidPorts.some((p) => p.portId === portId)
       ? cfg.PORT_PAID_SEIZURE
       : cfg.PORT_BASE_SEIZURE,
+    isMajorPort: major,
+    paidDurationHours,
   };
 }
 
@@ -270,7 +289,8 @@ export function payBribe(
     portId,
     seizurePct: state.config.corruption.PORT_PAID_SEIZURE,
     paidAtHours: state.clock.hours,
-    paidUntilHours: state.clock.hours + state.config.corruption.PORT_PAID_DURATION_HOURS,
+    // Major ports hold for a FRACTION of the standing duration (design/13 F).
+    paidUntilHours: state.clock.hours + quote.paidDurationHours,
   };
   const next: GameState = {
     ...state,
@@ -474,25 +494,34 @@ function businessLevel(state: GameState): number {
 }
 
 /**
- * The retainer an official would ask for right now (design/09 B.2 v1.1):
+ * The retainer an official would ask for right now (design/09 B.2 v1.1; capped
+ * per design/13 F, Prompt 48):
  *
  * ```
- * new_ask = current × (1 + Δbusiness) × (1 + heat) × greed × (1 + rivalPressure)
+ * raw = current × (1 + Δbusiness) × (1 + heat) × greed × (1 + rivalPressure)
+ * ask = min(raw, current × RAISE_MAX_MULTIPLE, archetype raiseCeiling)
  * ```
  *
  * Pure and RNG-free. The bigger and hotter your empire, the more they know they're
- * worth. Returns a rounded dollar amount; the caller decides whether it clears the
- * `RAISE_MIN_MARGIN` bar to actually be asked.
+ * worth — but the ask is now BOUNDED two ways so it never runs to the billions the
+ * round-4 feedback saw: a single raise lifts the retainer at most `RAISE_MAX_MULTIPLE`,
+ * and an absolute per-archetype `raiseCeiling` caps the top no matter what. Worked
+ * ladder: a DEA insider ($100k base, $1.2M ceiling) climbs 100k → 150k → 225k → …
+ * asymptotically to $1.2M — low millions at the very top, never billions. Returns a
+ * rounded dollar amount; the caller decides whether it clears the `RAISE_MIN_MARGIN`
+ * bar to actually be asked.
  */
 export function computeRaiseAsk(state: GameState, official: OfficialTie): number {
   const heat = clamp(state.heat / HEAT_MAX, 0, 1);
-  const ask =
+  const raw =
     official.retainerPerWeek *
     (1 + businessLevel(state)) *
     (1 + heat) *
     official.greed *
     (1 + rivalPressure(state));
-  return Math.round(ask);
+  const multipleCap = official.retainerPerWeek * state.config.corruption.RAISE_MAX_MULTIPLE;
+  const ceiling = findOfficial(official.officialId)?.raiseCeiling ?? Number.POSITIVE_INFINITY;
+  return Math.round(Math.min(raw, multipleCap, ceiling));
 }
 
 export interface RaiseResult {
@@ -513,6 +542,13 @@ export function requestRaise(state: GameState, officialId: string): RaiseResult 
   if (!tie) return { state, official: null, rejected: 'no-official' };
   if (tie.pendingRaise) return { state, official: tie };
 
+  // Cadence bound (design/13 F): an official can't nag again inside the cooldown.
+  const weeksSinceLast =
+    tie.lastRaiseWeek === undefined ? Infinity : state.clock.week - tie.lastRaiseWeek;
+  if (weeksSinceLast < state.config.corruption.RAISE_MIN_WEEKS_BETWEEN) {
+    return { state, official: tie }; // still cooling down — stays quiet
+  }
+
   const newRetainer = computeRaiseAsk(state, tie);
   if (newRetainer < tie.retainerPerWeek * (1 + state.config.corruption.RAISE_MIN_MARGIN)) {
     return { state, official: tie }; // not worth asking — stays quiet
@@ -523,7 +559,7 @@ export function requestRaise(state: GameState, officialId: string): RaiseResult 
     askedAtHours: state.clock.hours,
     reason: `${tie.name} wants a bigger cut — the empire's grown and so has the risk.`,
   };
-  const next = withTie(state, { ...tie, pendingRaise: ask });
+  const next = withTie(state, { ...tie, pendingRaise: ask, lastRaiseWeek: state.clock.week });
   return { state: next, official: findTie(next, officialId), ask };
 }
 
@@ -865,4 +901,57 @@ export function hasCustomsProtection(state: GameState): boolean {
       !o.isWire &&
       o.loyalty >= state.config.crew.BETRAYAL_PONR_LOYALTY,
   );
+}
+
+// --- Call in a favor & massive-shipment coverage (design/13 F; Prompt 48) ------
+
+/**
+ * The official who could pull an interdicted load back off the dock right now
+ * (design/13 F), or `null` if none qualifies. A candidate is on the payroll in the
+ * favor mapping (`FAVOR_OFFICIAL_IDS` — customs / DEA / judge), loyal past
+ * `FAVOR_MIN_LOYALTY`, and unflipped. The MOST loyal qualifying official answers
+ * (they have the most room to spend). Pure query — `travel.ts` reads it when an
+ * interdiction roll comes up bad to decide whether to offer the favor choice.
+ */
+export function favorOfficialFor(state: GameState): OfficialTie | null {
+  const cfg = state.config.corruption;
+  const candidates = state.corruption.officials.filter(
+    (o) =>
+      FAVOR_OFFICIAL_IDS.includes(o.officialId as OfficialId) &&
+      !o.isWire &&
+      o.loyalty >= cfg.FAVOR_MIN_LOYALTY,
+  );
+  if (candidates.length === 0) return null;
+  return candidates.reduce((best, o) => (o.loyalty > best.loyalty ? o : best));
+}
+
+/**
+ * Spend a favor: apply the disclosed loyalty cost to the official and log the
+ * grievance (design/13 F). The negative memory feeds the SAME flip arc every other
+ * underpayment does — an official you keep leaning on remembers and drifts. Pure;
+ * `travel.callFavor` calls this the moment the player commits to the call.
+ */
+export function spendFavorLoyalty(state: GameState, officialId: string): GameState {
+  const tie = findTie(state, officialId);
+  if (!tie) return state;
+  return applyOfficialLoyalty(
+    state,
+    officialId,
+    state.config.corruption.FAVOR_LOYALTY_COST,
+    'favor-called',
+    `You made ${tie.name} pull a load off the dock — a debt they won't forget.`,
+  );
+}
+
+/**
+ * Whether the player has relevant payroll coverage for a massive run right now
+ * (design/13 F). Coverage = any favor-mapping official (customs / DEA / judge) on
+ * payroll, loyal past the favor bar, unflipped — the same person who could pull the
+ * favor mid-crisis. An UNCOVERED massive manifest into a major country carries the
+ * disclosed odds surcharge (`travel.interdictionBreakdown`); a covered one doesn't.
+ * SOFT pressure only — never a launch lock (open access holds; design/13 Open
+ * decision 1).
+ */
+export function hasMassiveShipmentCoverage(state: GameState): boolean {
+  return favorOfficialFor(state) !== null;
 }

@@ -106,7 +106,9 @@ function PortCard({ row }: { readonly row: PortRow }) {
     >
       <p className="cg-label" style={{ marginBottom: 10 }}>
         Staged here ~{money(row.shipmentValue)} · pay to drop seizure from{' '}
-        {row.unpaidSeizurePctLabel} to {row.paidSeizurePctLabel}.
+        {row.unpaidSeizurePctLabel} to {row.paidSeizurePctLabel}. Holds{' '}
+        {row.paidDurationLabel}
+        {row.isMajorPort ? ' — a major gateway, so it costs more and lapses sooner.' : '.'}
       </p>
 
       {refused ? (

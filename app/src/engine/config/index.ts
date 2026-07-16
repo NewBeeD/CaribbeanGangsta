@@ -147,6 +147,16 @@ import {
   RAISE_ACCEPT_LOYALTY,
   RAISE_MIN_MARGIN,
   BUSINESS_LEVEL_SCALE,
+  RAISE_MAX_MULTIPLE,
+  RAISE_MIN_WEEKS_BETWEEN,
+  PORT_MAJOR_ASK_MULTIPLE,
+  PORT_MAJOR_DURATION_FRACTION,
+  FAVOR_FEE_FRACTION,
+  FAVOR_LOYALTY_COST,
+  FAVOR_MIN_LOYALTY,
+  MASSIVE_UNITS_THRESHOLD,
+  MASSIVE_VALUE_THRESHOLD,
+  MASSIVE_UNCOVERED_SURCHARGE,
 } from './corruption';
 import {
   LENDERS,
@@ -426,6 +436,20 @@ export interface CorruptionTuning {
   readonly RAISE_ACCEPT_LOYALTY: number;
   readonly RAISE_MIN_MARGIN: number;
   readonly BUSINESS_LEVEL_SCALE: number;
+  /** Raise sanity — cap, ceiling & cooldown on asks (design/13 F; Prompt 48). */
+  readonly RAISE_MAX_MULTIPLE: number;
+  readonly RAISE_MIN_WEEKS_BETWEEN: number;
+  /** Ports everywhere, priced by weight — major-port tiering (design/13 F). */
+  readonly PORT_MAJOR_ASK_MULTIPLE: number;
+  readonly PORT_MAJOR_DURATION_FRACTION: number;
+  /** Call-in-a-favor — the mid-crisis intervention (design/13 F; Prompt 48). */
+  readonly FAVOR_FEE_FRACTION: number;
+  readonly FAVOR_LOYALTY_COST: number;
+  readonly FAVOR_MIN_LOYALTY: number;
+  /** Massive-shipment coverage — the disclosed soft surcharge (design/13 F). */
+  readonly MASSIVE_UNITS_THRESHOLD: number;
+  readonly MASSIVE_VALUE_THRESHOLD: number;
+  readonly MASSIVE_UNCOVERED_SURCHARGE: number;
 }
 
 /** Loan sharks (design/10 — lifeline reach is tune-first §8.8). */
@@ -740,6 +764,16 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     RAISE_ACCEPT_LOYALTY,
     RAISE_MIN_MARGIN,
     BUSINESS_LEVEL_SCALE,
+    RAISE_MAX_MULTIPLE,
+    RAISE_MIN_WEEKS_BETWEEN,
+    PORT_MAJOR_ASK_MULTIPLE,
+    PORT_MAJOR_DURATION_FRACTION,
+    FAVOR_FEE_FRACTION,
+    FAVOR_LOYALTY_COST,
+    FAVOR_MIN_LOYALTY,
+    MASSIVE_UNITS_THRESHOLD,
+    MASSIVE_VALUE_THRESHOLD,
+    MASSIVE_UNCOVERED_SURCHARGE,
   },
   lenders: {
     LENDERS,

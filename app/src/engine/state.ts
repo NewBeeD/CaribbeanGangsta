@@ -159,8 +159,15 @@ import type {
  *     the RNG. The two new CHARTER modes (`container-ship`, `semi-sub`) and the cut
  *     retune are pure config CONTENT (no schema impact; migrated saves get them via
  *     the config backfill).
+ * v18: corruption v2 — raise caps, ports everywhere, interventions (design/13 F;
+ *     Prompt 48). `OfficialTie.lastRaiseWeek` gates the per-official raise cooldown;
+ *     `Shipment.favorPending` holds an interdicted load off the dock while the
+ *     "call in a favor" choice is open. The `config.corruption` group gains the raise
+ *     cap/ceiling/cooldown, major-port tiering, favor, and massive-shipment surcharge
+ *     knobs (backfilled from the default). Migration seeds nothing owned — no player
+ *     cash, holdings, or the RNG move (the new fields are absent-is-safe optionals).
  */
-export const SCHEMA_VERSION = 17 as const;
+export const SCHEMA_VERSION = 18 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -414,6 +421,12 @@ export interface OfficialTie {
   readonly isWire?: boolean;
   /** A standing raise they're currently asking for (design/09 B.2 v1.1). */
   readonly pendingRaise?: RaiseAsk;
+  /**
+   * The last in-game week this official asked for a raise (design/13 F; Prompt 48).
+   * `requestRaise` won't set a new ask within `RAISE_MIN_WEEKS_BETWEEN` weeks of it,
+   * so an official can't nag every settlement. Absent = never asked (no cooldown).
+   */
+  readonly lastRaiseWeek?: number;
 }
 
 /**
@@ -851,18 +864,30 @@ export function empireSize(state: GameState): number {
 export const ARREST_CHOICE_KIND = 'arrest';
 
 /**
+ * The `kind` of the "call in a favor" interrupt (design/13 F; Prompt 48), queued
+ * by `travel.ts` when an interdicted shipment could be pulled back by a payrolled
+ * official. It presents as a call-them-or-let-it-go choice: pay the disclosed
+ * favor fee + spend loyalty and the load survives (`travel.callFavor`), or decline
+ * and take today's seizure (`travel.declineFavor`). Consequential by nature — the
+ * held load must resolve through the explicit choice, never a silent dismissal.
+ */
+export const FAVOR_CHOICE_KIND = 'favor-offer';
+
+/**
  * Whether dismissing this pending choice is CONSEQUENTIAL — it carries a story
  * card with real branches (`beatId`/`cardId`), or it is the arrest interrupt
- * (bond or sentence — design/13 B4), so clearing it would silently pick one.
- * These present as interrupt scenes (Prompt 22), are excluded from the Money
- * feed, and survive `dismissAllPendingChoices` (design/13 A5 guardrail: Clear all
- * never silently picks a consequential branch).
+ * (bond or sentence — design/13 B4) or the favor interrupt (call or let it go —
+ * design/13 F), so clearing it would silently pick one. These present as interrupt
+ * scenes (Prompt 22), are excluded from the Money feed, and survive
+ * `dismissAllPendingChoices` (design/13 A5 guardrail: Clear all never silently
+ * picks a consequential branch).
  */
 export function isConsequentialChoice(choice: PendingChoice): boolean {
   return (
     choice.beatId !== undefined ||
     choice.cardId !== undefined ||
-    choice.kind === ARREST_CHOICE_KIND
+    choice.kind === ARREST_CHOICE_KIND ||
+    choice.kind === FAVOR_CHOICE_KIND
   );
 }
 

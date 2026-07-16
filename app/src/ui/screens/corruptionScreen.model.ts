@@ -115,6 +115,11 @@ export interface PortRow {
   /** When a one-off protection lapses, as prose ("day 12, 08:00"); null = standing/unpaid. */
   readonly paidUntilLabel: string | null;
   readonly containerNames: readonly string[];
+  /** A MAJOR gateway (Miami/Rotterdam class) — pricier ask, shorter hold (design/13 F). */
+  readonly isMajorPort: boolean;
+  /** How long paying holds the reduced seizure, as prose ("~2 days") — shorter at a
+   * major port (design/13 F). */
+  readonly paidDurationLabel: string;
 }
 
 /**
@@ -149,6 +154,8 @@ export function portRows(state: GameState): readonly PortRow[] {
       standing: isPortStanding(state, countryId),
       paidUntilLabel: until !== undefined ? gameTimeLabel(until) : null,
       containerNames: here.map((s) => s.name),
+      isMajorPort: quote.isMajorPort,
+      paidDurationLabel: `~${Math.round(quote.paidDurationHours / 24)} days`,
     };
   });
 }

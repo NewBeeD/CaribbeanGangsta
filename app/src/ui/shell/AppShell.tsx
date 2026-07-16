@@ -5,7 +5,15 @@ import {
   useGameState,
   useOfflineReport,
 } from '@/store';
-import { ARREST_CHOICE_KIND, arrestBond, type GameState } from '@/engine';
+import {
+  ARREST_CHOICE_KIND,
+  FAVOR_CHOICE_KIND,
+  arrestBond,
+  favorOfficialFor,
+  favorQuote,
+  type GameState,
+  type Shipment,
+} from '@/engine';
 import { BottomNav, Button, type BottomNavItem } from '@/ui/components';
 import { SCREEN_NODES, screenForHash, type ScreenId } from './nav';
 import { NewRunGate } from './NewRunGate';
@@ -148,6 +156,14 @@ export function AppShell() {
   // sentence — either way the run continues.
   const arrest = state.pendingChoices.find((c) => c.kind === ARREST_CHOICE_KIND) ?? null;
 
+  // A "call in a favor" interrupt (design/13 F; Prompt 48): an interdicted load a
+  // payrolled official can pull back — call it in (pay the disclosed fee + loyalty)
+  // or let it go (today's seizure). Consequential, so it presents as a modal.
+  const favor = state.pendingChoices.find((c) => c.kind === FAVOR_CHOICE_KIND) ?? null;
+  const favorShipment = favor
+    ? (state.shipments.find((s) => s.favorPending && `favor-${s.id}` === favor.id) ?? null)
+    : null;
+
   const navItems: BottomNavItem[] = SCREEN_NODES.filter((n) => n.inNav).map(
     (n) => ({
       id: n.id,
@@ -240,6 +256,16 @@ export function AppShell() {
         />
       ) : null}
 
+      {!scene && !arrest && favor && favorShipment ? (
+        <FavorModal
+          state={state}
+          shipment={favorShipment}
+          summary={favor.summary}
+          onCall={() => useGameStore.getState().resolveFavor(favor.id, 'call')}
+          onLetGo={() => useGameStore.getState().resolveFavor(favor.id, 'let-go')}
+        />
+      ) : null}
+
       {confirmAbandon ? (
         <AbandonRunModal
           onCancel={() => setConfirmAbandon(false)}
@@ -318,6 +344,79 @@ function ArrestModal({
           <Button variant="ghost" fullWidth onClick={onServe} data-testid="arrest-serve">
             Serve the sentence
             <small>{sentenceDays} days inside — costs run, income freezes</small>
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The "call in a favor" interrupt (design/13 F; Prompt 48) — an interdicted load a
+ * payrolled official can pull back off the dock. Deterministic against the roll
+ * that already came up bad: the fee (a fraction of the cargo's sell value) and the
+ * loyalty cost are SHOWN before choosing. Call it in and the exact load is
+ * delivered; let it go and the seizure lands exactly as it would have. Unaffordable
+ * fee = you can only let it go — the load's gone either way, but the choice was real.
+ */
+function FavorModal({
+  state,
+  shipment,
+  summary,
+  onCall,
+  onLetGo,
+}: {
+  readonly state: GameState;
+  readonly shipment: Shipment;
+  readonly summary: string;
+  readonly onCall: () => void;
+  readonly onLetGo: () => void;
+}) {
+  const official = favorOfficialFor(state);
+  const quote = official ? favorQuote(state, shipment, official) : null;
+  const fee = quote?.fee ?? 0;
+  const canAfford = official !== null && state.cleanCash >= fee;
+  return (
+    <div
+      className="cg-modal__scrim"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Call in a favor"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(0,0,0,0.6)',
+        zIndex: 50,
+        padding: 16,
+      }}
+    >
+      <div className="cg-card" style={{ maxWidth: 420 }} data-testid="favor-modal">
+        <h2 className="cg-kicker">Call in a favor</h2>
+        <p className="cg-label" style={{ margin: '10px 0' }}>
+          {summary}
+        </p>
+        <p className="cg-label" style={{ margin: '10px 0' }}>
+          {official ? official.name : 'Your contact'} wants $
+          {fee.toLocaleString('en-US')}, clean cash only
+          {canAfford ? ' — and they owe you enough to make it stick.' : " — and you can't cover it."}
+        </p>
+        <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+          <Button
+            variant="primary"
+            fullWidth
+            onClick={onCall}
+            disabled={!canAfford}
+            data-testid="favor-call"
+          >
+            Call it in
+            <small>${fee.toLocaleString('en-US')} clean · costs their loyalty</small>
+          </Button>
+          <Button variant="ghost" fullWidth onClick={onLetGo} data-testid="favor-let-go">
+            Let it go
+            <small>The load is seized — take the loss</small>
           </Button>
         </div>
       </div>

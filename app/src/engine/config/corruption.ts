@@ -49,6 +49,14 @@ export interface OfficialConfig {
    * risk more, so their thresholds are higher; a skittish politician's is low.
    */
   readonly comfortHeat: number;
+  /**
+   * Per-archetype ABSOLUTE ceiling, $/wk, on any single raise ask (design/13 F;
+   * Prompt 48). `computeRaiseAsk` never returns above this OR `retainer ×
+   * RAISE_MAX_MULTIPLE`, whichever is lower — so a billionaire-scale empire can't
+   * push a DEA insider to $10B. The worked ladder: a late-game official maxes in
+   * the low millions, never the billions the round-4 feedback saw.
+   */
+  readonly raiseCeiling: number;
 }
 
 /**
@@ -73,6 +81,7 @@ export const OFFICIALS: readonly OfficialConfig[] = [
     greed: 0.9,
     startingLoyalty: 62,
     comfortHeat: 55,
+    raiseCeiling: 500_000,
   },
   {
     id: 'detective',
@@ -83,6 +92,7 @@ export const OFFICIALS: readonly OfficialConfig[] = [
     greed: 1.1,
     startingLoyalty: 52,
     comfortHeat: 62,
+    raiseCeiling: 1_200_000,
   },
   {
     id: 'customs-chief',
@@ -93,6 +103,7 @@ export const OFFICIALS: readonly OfficialConfig[] = [
     greed: 1.05,
     startingLoyalty: 55,
     comfortHeat: 58,
+    raiseCeiling: 3_000_000,
   },
   {
     id: 'politician',
@@ -103,6 +114,7 @@ export const OFFICIALS: readonly OfficialConfig[] = [
     greed: 1.2,
     startingLoyalty: 50,
     comfortHeat: 45,
+    raiseCeiling: 5_000_000,
   },
   {
     id: 'judge',
@@ -113,6 +125,7 @@ export const OFFICIALS: readonly OfficialConfig[] = [
     greed: 1.25,
     startingLoyalty: 48,
     comfortHeat: 40,
+    raiseCeiling: 10_000_000,
   },
 ] as const;
 
@@ -210,3 +223,95 @@ export const RAISE_MIN_MARGIN = 0.05;
 
 /** Reputation.business (0–100) is normalized by this into the `Δbusiness` term. */
 export const BUSINESS_LEVEL_SCALE = 100;
+
+// --- Raise sanity (design/13 F; Prompt 48) -----------------------------------
+//
+// Round-4 feedback: "The DEA agent keeps raising his price up to $10 billion."
+// The raise ARC (pending/accept/refuse/grievance) is untouched — only the NUMBER
+// and the CADENCE get bounds:
+//   • the ask is capped at `retainer × RAISE_MAX_MULTIPLE` AND the archetype's
+//     absolute `raiseCeiling` (above), whichever is lower;
+//   • an official won't ask again inside `RAISE_MIN_WEEKS_BETWEEN` weeks.
+// Worked ladder for a late-game DEA insider (base $100k, ceiling $1.2M): each
+// accepted raise lifts the retainer at most ×1.5, so the sequence is
+// 100k → 150k → 225k → 337k → … asymptotically capped at $1.2M — low millions at
+// the very top, never billions, no matter how big/hot the empire grows.
+
+/** Most a single raise can lift the CURRENT retainer (a multiplicative cap). */
+export const RAISE_MAX_MULTIPLE = 1.5;
+/** An official won't ask for another raise within this many in-game weeks. */
+export const RAISE_MIN_WEEKS_BETWEEN = 4;
+
+// --- Ports everywhere, priced by weight (design/13 F; Prompt 48) --------------
+//
+// Round-4 feedback: "Only Puerto Verde gives me the bribe option — I want this
+// for all ports; major ports should charge much more for less time." Every port
+// country can now quote/haggle/pay (`quoteBribe`/`payBribe` were always
+// port-agnostic — this is the tiering + the surfacing). A MAJOR port (a big
+// continental gateway — Miami/Rotterdam class) charges a MULTIPLE of the ask for
+// a FRACTION of the standing duration; minor ports keep the cheap, long deal. The
+// per-port greed/drift factors still give every port its own personality on top.
+
+/** The big continental gateways — the "major port" tier (design/13 F). Content, like
+ * the officials roster: a stable list of country ids, not a tunable number. */
+export const MAJOR_PORT_COUNTRY_IDS: readonly string[] = [
+  'miami',
+  'new-york',
+  'rotterdam',
+  'london',
+];
+
+/** Whether a port country is a MAJOR gateway (pricier bribe, shorter hold). */
+export function isMajorPort(countryId: string): boolean {
+  return MAJOR_PORT_COUNTRY_IDS.includes(countryId);
+}
+
+/** A major port's bribe costs this multiple of the minor-port ask (design/13 F). */
+export const PORT_MAJOR_ASK_MULTIPLE = 3;
+/** …and holds for only this fraction of `PORT_PAID_DURATION_HOURS` (design/13 F). */
+export const PORT_MAJOR_DURATION_FRACTION = 0.34;
+
+// --- Call in a favor (design/13 F; Prompt 48) --------------------------------
+//
+// Round-4 feedback: "If my drugs come across law officials and I have someone on
+// payroll, I should be given the option to call them." When a shipment is about
+// to be lost AND a relevant official (customs / DEA / judge) is on payroll, loyal
+// past the tested bar, and unflipped, the seizure resolves into a telegraphed
+// CHOICE (`travel.ts` favor arc): call them — pay a fee scaled to cargo value +
+// spend loyalty, the load survives — or let it go (today's seizure). Deterministic
+// against the already-rolled interdiction; the fee and loyalty cost are shown
+// before choosing. Burning favors feeds the flip arc (an official you lean on
+// remembers).
+
+/** The officials who can pull a load back off the dock (design/13 F). The favor
+ * mapping: customs (port paperwork), DEA (the case), the judge (the charge). */
+export const FAVOR_OFFICIAL_IDS: readonly OfficialId[] = [
+  'customs-chief',
+  'detective',
+  'judge',
+];
+
+/** Favor fee = this fraction of the cargo's destination sell value (design/13 F). */
+export const FAVOR_FEE_FRACTION = 0.2;
+/** Loyalty spent when an official pulls a favor — a grievance that feeds the flip. */
+export const FAVOR_LOYALTY_COST = -6;
+/** An official must be at least this loyal (and unflipped) to answer the call. */
+export const FAVOR_MIN_LOYALTY = 40;
+
+// --- Massive-shipment coverage — SOFT, never gated (design/13 F; Prompt 48) ----
+//
+// Round-4 feedback: "For massive shipments to major countries, there should be a
+// requirement to have officials on the payroll." Shipped as a DISCLOSED seizure
+// SURCHARGE (a worse shown price on Prompt 47's itemized quote), NOT a hard lock —
+// open access holds (design/13 Open decision 1; a hard gate needs an explicit
+// sign-off recorded like the territory override). An above-threshold manifest into
+// a MAJOR country WITHOUT relevant payroll coverage adds `MASSIVE_UNCOVERED_
+// SURCHARGE` to the interdiction odds (inside the rolled number — shown = rolled);
+// covered manifests add nothing.
+
+/** Units at/above which a manifest counts as "massive" (design/13 F). */
+export const MASSIVE_UNITS_THRESHOLD = 500;
+/** …OR destination sell value at/above which it counts as massive, $ (design/13 F). */
+export const MASSIVE_VALUE_THRESHOLD = 2_000_000;
+/** Odds added to an uncovered massive run into a major country (design/13 F). */
+export const MASSIVE_UNCOVERED_SURCHARGE = 0.18;

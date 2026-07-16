@@ -239,19 +239,28 @@ describe('weekly retainers — charged on the weekly boundary from clean cash', 
 // --- Raise-asks (design/09 B.2 v1.1) -----------------------------------------
 
 describe('raise-asks scale with business level & heat (design/09 B.2 v1.1)', () => {
-  it('computeRaiseAsk follows current × (1+Δbusiness) × (1+heat) × greed × (1+rival)', () => {
+  it('computeRaiseAsk follows current × (1+Δbusiness) × (1+heat) × greed × (1+rival), capped (design/13 F)', () => {
     let state = fundedCalm('raise', 200_000);
     state = hire(state, 'detective').state;
     state = { ...state, heat: 50, reputation: { ...state.reputation, business: 80 } };
     const tie = state.corruption.officials[0]!;
 
-    const expected = Math.round(
+    const raw = Math.round(
       tie.retainerPerWeek *
         (1 + 80 / 100) *
         (1 + 50 / HEAT_MAX) *
         tie.greed *
         (1 + rivalPressure(state)),
     );
+    // The raw formula (297k here) is now bounded by the multiplicative cap
+    // (retainer × RAISE_MAX_MULTIPLE) and the archetype ceiling (design/13 F;
+    // Prompt 48) — so the ask never runs to the billions the round-4 feedback saw.
+    const cfg = state.config.corruption;
+    const ceiling = getOfficial('detective').raiseCeiling;
+    const expected = Math.round(
+      Math.min(raw, tie.retainerPerWeek * cfg.RAISE_MAX_MULTIPLE, ceiling),
+    );
+    expect(expected).toBeLessThan(raw); // the cap actually binds in this scenario
     expect(computeRaiseAsk(state, tie)).toBe(expected);
   });
 

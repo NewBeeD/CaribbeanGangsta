@@ -132,6 +132,7 @@ export {
   rngFor,
   withRngState,
   ARREST_CHOICE_KIND,
+  FAVOR_CHOICE_KIND,
 } from './state';
 export type {
   GameState,
@@ -334,6 +335,10 @@ export {
   patternHeatSurcharge,
   arrestBond,
   postBond,
+  favorQuote,
+  callFavor,
+  declineFavor,
+  massiveUncoveredSurcharge,
   helmingInFlight,
   peopleTotal,
   peopleOut,
@@ -347,6 +352,8 @@ export type {
   ShipmentQuote,
   ShipResult,
   PostBondResult,
+  FavorQuote,
+  FavorResult,
   OddsTerm,
   InterdictionBreakdown,
 } from './travel';
@@ -670,6 +677,19 @@ export {
   RAISE_ACCEPT_LOYALTY,
   RAISE_MIN_MARGIN,
   BUSINESS_LEVEL_SCALE,
+  RAISE_MAX_MULTIPLE,
+  RAISE_MIN_WEEKS_BETWEEN,
+  MAJOR_PORT_COUNTRY_IDS,
+  isMajorPort,
+  PORT_MAJOR_ASK_MULTIPLE,
+  PORT_MAJOR_DURATION_FRACTION,
+  FAVOR_OFFICIAL_IDS,
+  FAVOR_FEE_FRACTION,
+  FAVOR_LOYALTY_COST,
+  FAVOR_MIN_LOYALTY,
+  MASSIVE_UNITS_THRESHOLD,
+  MASSIVE_VALUE_THRESHOLD,
+  MASSIVE_UNCOVERED_SURCHARGE,
 } from './config/corruption';
 export type { OfficialId, OfficialBenefit, OfficialConfig } from './config/corruption';
 export {
@@ -699,6 +719,9 @@ export {
   hasTaskforceWarning,
   hasPoliticalProtection,
   hasCustomsProtection,
+  favorOfficialFor,
+  spendFavorLoyalty,
+  hasMassiveShipmentCoverage,
 } from './corruption';
 export type {
   BribeQuote,

@@ -51,12 +51,20 @@ import {
   recentUseOf,
 } from './heatSources';
 import {
+  favorOfficialFor,
+  hasMassiveShipmentCoverage,
+  spendFavorLoyalty,
+} from './corruption';
+import { isMajorPort } from './config/corruption';
+import {
   ARREST_CHOICE_KIND,
+  FAVOR_CHOICE_KIND,
   netWorth,
   splitCharge,
   type CrewMember,
   type GameState,
   type Inventory,
+  type OfficialTie,
   type PendingChoice,
   type Stash,
 } from './state';
@@ -89,6 +97,14 @@ export interface Shipment {
    * are rolled exactly once; a waiting load is never re-rolled (fairness law).
    */
   readonly cleared?: boolean;
+  /**
+   * True while an interdicted load is HELD off the dock pending the "call in a
+   * favor" choice (design/13 F; Prompt 48). The roll already came up bad; a
+   * payrolled official could pull it back. `travelStep` skips a held shipment
+   * (never re-rolls it — fairness law); it resolves only through `callFavor`
+   * (delivered) or `declineFavor` (seized as today).
+   */
+  readonly favorPending?: boolean;
 }
 
 export interface ShipIntent {
@@ -133,6 +149,13 @@ function withStash(state: GameState, next: Stash): GameState {
   return {
     ...state,
     stashes: state.stashes.map((s) => (s.id === next.id ? next : s)),
+  };
+}
+
+function withShipment(state: GameState, next: Shipment): GameState {
+  return {
+    ...state,
+    shipments: state.shipments.map((s) => (s.id === next.id ? next : s)),
   };
 }
 
@@ -288,6 +311,7 @@ export function interdictionBreakdown(
   const cargoHeatN = clamp(cargoHeat / T.CARGO_HEAT_FULL_RISK, 0, 1);
   const paid = isPortPaid(state, to.countryId) || isPortPaid(state, from.countryId);
   const pattern = patternOddsSurcharge(state, intent);
+  const massive = massiveUncoveredSurcharge(state, intent);
 
   const terms: OddsTerm[] = [
     { label: 'Base exposure', contribution: T.INTERDICTION_BASE },
@@ -333,6 +357,16 @@ export function interdictionBreakdown(
       hint: 'Rotate origin ports — they’re watching this one.',
     });
   }
+  if (massive > 0) {
+    // Massive-shipment coverage (design/13 F): a huge load into a major country
+    // with nobody on the payroll to smooth it runs a DISCLOSED surcharge — a worse
+    // shown price, never a lock (open access holds). Covered manifests add nothing.
+    terms.push({
+      label: `No ${toCountry.name} payroll coverage`,
+      contribution: massive,
+      hint: 'Put customs, a DEA insider, or a judge on the payroll — or split the load.',
+    });
+  }
 
   const raw = terms.reduce((sum, t) => sum + t.contribution, 0);
   const clamped = clamp(raw, T.INTERDICTION_MIN, T.INTERDICTION_MAX);
@@ -365,6 +399,28 @@ export function patternOddsSurcharge(state: GameState, intent: ShipIntent): numb
   return (
     recentUseOf(state, portUseKey(from.countryId)) * state.config.heat.PATTERN_ODDS_PER_USE
   );
+}
+
+/**
+ * The odds surcharge an UNCOVERED massive manifest into a major country carries
+ * (design/13 F; Prompt 48) — `MASSIVE_UNCOVERED_SURCHARGE` when the run is massive
+ * (`qty ≥ MASSIVE_UNITS_THRESHOLD` OR destination sell value `≥ MASSIVE_VALUE_
+ * THRESHOLD`), lands in a MAJOR port country, and no favor-mapping official is on
+ * the payroll to smooth it (`hasMassiveShipmentCoverage`); otherwise 0. SOFT — a
+ * worse shown price folded into the rolled odds, never a launch lock (open access
+ * holds; design/13 Open decision 1). Disclosed as its own line on the quote.
+ */
+export function massiveUncoveredSurcharge(state: GameState, intent: ShipIntent): number {
+  const to = findStash(state, intent.toStashId);
+  if (!to) return 0;
+  const toCountry = findCountry(to.countryId);
+  if (!toCountry || !isMajorPort(toCountry.id)) return 0;
+  const C = state.config.corruption;
+  const cargoValue = getMarketPrice(state, intent.product, toCountry.id).price * intent.qty;
+  const isMassive =
+    intent.qty >= C.MASSIVE_UNITS_THRESHOLD || cargoValue >= C.MASSIVE_VALUE_THRESHOLD;
+  if (!isMassive) return 0;
+  return hasMassiveShipmentCoverage(state) ? 0 : C.MASSIVE_UNCOVERED_SURCHARGE;
 }
 
 /** The extra launch heat from recent reuse of the origin port (disclosed). */
@@ -451,6 +507,108 @@ export function postBond(state: GameState, choiceId: string): PostBondResult {
   };
   next = addHeat(next, state.config.transport.ARREST_BOND_HEAT, 'arrest.bond');
   return { state: next, ok: true, paid: bond };
+}
+
+// --- Call in a favor (design/13 F; Prompt 48) ----------------------------------
+
+/** Everything disclosed on the favor choice before the player commits (design/13 F). */
+export interface FavorQuote {
+  /** The favor fee, $ — `FAVOR_FEE_FRACTION × cargo sell value`, from CLEAN cash. */
+  readonly fee: number;
+  /** The loyalty the official spends answering the call (feeds their flip arc). */
+  readonly loyaltyCost: number;
+  /** The official who would pull the load back. */
+  readonly officialId: string;
+  readonly officialName: string;
+}
+
+/**
+ * Quote the favor for a held load (design/13 F): the fee (a fraction of the cargo's
+ * destination sell value) and the loyalty the official spends. Pure and shown before
+ * the player chooses — `callFavor` charges exactly this. Deterministic against the
+ * already-rolled interdiction (no second hidden roll).
+ */
+export function favorQuote(
+  state: GameState,
+  shipment: Shipment,
+  official: OfficialTie,
+): FavorQuote {
+  const to = findStash(state, shipment.toStashId);
+  const toCountryId = to ? (findCountry(to.countryId)?.id ?? to.countryId) : '';
+  const cargoValue = toCountryId
+    ? getMarketPrice(state, shipment.product, toCountryId).price * shipment.qty
+    : 0;
+  return {
+    fee: Math.round(cargoValue * state.config.corruption.FAVOR_FEE_FRACTION),
+    loyaltyCost: state.config.corruption.FAVOR_LOYALTY_COST,
+    officialId: official.id,
+    officialName: official.name,
+  };
+}
+
+/** The held shipment a favor choice refers to (`favor-${id}`), or null. */
+function shipmentForFavor(state: GameState, choiceId: string): Shipment | null {
+  return state.shipments.find((s) => s.favorPending && `favor-${s.id}` === choiceId) ?? null;
+}
+
+export interface FavorResult {
+  readonly state: GameState;
+  readonly ok: boolean;
+  /** What the favor cost (the disclosed fee). 0 when declined or rejected. */
+  readonly paid: number;
+  readonly rejected?: 'no-favor' | 'no-official' | 'insufficient-funds';
+}
+
+/**
+ * Call in the favor on a held load (design/13 F): pay the disclosed fee from CLEAN
+ * cash, spend the official's loyalty (a grievance that feeds their flip arc —
+ * `corruption.spendFavorLoyalty`), and DELIVER the exact load that was about to be
+ * seized. Rejects without mutating when the choice isn't a held favor, no official
+ * still qualifies, or clean cash can't cover the fee (decline is the other exit).
+ */
+export function callFavor(state: GameState, choiceId: string): FavorResult {
+  const choice = state.pendingChoices.find((c) => c.id === choiceId);
+  const shipment = shipmentForFavor(state, choiceId);
+  if (!choice || choice.kind !== FAVOR_CHOICE_KIND || !shipment) {
+    return { state, ok: false, paid: 0, rejected: 'no-favor' };
+  }
+  const official = favorOfficialFor(state);
+  if (!official) return { state, ok: false, paid: 0, rejected: 'no-official' };
+  const quote = favorQuote(state, shipment, official);
+  if (state.cleanCash < quote.fee) {
+    return { state, ok: false, paid: 0, rejected: 'insufficient-funds' };
+  }
+  let next: GameState = {
+    ...state,
+    cleanCash: state.cleanCash - quote.fee,
+    pendingChoices: state.pendingChoices.filter((c) => c.id !== choiceId),
+  };
+  next = spendFavorLoyalty(next, official.id);
+  // Clear the held flag, then deliver exactly the load the roll had condemned.
+  next = withShipment(next, { ...shipment, favorPending: false });
+  next = deliverShipment(next, { ...shipment, favorPending: false });
+  return { state: next, ok: true, paid: quote.fee };
+}
+
+/**
+ * Let the held load go (design/13 F): decline the favor and take today's seizure —
+ * exactly the loss (cargo gone, heat spike, investigation window, arrest-if-solo)
+ * that would have landed without a payrolled official. Rejects without mutating when
+ * the choice isn't a held favor.
+ */
+export function declineFavor(state: GameState, choiceId: string): FavorResult {
+  const choice = state.pendingChoices.find((c) => c.id === choiceId);
+  const shipment = shipmentForFavor(state, choiceId);
+  if (!choice || choice.kind !== FAVOR_CHOICE_KIND || !shipment) {
+    return { state, ok: false, paid: 0, rejected: 'no-favor' };
+  }
+  let next: GameState = {
+    ...state,
+    pendingChoices: state.pendingChoices.filter((c) => c.id !== choiceId),
+  };
+  next = withShipment(next, { ...shipment, favorPending: false });
+  next = seizeShipment(next, { ...shipment, favorPending: false });
+  return { state: next, ok: true, paid: 0 };
 }
 
 // --- The quote (everything disclosed before commit) ---------------------------
@@ -768,56 +926,91 @@ function deliverShipment(state: GameState, shipment: Shipment): GameState {
   );
 }
 
-/** Resolve one due shipment: roll the snapshotted odds, then seize or deliver. */
-function resolveShipment(
-  state: GameState,
-  shipment: Shipment,
-  roll: number,
-): GameState {
+/**
+ * Carry out an interdiction seizure (design/11 §3; design/13 B4): remove ONLY this
+ * cargo (never a wipe of other stashes), spike heat (full spike solo; a fraction
+ * consigned — the courier took the fall), open the investigation window on a major
+ * seizure, and render the loss — an arrest interrupt for a solo run, a plain scene
+ * for a consigned one. Deterministic (no roll): the interdiction was already rolled.
+ * Called on a fresh interdiction with no favor available, and when a favor is
+ * DECLINED (`declineFavor`).
+ */
+function seizeShipment(state: GameState, shipment: Shipment): GameState {
   const product = getProduct(shipment.product, state.config.products.PRODUCTS);
   const modeName = getTransport(shipment.mode, state.config.transport.TRANSPORTS)
     .name.toLowerCase();
   const destName = findCountry(
     findStash(state, shipment.toStashId)?.countryId ?? '',
   )?.name;
-
-  if (roll < shipment.interdictionChance) {
-    // Interdicted: ONLY this cargo is seized (never a wipe of other stashes —
-    // design/11 §3), heat spikes (the full spike solo; a fraction consigned —
-    // the courier took the fall), and the loss renders as a scene.
-    const solo = shipment.courierIds.length === 0;
-    const spike =
-      product.heatPerUnit *
-      shipment.qty *
-      product.bustHeatMultiplier *
-      (solo ? 1 : state.config.transport.CONSIGNED_BUST_HEAT_FACTOR);
-    let next: GameState = {
-      ...state,
-      shipments: state.shipments.filter((s) => s.id !== shipment.id),
+  const solo = shipment.courierIds.length === 0;
+  const spike =
+    product.heatPerUnit *
+    shipment.qty *
+    product.bustHeatMultiplier *
+    (solo ? 1 : state.config.transport.CONSIGNED_BUST_HEAT_FACTOR);
+  let next: GameState = {
+    ...state,
+    shipments: state.shipments.filter((s) => s.id !== shipment.id),
+  };
+  next = freeCouriers(next, shipment);
+  next = addHeat(next, spike, 'shipment.seized');
+  // A MAJOR seizure opens the disclosed investigation window (design/13 B5.5).
+  next = maybeOpenInvestigation(next, spike);
+  if (solo) {
+    // YOU were driving (design/13 B4) — the launch quote said what this means.
+    // The arrest presents as a consequential interrupt: post the disclosed
+    // bond (travel.postBond) or serve the disclosed sentence
+    // (clock.serveSentence) — either way the run continues; this tick step
+    // never ends a run (GDD §8).
+    const arrest: PendingChoice = {
+      id: `arrest-${shipment.id}`,
+      kind: ARREST_CHOICE_KIND,
+      summary: `They boarded the ${modeName} with you at the helm. You're in the cuffs — post bond or do the time.`,
+      createdAtHours: next.clock.hours,
     };
-    next = freeCouriers(next, shipment);
-    next = addHeat(next, spike, 'shipment.seized');
-    // A MAJOR seizure opens the disclosed investigation window (design/13 B5.5).
-    next = maybeOpenInvestigation(next, spike);
-    if (solo) {
-      // YOU were driving (design/13 B4) — the launch quote said what this means.
-      // The arrest presents as a consequential interrupt: post the disclosed
-      // bond (travel.postBond) or serve the disclosed sentence
-      // (clock.serveSentence) — either way the run continues; this tick step
-      // never ends a run (GDD §8).
-      const arrest: PendingChoice = {
-        id: `arrest-${shipment.id}`,
-        kind: ARREST_CHOICE_KIND,
-        summary: `They boarded the ${modeName} with you at the helm. You're in the cuffs — post bond or do the time.`,
-        createdAtHours: next.clock.hours,
-      };
-      return { ...next, pendingChoices: [...next.pendingChoices, arrest] };
-    }
-    const summary = `The ${modeName} got boarded en route${destName ? ` to ${destName}` : ''}. Your people walked, but the load is gone.`;
-    return queueScene(next, `shipment-seized-${shipment.id}`, 'shipment-seized', summary);
+    return { ...next, pendingChoices: [...next.pendingChoices, arrest] };
   }
+  const summary = `The ${modeName} got boarded en route${destName ? ` to ${destName}` : ''}. Your people walked, but the load is gone.`;
+  return queueScene(next, `shipment-seized-${shipment.id}`, 'shipment-seized', summary);
+}
 
+/** Resolve one due shipment: roll the snapshotted odds, then seize or deliver. */
+function resolveShipment(
+  state: GameState,
+  shipment: Shipment,
+  roll: number,
+): GameState {
+  if (roll < shipment.interdictionChance) {
+    // Interdicted. Before the seizure lands, check whether a payrolled official can
+    // pull the load back (design/13 F): if one qualifies, the loss becomes a
+    // telegraphed "call in a favor" CHOICE instead of a flat seizure — the load is
+    // held off the dock (`favorPending`), never re-rolled (fairness law), until the
+    // player calls the favor (`callFavor`) or lets it go (`declineFavor`).
+    const official = favorOfficialFor(state);
+    if (official) return offerFavor(state, shipment, official);
+    return seizeShipment(state, shipment);
+  }
   return deliverShipment(state, shipment);
+}
+
+/**
+ * Hold an interdicted load off the dock and queue the "call in a favor" choice
+ * (design/13 F). The shipment is marked `favorPending` (skipped by `travelStep` —
+ * never re-rolled), and a consequential interrupt discloses the fee + loyalty cost
+ * before the player commits. Resolves only through `callFavor` or `declineFavor`.
+ */
+function offerFavor(state: GameState, shipment: Shipment, official: OfficialTie): GameState {
+  const quote = favorQuote(state, shipment, official);
+  const modeName = getTransport(shipment.mode, state.config.transport.TRANSPORTS)
+    .name.toLowerCase();
+  const next = withShipment(state, { ...shipment, favorPending: true });
+  const scene: PendingChoice = {
+    id: `favor-${shipment.id}`,
+    kind: FAVOR_CHOICE_KIND,
+    summary: `They flagged the ${modeName}. ${official.name} can make it disappear for $${quote.fee.toLocaleString()} — call it in, or let the load go.`,
+    createdAtHours: next.clock.hours,
+  };
+  return { ...next, pendingChoices: [...next.pendingChoices, scene] };
 }
 
 /**
@@ -831,7 +1024,11 @@ function resolveShipment(
  */
 export function travelStep(state: GameState, dtHours: number): GameState {
   if (dtHours <= 0 || state.shipments.length === 0) return state;
-  const due = state.shipments.filter((s) => s.arrivesAtHours <= state.clock.hours);
+  // A `favorPending` load is HELD off the dock awaiting the player's call-in-a-favor
+  // choice (design/13 F) — never re-rolled or delivered by the tick (fairness law).
+  const due = state.shipments.filter(
+    (s) => s.arrivesAtHours <= state.clock.hours && !s.favorPending,
+  );
   if (due.length === 0) return state;
 
   let rngUsed = false;

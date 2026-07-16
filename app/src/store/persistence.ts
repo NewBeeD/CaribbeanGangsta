@@ -449,6 +449,21 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
       state: { ...legacy, vessels: legacy.vessels ?? [], config },
     };
   },
+  // 17 → 18: corruption v2 — raise caps, ports everywhere, interventions
+  // (design/13 F; Prompt 48). The saved `config.corruption` gains the raise
+  // cap/ceiling/cooldown, major-port tiering, favor, and massive-shipment surcharge
+  // knobs from the default (any other saved corruption tuning survives). The new
+  // per-tie `lastRaiseWeek` and per-shipment `favorPending` are absent-is-safe
+  // optionals — nothing to seed. Nothing the player earned changes: no cash,
+  // holdings, officials, or RNG movement.
+  17: (env) => {
+    const legacy = env.state as GameState;
+    const config: GameConfig = {
+      ...legacy.config,
+      corruption: { ...DEFAULT_GAME_CONFIG.corruption, ...legacy.config.corruption },
+    };
+    return { ...env, schemaVersion: 18, state: { ...legacy, config } };
+  },
 };
 
 /**
