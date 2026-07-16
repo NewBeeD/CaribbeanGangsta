@@ -39,6 +39,8 @@ import {
 } from './config/countries';
 import { getProduct } from './config/products';
 import { getTransport, type TransportId } from './config/transport';
+import { getVessel, type VesselId } from './config/vessels';
+import { ownedVesselForMode, vesselCargoCap } from './vessels';
 import { getMarketPrice } from './deals';
 import { effectiveCapacity } from './storage';
 import { addHeat } from './heat';
@@ -110,7 +112,14 @@ export type ShipRejectReason =
   | 'insufficient-funds'
   /** A courier id that names nobody on the crew. */
   | 'no-courier'
-  | 'courier-not-idle';
+  | 'courier-not-idle'
+  /**
+   * A SOLO run (nobody consigned = YOU driving) while you're already helming
+   * another in-flight run — you can helm at most one shipment at a time (design/13
+   * E; Prompt 47). People are the capacity: send crew instead, or wait for the
+   * helmed run to return.
+   */
+  | 'helm-busy';
 
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
@@ -156,24 +165,120 @@ function couriersOf(state: GameState, intent: ShipIntent): readonly CrewMember[]
   });
 }
 
+// --- Concurrency: people are the capacity (design/13 E; Prompt 47) -------------
+//
+// Every run needs at least one person aboard — a crew member helming it, or you —
+// and each person can be on at most one run at a time. A CONSIGNED run's couriers
+// are marked `courier` while in flight (`ship`/`freeCouriers`), so a crew member is
+// never double-booked (the `courier-not-idle` reject). A SOLO run is YOU driving;
+// you can helm at most one shipment, so a second solo launch while one is in flight
+// rejects `helm-busy`. People spent per run therefore trade directly against runs
+// you can still launch. A returning run frees exactly its people (crew idle again;
+// a solo run's "you" freed the moment its shipment leaves `state.shipments`).
+
+/** True while a SOLO run (nobody consigned) is in flight — YOU are at a helm. */
+export function helmingInFlight(state: GameState): boolean {
+  return state.shipments.some((s) => s.courierIds.length === 0);
+}
+
+/** Total people available to crew runs: everyone on the crew, plus you. */
+export function peopleTotal(state: GameState): number {
+  return state.crew.length + 1;
+}
+
+/**
+ * People currently OUT on in-flight runs: each consigned run counts its couriers,
+ * each solo run counts one (you). Never exceeds `peopleTotal`, since crew are
+ * single-booked and you helm at most one run.
+ */
+export function peopleOut(state: GameState): number {
+  return state.shipments.reduce(
+    (n, s) => n + (s.courierIds.length === 0 ? 1 : s.courierIds.length),
+    0,
+  );
+}
+
+/** People free to launch a new run right now (`peopleTotal − peopleOut`). */
+export function peopleAvailable(state: GameState): number {
+  return peopleTotal(state) - peopleOut(state);
+}
+
+/**
+ * The cargo cap for `mode` right now: an OWNED vessel operating that mode raises the
+ * hold to its level-scaled `vesselCargoCap` (design/13 E; Prompt 47); otherwise the
+ * charter mode's own `cargoCap`. The number the quote shows and `validate` enforces.
+ */
+export function effectiveCargoCap(state: GameState, mode: TransportId): number {
+  const vessel = ownedVesselForMode(state, mode);
+  if (vessel) return vesselCargoCap(vessel, state.config.vessels);
+  return getTransport(mode, state.config.transport.TRANSPORTS).cargoCap;
+}
+
 // --- The displayed odds (THE number rolled — fairness law) ---------------------
 
 /**
- * The interdiction probability for this shipment: `f(mode baseRisk, leg
- * distance, cargo heat, destination country risk, port protection, paid
- * ports)` clamped into the interdiction window, then reduced multiplicatively
- * per ESCORT (each courier beyond the first) so added security ALWAYS shows in
- * the number (design/11 §3). This is exactly the number `quoteShipment`
- * displays and `travelStep` rolls against. Returns 0 for unknown stashes or
- * countries (`ship` rejects those without rolling anything).
+ * One readable line of the interdiction quote (design/13 E; Prompt 47) — a term of
+ * the odds with its signed contribution, so "why is England 75%?" answers itself.
+ * NO new math: these are the exact inputs `interdictionChance` already sums. A
+ * positive `contribution` raises the odds; a negative one (port protection, paid
+ * ports) lowers them.
  */
-export function interdictionChance(state: GameState, intent: ShipIntent): number {
+export interface OddsTerm {
+  readonly label: string;
+  /** Signed contribution to the PRE-CLAMP odds (probability, e.g. +0.21 or −0.10). */
+  readonly contribution: number;
+  /** A one-line hint of what would move this term (open-access teaching copy). */
+  readonly hint?: string;
+}
+
+/**
+ * The full, itemized derivation of a shipment's interdiction odds (design/13 E;
+ * Prompt 47). `terms` sum to `raw`; `raw` clamps into the interdiction window to
+ * `clamped`; `clamped × escortMultiplier` (one factor per escort beyond the first)
+ * is `total` — byte-identical to `interdictionChance` (which is defined as this
+ * `total`). The quote lists the terms so the number the engine rolls is fully
+ * explained, never opaque.
+ */
+export interface InterdictionBreakdown {
+  readonly terms: readonly OddsTerm[];
+  /** Sum of the terms, before the fairness clamp. */
+  readonly raw: number;
+  /** `raw` clamped into `[INTERDICTION_MIN, INTERDICTION_MAX]`. */
+  readonly clamped: number;
+  /** Escorts = couriers beyond the first (each multiplies the odds down). */
+  readonly escorts: number;
+  /** `(1 − ESCORT_ODDS_REDUCTION)^escorts` — applied after the clamp. */
+  readonly escortMultiplier: number;
+  /** THE number displayed and rolled: `clamped × escortMultiplier`. */
+  readonly total: number;
+}
+
+const ZERO_BREAKDOWN: InterdictionBreakdown = {
+  terms: [],
+  raw: 0,
+  clamped: 0,
+  escorts: 0,
+  escortMultiplier: 1,
+  total: 0,
+};
+
+/**
+ * Derive the interdiction odds AS an itemized breakdown (design/13 E; Prompt 47).
+ * `interdictionChance` is defined as this `total`, so the terms the quote lists
+ * ALWAYS reconstruct exactly the number rolled on arrival (fairness law). Returns a
+ * zero breakdown for unknown stashes or countries (`ship` rejects those without
+ * rolling anything).
+ */
+export function interdictionBreakdown(
+  state: GameState,
+  intent: ShipIntent,
+): InterdictionBreakdown {
   const from = findStash(state, intent.fromStashId);
   const to = findStash(state, intent.toStashId);
-  if (!from || !to) return 0;
+  if (!from || !to) return ZERO_BREAKDOWN;
   const fromCountry = findCountry(from.countryId);
   const toCountry = findCountry(to.countryId);
-  if (!fromCountry || !toCountry) return 0;
+  if (!fromCountry || !toCountry) return ZERO_BREAKDOWN;
 
   const T = state.config.transport;
   const mode = getTransport(intent.mode, T.TRANSPORTS);
@@ -182,23 +287,73 @@ export function interdictionChance(state: GameState, intent: ShipIntent): number
     getProduct(intent.product, state.config.products.PRODUCTS).heatPerUnit * intent.qty;
   const cargoHeatN = clamp(cargoHeat / T.CARGO_HEAT_FULL_RISK, 0, 1);
   const paid = isPortPaid(state, to.countryId) || isPortPaid(state, from.countryId);
+  const pattern = patternOddsSurcharge(state, intent);
 
-  const raw =
-    T.INTERDICTION_BASE +
-    mode.baseRisk * T.MODE_RISK_WEIGHT +
-    dist * T.DISTANCE_RISK_WEIGHT +
-    cargoHeatN * T.CARGO_HEAT_WEIGHT +
-    toCountry.risk * T.DEST_RISK_WEIGHT -
-    toCountry.portProtectionBaseline * T.PORT_PROTECTION_WEIGHT -
-    (paid ? T.PAID_PORT_RELIEF : 0) +
+  const terms: OddsTerm[] = [
+    { label: 'Base exposure', contribution: T.INTERDICTION_BASE },
+    {
+      label: `${mode.name} mode risk`,
+      contribution: mode.baseRisk * T.MODE_RISK_WEIGHT,
+      hint: 'A container ship or semi-sub rides far lower than a go-fast.',
+    },
+    {
+      label: 'Leg distance',
+      contribution: dist * T.DISTANCE_RISK_WEIGHT,
+      hint: 'Longer hauls run hotter — a closer landing is safer.',
+    },
+    {
+      label: 'Cargo heat',
+      contribution: cargoHeatN * T.CARGO_HEAT_WEIGHT,
+      hint: 'Smaller loads of cooler product lower this.',
+    },
+    {
+      label: `${toCountry.name} destination risk`,
+      contribution: toCountry.risk * T.DEST_RISK_WEIGHT,
+      hint: 'Some markets are simply harder to land in.',
+    },
+    {
+      label: 'Port protection',
+      contribution: -toCountry.portProtectionBaseline * T.PORT_PROTECTION_WEIGHT,
+      hint: 'A better-protected destination port helps automatically.',
+    },
+  ];
+  if (paid) {
+    terms.push({
+      label: 'Paid port relief',
+      contribution: -T.PAID_PORT_RELIEF,
+      hint: 'Bribing the origin or destination port bought this down.',
+    });
+  }
+  if (pattern !== 0) {
     // Repeated patterns (design/13 B5.3): re-running the same origin port inside
-    // the decay window adds a DISCLOSED odds surcharge — it lands here, INSIDE
-    // the number the quote shows and arrival rolls (shown = rolled).
-    patternOddsSurcharge(state, intent);
+    // the decay window adds a DISCLOSED odds surcharge — INSIDE the rolled number.
+    terms.push({
+      label: 'Repeated-port pattern',
+      contribution: pattern,
+      hint: 'Rotate origin ports — they’re watching this one.',
+    });
+  }
 
+  const raw = terms.reduce((sum, t) => sum + t.contribution, 0);
   const clamped = clamp(raw, T.INTERDICTION_MIN, T.INTERDICTION_MAX);
   const escorts = Math.max(0, (intent.courierIds?.length ?? 0) - 1);
-  return clamped * Math.pow(1 - T.ESCORT_ODDS_REDUCTION, escorts);
+  const escortMultiplier = Math.pow(1 - T.ESCORT_ODDS_REDUCTION, escorts);
+  return { terms, raw, clamped, escorts, escortMultiplier, total: clamped * escortMultiplier };
+}
+
+/**
+ * The interdiction probability for this shipment: `f(mode baseRisk, leg
+ * distance, cargo heat, destination country risk, port protection, paid
+ * ports)` clamped into the interdiction window, then reduced multiplicatively
+ * per ESCORT (each courier beyond the first) so added security ALWAYS shows in
+ * the number (design/11 §3). This is exactly the number `quoteShipment`
+ * displays and `travelStep` rolls against — defined AS `interdictionBreakdown`'s
+ * `total`, so the itemized quote reconstructs it exactly (design/13 E; Prompt 47).
+ * Returns 0 for unknown stashes or countries (`ship` rejects those without rolling
+ * anything).
+ */
+export function interdictionChance(state: GameState, intent: ShipIntent): number {
+  return interdictionBreakdown(state, intent).total;
 }
 
 // --- Shipment heat & pattern surcharges (design/13 B5.1/B5.3; Prompt 44) -------
@@ -338,6 +493,17 @@ export interface ShipmentQuote {
   readonly arrestBond: number;
   /** The sentence served if no bond is posted (the disclosed other downside). */
   readonly arrestSentenceHours: number;
+  /** The itemized odds derivation — every term with its contribution (design/13 E;
+   * Prompt 47). `oddsBreakdown.total` equals `interdictionChance` exactly. */
+  readonly oddsBreakdown: InterdictionBreakdown;
+  /** True when an OWNED vessel is flying this mode — cut-free, discounted, bigger
+   * hold (design/13 E; Prompt 47). */
+  readonly usingOwnedVessel: boolean;
+  /** The owned vessel's name when one is flying this mode (else undefined). */
+  readonly vesselName?: string;
+  /** The effective cargo cap for the chosen mode — the owned vessel's raised hold
+   * if one is flying it, else the charter mode's `cargoCap`. */
+  readonly cargoCap: number;
 }
 
 function validate(state: GameState, intent: ShipIntent): ShipRejectReason | null {
@@ -348,7 +514,8 @@ function validate(state: GameState, intent: ShipIntent): ShipRejectReason | null
     return 'no-stash';
   }
   if (from.countryId === to.countryId) return 'same-country';
-  if (intent.qty > getTransport(intent.mode, state.config.transport.TRANSPORTS).cargoCap) {
+  // An owned vessel operating this mode raises the hold (design/13 E; Prompt 47).
+  if (intent.qty > effectiveCargoCap(state, intent.mode)) {
     return 'over-cargo-cap';
   }
   if ((from.inventory[intent.product] ?? 0) < intent.qty) return 'insufficient-inventory';
@@ -360,6 +527,10 @@ function validate(state: GameState, intent: ShipIntent): ShipRejectReason | null
     if (!npc) return 'no-courier';
     if (npc.assignment.kind !== 'idle') return 'courier-not-idle';
   }
+  // Concurrency (design/13 E; Prompt 47): a solo run is YOU at the helm — you can
+  // helm at most one shipment at a time. A second solo launch while one is in
+  // flight rejects (send crew instead, or wait for the helmed run to return).
+  if (ids.length === 0 && helmingInFlight(state)) return 'helm-busy';
   return null;
 }
 
@@ -398,6 +569,9 @@ export function quoteShipment(state: GameState, intent: ShipIntent): ShipmentQuo
       soloRun: (intent.courierIds ?? []).length === 0,
       arrestBond: arrestBond(state),
       arrestSentenceHours: state.config.transport.ARREST_SENTENCE_HOURS,
+      oddsBreakdown: ZERO_BREAKDOWN,
+      usingOwnedVessel: false,
+      cargoCap: 0,
     };
   }
 
@@ -405,8 +579,15 @@ export function quoteShipment(state: GameState, intent: ShipIntent): ShipmentQuo
   const mode = getTransport(intent.mode, T.TRANSPORTS);
   const dist = legDistance(fromCountry, toCountry, T.MIN_LEG_DISTANCE);
   const cargoValue = getMarketPrice(state, intent.product, toCountry.id).price * intent.qty;
-  const transportCost = Math.round(mode.costPerDistance * dist);
-  const ownerCut = Math.round(cargoValue * (mode.ownerCutPct ?? 0));
+  // An OWNED vessel operating this mode discounts the leg and pays NO owner cut
+  // (design/13 E; Prompt 47) — both disclosed here, exactly what `ship` charges.
+  const vessel = ownedVesselForMode(state, intent.mode);
+  const vesselCfg = vessel
+    ? getVessel(vessel.type as VesselId, state.config.vessels.VESSELS)
+    : null;
+  const legDiscount = vesselCfg?.legDiscount ?? 0;
+  const transportCost = Math.round(mode.costPerDistance * dist * (1 - legDiscount));
+  const ownerCut = vessel ? 0 : Math.round(cargoValue * (mode.ownerCutPct ?? 0));
   const courierCut = Math.round(cargoValue * T.COURIER_CUT_PCT) * couriers.length;
   const warned = couriers.filter((c) => c.activeArc !== undefined);
   const skimPerCourier = Math.floor(intent.qty * T.COURIER_SKIM_PCT);
@@ -436,6 +617,10 @@ export function quoteShipment(state: GameState, intent: ShipIntent): ShipmentQuo
     soloRun: couriers.length === 0 && (intent.courierIds ?? []).length === 0,
     arrestBond: arrestBond(state),
     arrestSentenceHours: T.ARREST_SENTENCE_HOURS,
+    oddsBreakdown: interdictionBreakdown(state, intent),
+    usingOwnedVessel: vessel !== null,
+    ...(vesselCfg ? { vesselName: vesselCfg.name } : {}),
+    cargoCap: effectiveCargoCap(state, intent.mode),
   };
 }
 

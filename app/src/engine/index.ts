@@ -60,6 +60,7 @@ export type {
   PrestigeTuning,
   TransportTuning,
   ConversionsTuning,
+  VesselsTuning,
   ProductionTuning,
   StreetTuning,
   PlugsTuning,
@@ -143,6 +144,7 @@ export type {
   Stash,
   Front,
   ProductionOp,
+  Vessel,
   CrewMember,
   MemoryEntry,
   BetrayalArc,
@@ -321,6 +323,7 @@ export {
 export type { TransportId, TransportConfig } from './config/transport';
 export {
   interdictionChance,
+  interdictionBreakdown,
   quoteShipment,
   ship,
   travelStep,
@@ -331,6 +334,11 @@ export {
   patternHeatSurcharge,
   arrestBond,
   postBond,
+  helmingInFlight,
+  peopleTotal,
+  peopleOut,
+  peopleAvailable,
+  effectiveCargoCap,
 } from './travel';
 export type {
   Shipment,
@@ -339,7 +347,29 @@ export type {
   ShipmentQuote,
   ShipResult,
   PostBondResult,
+  OddsTerm,
+  InterdictionBreakdown,
 } from './travel';
+
+// Owned vessels — the late-game logistics money sink (design/13 E) — Prompt 47.
+export {
+  VESSELS,
+  VESSEL_MAX_LEVEL,
+  VESSEL_COST_GROWTH,
+  VESSEL_CARGO_GROWTH,
+  getVessel,
+} from './config/vessels';
+export type { VesselId, VesselConfig } from './config/vessels';
+export {
+  vesselCargoCap,
+  vesselUpgradeCost,
+  vesselValue,
+  vesselsValue,
+  ownedVesselForMode,
+  buyVessel,
+  upgradeVessel,
+} from './vessels';
+export type { VesselResult, VesselRejectReason } from './vessels';
 
 // Plugs — true-source connections (Ideas2 §2; design/11 §2).
 export {

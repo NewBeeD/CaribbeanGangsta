@@ -424,6 +424,31 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
       },
     };
   },
+  // 16 → 17: owned vessels — the late-game logistics money sink (design/13 E;
+  // Prompt 47). A pre-v17 run could never buy a vessel, so `vessels` starts empty
+  // and the saved config gains the `vessels` group from the default. The two new
+  // CHARTER modes (`container-ship`, `semi-sub`) are open-access CONTENT — every
+  // mode is offered from minute one — so the `TRANSPORTS` table swaps to the
+  // default (which carries them and the retuned go-fast owner cut), and the courier
+  // cut retune lands too; every other transport scalar the save carried is
+  // preserved. Nothing the player earned changes — no cash, holdings, or RNG.
+  16: (env) => {
+    const legacy = env.state as GameState & { vessels?: GameState['vessels'] };
+    const config: GameConfig = {
+      ...legacy.config,
+      vessels: DEFAULT_GAME_CONFIG.vessels,
+      transport: {
+        ...legacy.config.transport,
+        TRANSPORTS: DEFAULT_GAME_CONFIG.transport.TRANSPORTS,
+        COURIER_CUT_PCT: DEFAULT_GAME_CONFIG.transport.COURIER_CUT_PCT,
+      },
+    };
+    return {
+      ...env,
+      schemaVersion: 17,
+      state: { ...legacy, vessels: legacy.vessels ?? [], config },
+    };
+  },
 };
 
 /**
@@ -460,6 +485,7 @@ function normalizeState(state: GameState): GameState {
     loansTaken?: number;
     wash?: GameState['wash'];
     productionOps?: GameState['productionOps'];
+    vessels?: GameState['vessels'];
   };
   // A v11 save written before Prompt 35 carries a `config` without the `arms`
   // group; the arms engine reads `config.arms`, so patch it in from the default
@@ -479,21 +505,24 @@ function normalizeState(state: GameState): GameState {
     arms?: unknown;
     territory?: unknown;
     production?: unknown;
+    vessels?: unknown;
     heat?: { PAYROLLED_COP_DECAY_MULTIPLIER?: number };
     transport?: { ARREST_SENTENCE_HOURS?: number };
   };
   const needsArms = legacyConfig.arms === undefined;
   const needsTerritory = legacyConfig.territory === undefined;
   const needsProduction = legacyConfig.production === undefined;
+  const needsVessels = legacyConfig.vessels === undefined;
   const needsCopDecay = legacyConfig.heat?.PAYROLLED_COP_DECAY_MULTIPLIER === undefined;
   const needsSentence = legacyConfig.transport?.ARREST_SENTENCE_HOURS === undefined;
   const config: GameConfig =
-    needsArms || needsTerritory || needsProduction || needsCopDecay || needsSentence
+    needsArms || needsTerritory || needsProduction || needsVessels || needsCopDecay || needsSentence
       ? {
           ...s.config,
           ...(needsArms ? { arms: DEFAULT_GAME_CONFIG.arms } : {}),
           ...(needsTerritory ? { territory: DEFAULT_GAME_CONFIG.territory } : {}),
           ...(needsProduction ? { production: DEFAULT_GAME_CONFIG.production } : {}),
+          ...(needsVessels ? { vessels: DEFAULT_GAME_CONFIG.vessels } : {}),
           ...(needsCopDecay
             ? {
                 heat: {
@@ -531,6 +560,7 @@ function normalizeState(state: GameState): GameState {
     s.loansTaken !== undefined &&
     s.wash !== undefined &&
     s.productionOps !== undefined &&
+    s.vessels !== undefined &&
     config === s.config &&
     !missingMarkets &&
     !missingArms
@@ -572,6 +602,7 @@ function normalizeState(state: GameState): GameState {
     loansTaken: s.loansTaken ?? (state.debt.active ? 1 : 0),
     wash: s.wash ?? emptyWash(),
     productionOps: s.productionOps ?? [],
+    vessels: s.vessels ?? [],
   };
 }
 

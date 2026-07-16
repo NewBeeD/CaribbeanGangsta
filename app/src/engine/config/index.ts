@@ -218,6 +218,13 @@ import {
   ARREST_SENTENCE_HOURS,
   type TransportConfig,
 } from './transport';
+import {
+  VESSELS,
+  VESSEL_MAX_LEVEL,
+  VESSEL_COST_GROWTH,
+  VESSEL_CARGO_GROWTH,
+  type VesselConfig,
+} from './vessels';
 import { CONVERSION_RECIPES, type ConversionRecipe } from './conversions';
 import {
   PRODUCTION_OPS,
@@ -502,6 +509,14 @@ export interface ConversionsTuning {
   readonly CONVERSION_RECIPES: readonly ConversionRecipe[];
 }
 
+/** Owned vessels — the late-game logistics money sink (design/13 E; Prompt 47). */
+export interface VesselsTuning {
+  readonly VESSELS: readonly VesselConfig[];
+  readonly VESSEL_MAX_LEVEL: number;
+  readonly VESSEL_COST_GROWTH: number;
+  readonly VESSEL_CARGO_GROWTH: number;
+}
+
 /** Production layer — grow-ops, strains & drug factories (Ideas2 item 3; Prompt 39). */
 export interface ProductionTuning {
   readonly PRODUCTION_OPS: readonly ProductionOpConfig[];
@@ -594,6 +609,7 @@ export interface GameConfig {
   readonly prestige: PrestigeTuning;
   readonly transport: TransportTuning;
   readonly conversions: ConversionsTuning;
+  readonly vessels: VesselsTuning;
   readonly production: ProductionTuning;
   readonly markets: MarketsTuning;
   readonly street: StreetTuning;
@@ -791,6 +807,12 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     ARREST_SENTENCE_HOURS,
   },
   conversions: { CONVERSION_RECIPES },
+  vessels: {
+    VESSELS,
+    VESSEL_MAX_LEVEL,
+    VESSEL_COST_GROWTH,
+    VESSEL_CARGO_GROWTH,
+  },
   production: {
     PRODUCTION_OPS,
     PRODUCTION_MAX_LEVEL,

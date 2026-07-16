@@ -47,6 +47,7 @@ import { setLieLow, tierForHeat, type LeTier, type LieLowIntent } from './heat';
 import { convert, type ConvertIntent } from './conversions';
 import { buyPlug, type BuyPlugIntent } from './plugs';
 import { ship, type ShipIntent, type Shipment } from './travel';
+import { vesselsValue } from './vessels';
 import { STARTING_STASH_TYPE, type StashType } from './config/stashes';
 import type {
   CrewAgenda,
@@ -148,8 +149,18 @@ import type {
  *     LIEUTENANT_MAX_PRODUCTION_OPS` is backfilled from the default. The bigger
  *     archetype roster is pure config CONTENT (no schema impact — new candidates
  *     just appear as hireable). Never touches player cash, holdings, or the RNG.
+ * v17: owned vessels — the late-game logistics money sink (design/13 E; Prompt 47).
+ *     `GameState.vessels` (shape mirrors `Front`/`ProductionOp`: a stable per-id
+ *     `vessel-${type}`, single-buy, 1–5 `level`) holds boats bought outright from
+ *     clean cash; each operates a charter mode cut-free with a per-leg discount and a
+ *     level-scaled cargo cap (engine/vessels.ts), and the fleet's invested value
+ *     counts in `netWorth`. The `config.vessels` group is backfilled from the default.
+ *     Migration seeds an empty fleet on old saves — never player cash, holdings, or
+ *     the RNG. The two new CHARTER modes (`container-ship`, `semi-sub`) and the cut
+ *     retune are pure config CONTENT (no schema impact; migrated saves get them via
+ *     the config backfill).
  */
-export const SCHEMA_VERSION = 16 as const;
+export const SCHEMA_VERSION = 17 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -249,6 +260,21 @@ export interface ProductionOp {
    * accumulator. ABSENT (default, and every legacy op) reads as running.
    */
   readonly paused?: boolean;
+}
+
+/**
+ * An owned vessel — a boat bought outright as the late-game logistics money sink
+ * (design/13 E; Prompt 47). Shape mirrors `Front`/`ProductionOp`: a stable per-type
+ * `id` (`vessel-${type}`, single-buy), the config `type` (`VesselId`), and a 1–5
+ * `level`. It operates its charter mode (config/vessels.ts → config/transport.ts)
+ * cut-free with a per-leg discount and a level-scaled cargo cap (engine/vessels.ts),
+ * and its invested value counts in `netWorth`. Empty fleet on a fresh run and on a
+ * migrated pre-v17 save.
+ */
+export interface Vessel {
+  readonly id: string;
+  readonly type: string;
+  readonly level: number;
 }
 
 /**
@@ -676,6 +702,13 @@ export interface GameState {
    * fresh run and on a migrated pre-v13 save.
    */
   readonly productionOps: readonly ProductionOp[];
+  /**
+   * Owned vessels — boats bought outright as the late-game logistics money sink
+   * (design/13 E; Prompt 47). Each operates a charter mode cut-free, discounts its
+   * legs, and counts (its invested value) in `netWorth`. Empty on a fresh run and
+   * on a migrated pre-v17 save.
+   */
+  readonly vessels: readonly Vessel[];
   readonly crew: readonly CrewMember[];
   /**
    * Last in-game week the crew payroll was settled (design/13 D; Prompt 46 — the
@@ -790,13 +823,17 @@ export function splitCharge(
 }
 
 /**
- * Net worth = all dirty cash (in stashes) + clean cash + dirty in the wash queue.
- * Basis of the peak high score. Queued cash counts at FACE VALUE — it's committed
- * but not yet skimmed — so sending the mules never dents net worth on its own; the
- * `WASH_CUT` is realized only as each batch lands (wash.ts).
+ * Net worth = all dirty cash (in stashes) + clean cash + dirty in the wash queue +
+ * the fleet's invested value. Basis of the peak high score. Queued cash counts at
+ * FACE VALUE — it's committed but not yet skimmed — so sending the mules never dents
+ * net worth on its own; the `WASH_CUT` is realized only as each batch lands (wash.ts).
+ * Owned vessels (design/13 E; Prompt 47) count their invested value, so buying a
+ * boat moves capital into an asset rather than reading as a loss (`vesselsValue`).
  */
 export function netWorth(state: GameState): number {
-  return totalDirtyCash(state) + state.cleanCash + state.wash.queuedDirty;
+  return (
+    totalDirtyCash(state) + state.cleanCash + state.wash.queuedDirty + vesselsValue(state)
+  );
 }
 
 /** A rough empire-size composite (design/01 §7). Expanded in Prompt 11. */
@@ -908,6 +945,7 @@ export function createInitialState(
     shipments: [],
     fronts: [],
     productionOps: [],
+    vessels: [],
     crew: [],
     lastCrewPayrollWeek: 1,
     corruption: { officials: [], payrollPerWeek: 0, paidPorts: [], lastPayrollWeek: 1 },

@@ -163,10 +163,12 @@ describe('the launch button label never carries the disabled hint (design/13 A2)
 
     const button = view.container.querySelector('[data-testid="launch-shipment"]')!;
     expect((button as HTMLButtonElement).disabled).toBe(true);
-    expect(button.textContent).not.toContain('Fix the manifest');
+    // The disabled reason renders as its OWN helper line, never in the label
+    // (design/13 A2). Prompt 47 makes over-cargo its own specific hint.
+    expect(button.textContent).not.toContain('bigger mode');
     const hint = view.container.querySelector('[data-testid="launch-hint"]')!;
     expect(hint).not.toBeNull();
-    expect(hint.textContent).toContain('Fix the manifest first.');
+    expect(hint.textContent).toContain('Too much for this hold');
     view.unmount();
   });
 

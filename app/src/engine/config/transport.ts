@@ -15,7 +15,14 @@
  * arrival (the fairness law, design/01 §0.3).
  */
 
-export type TransportId = 'go-fast' | 'ferry' | 'plane';
+export type TransportId =
+  | 'go-fast'
+  | 'ferry'
+  | 'plane'
+  // Bulk charter modes (design/13 E; Prompt 47) — scale the water so a player can
+  // move FAR more units per leg. Pure config rows; `travel.ts` prices any mode.
+  | 'container-ship'
+  | 'semi-sub';
 
 export interface TransportConfig {
   readonly id: TransportId;
@@ -42,7 +49,9 @@ export const TRANSPORTS: readonly TransportConfig[] = [
     cargoCap: 400,
     hoursPerDistance: 18,
     baseRisk: 0.35,
-    ownerCutPct: 0.1,
+    // Cut retune (design/13 E; Prompt 47) — the middleman took too much: 0.10 →
+    // 0.06. An OWNED go-fast vessel pays no owner cut at all (engine/vessels.ts).
+    ownerCutPct: 0.06,
   },
   {
     // Cheapest and lowest-profile thing on the water — but slow, and it only
@@ -63,6 +72,32 @@ export const TRANSPORTS: readonly TransportConfig[] = [
     cargoCap: 100,
     hoursPerDistance: 6,
     baseRisk: 0.18,
+  },
+  {
+    // BULK — the freight play (design/13 E; Prompt 47). Hidden among legitimate
+    // container traffic, it moves an order of magnitude more than any go-fast at
+    // the CHEAPEST per unit-distance and the LOWEST mode risk — but it is the
+    // slowest thing on the water, and a seizure loses a fortune (its own balance:
+    // no cut/discount softens a lost 2,000-unit load). v1 numbers are HYPOTHESES,
+    // retune on the sim.
+    id: 'container-ship',
+    name: 'Container Ship',
+    costPerDistance: 4_000,
+    cargoCap: 2_000,
+    hoursPerDistance: 72,
+    baseRisk: 0.06,
+  },
+  {
+    // The STEALTH play (design/13 E; Prompt 47). Very low mode risk (nothing sees
+    // it coming) and moderate speed, at an EXTREME charter price — the premium you
+    // pay for the lowest displayed odds of any mode carrying the same load. A big
+    // hold, but far under the container ship. v1 numbers are HYPOTHESES.
+    id: 'semi-sub',
+    name: 'Semi-Submersible',
+    costPerDistance: 60_000,
+    cargoCap: 800,
+    hoursPerDistance: 30,
+    baseRisk: 0.04,
   },
 ] as const;
 
@@ -119,8 +154,11 @@ export const MIN_LEG_DISTANCE = 0.15;
 
 // --- Couriers & escorts (Ideas2 §1 — go yourself vs send someone) -------------
 
-/** Each courier's cut, as a fraction of the cargo's sell value at the destination. */
-export const COURIER_CUT_PCT = 0.05;
+/**
+ * Each courier's cut, as a fraction of the cargo's sell value at the destination.
+ * Cut retune (design/13 E; Prompt 47) — couriers took too much: 0.05 → 0.03.
+ */
+export const COURIER_CUT_PCT = 0.03;
 /**
  * Multiplicative odds reduction per escort — each courier BEYOND the first
  * rides shotgun, and each strictly lowers the displayed odds (added security)

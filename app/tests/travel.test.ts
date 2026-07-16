@@ -78,8 +78,15 @@ const home = (state: GameState): Stash => state.stashes[0] as Stash;
 const pool = (state: GameState): number => home(state).dirtyCash + state.cleanCash;
 
 describe('transport config — the mode table (design/11 §3)', () => {
-  it('ships three modes, all priced, all open from minute one (cash is the gate)', () => {
-    expect(TRANSPORTS.map((t) => t.id).sort()).toEqual(['ferry', 'go-fast', 'plane']);
+  it('ships five modes, all priced, all open from minute one (cash is the gate)', () => {
+    // Prompt 47 (design/13 E) adds the two bulk charter modes to the original trio.
+    expect(TRANSPORTS.map((t) => t.id).sort()).toEqual([
+      'container-ship',
+      'ferry',
+      'go-fast',
+      'plane',
+      'semi-sub',
+    ]);
     for (const t of TRANSPORTS) {
       expect(t.costPerDistance).toBeGreaterThan(0);
       expect(t.cargoCap).toBeGreaterThan(0);

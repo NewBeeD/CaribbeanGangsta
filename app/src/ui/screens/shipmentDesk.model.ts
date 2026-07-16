@@ -9,17 +9,27 @@
 
 import {
   TRANSPORTS,
+  VESSELS,
   findCountry,
   getTransport,
   productDisplayName,
   quoteShipment,
   shipmentRoute,
+  effectiveCargoCap,
+  ownedVesselForMode,
+  peopleAvailable,
+  peopleOut,
+  peopleTotal,
+  vesselCargoCap,
+  vesselUpgradeCost,
+  VESSEL_MAX_LEVEL,
   type GameState,
   type ProductId,
   type ShipIntent,
   type ShipmentQuote,
   type Stash,
   type TransportId,
+  type VesselId,
 } from '@/engine';
 
 /** A held product at the origin stash — what there is to ship. */
@@ -48,9 +58,12 @@ export interface DestinationOption {
 export interface ModeOption {
   readonly id: TransportId;
   readonly name: string;
+  /** Effective hold: an owned vessel's raised cap if one flies this mode, else the charter's. */
   readonly cargoCap: number;
   /** The go-fast owner's % of cargo value, 0 for the others (Ideas2 §1). */
   readonly ownerCutPct: number;
+  /** True when an OWNED vessel flies this mode — cut-free & discounted (design/13 E). */
+  readonly owned: boolean;
 }
 
 /** An idle crew member who can ride as courier/escort (Ideas2 §1). */
@@ -96,14 +109,92 @@ export function destinationOptions(
     .map((s) => ({ id: s.id, name: s.name, countryName: countryName(s) }));
 }
 
-/** The mode table for the picker (config, not literals). */
-export function modeOptions(): readonly ModeOption[] {
-  return TRANSPORTS.map((t) => ({
-    id: t.id,
-    name: t.name,
-    cargoCap: t.cargoCap,
-    ownerCutPct: t.ownerCutPct ?? 0,
-  }));
+/** The mode table for the picker (config, not literals), with owned-vessel state. */
+export function modeOptions(state: GameState): readonly ModeOption[] {
+  return TRANSPORTS.map((t) => {
+    const owned = ownedVesselForMode(state, t.id) !== null;
+    return {
+      id: t.id,
+      name: t.name,
+      cargoCap: effectiveCargoCap(state, t.id),
+      // An owned vessel pays no owner cut (design/13 E) — surface 0 when you own it.
+      ownerCutPct: owned ? 0 : (t.ownerCutPct ?? 0),
+      owned,
+    };
+  });
+}
+
+/** The people-are-capacity counter (design/13 E; Prompt 47) — "5 of 6 out". */
+export interface PeopleStatus {
+  /** Everyone available to crew runs: the whole crew, plus you. */
+  readonly total: number;
+  /** People currently out on in-flight runs (couriers + you when helming). */
+  readonly out: number;
+  /** People free to launch another run right now. */
+  readonly available: number;
+}
+
+export function peopleStatus(state: GameState): PeopleStatus {
+  return {
+    total: peopleTotal(state),
+    out: peopleOut(state),
+    available: peopleAvailable(state),
+  };
+}
+
+/** One owned-or-buyable vessel row for the Fleet card (design/13 E; Prompt 47). */
+export interface FleetOption {
+  readonly id: VesselId;
+  readonly name: string;
+  readonly modeName: string;
+  readonly blurb: string;
+  /** True once bought — then it shows level/cargo and an upgrade price. */
+  readonly owned: boolean;
+  /** The saved vessel's id (for upgrade dispatch); undefined until bought. */
+  readonly vesselId?: string;
+  readonly level: number;
+  readonly maxLevel: number;
+  /** Current cargo cap (level-scaled once owned; the level-1 cap before). */
+  readonly cargoCap: number;
+  readonly legDiscountPct: number;
+  /** Clean-cash price of the NEXT action: buy-in when unowned, upgrade cost when owned. */
+  readonly nextCost: number;
+  /** True when the vessel is maxed (owned at max level — no next action). */
+  readonly maxed: boolean;
+  /** Whether clean cash covers `nextCost` right now. */
+  readonly affordable: boolean;
+}
+
+/** Every vessel — owned first-class, the rest buyable (open access, price the only gate). */
+export function fleetOptions(state: GameState): readonly FleetOption[] {
+  return VESSELS.map((cfg) => {
+    const owned = state.vessels.find((v) => v.type === cfg.id) ?? null;
+    const level = owned?.level ?? 1;
+    const maxed = owned !== null && level >= VESSEL_MAX_LEVEL;
+    const cargoCap = owned
+      ? vesselCargoCap(owned, state.config.vessels)
+      : cfg.baseCargoCap;
+    const nextCost = !owned
+      ? cfg.buyIn
+      : maxed
+        ? 0
+        : vesselUpgradeCost(cfg.id, level, state.config.vessels);
+    return {
+      id: cfg.id,
+      name: cfg.name,
+      modeName: getTransport(cfg.mode).name,
+      blurb: cfg.blurb,
+      owned: owned !== null,
+      ...(owned ? { vesselId: owned.id } : {}),
+      level,
+      maxLevel: VESSEL_MAX_LEVEL,
+      cargoCap,
+      legDiscountPct: Math.round(cfg.legDiscount * 100),
+      nextCost,
+      maxed,
+      affordable: !maxed && state.cleanCash >= nextCost,
+    };
+  });
 }
 
 /** Idle crew, with the betrayal-arc warning surfaced (telegraphed, never hidden). */

@@ -20,9 +20,11 @@ import {
   courierOptions,
   deskQuote,
   destinationOptions,
+  fleetOptions,
   inFlightViews,
   originOptions,
   modeOptions,
+  peopleStatus,
   shipmentScenes,
 } from './shipmentDesk.model';
 
@@ -43,7 +45,9 @@ export function ShipmentDesk() {
   const origins = originOptions(state);
   const inFlight = inFlightViews(state);
   const scenes = shipmentScenes(state);
-  const modes = modeOptions();
+  const modes = modeOptions(state);
+  const people = peopleStatus(state);
+  const fleet = fleetOptions(state);
 
   // Resolve the working selection against live state (stale picks fall back).
   const origin = origins.find((o) => o.id === fromId) ?? origins[0] ?? null;
@@ -132,6 +136,15 @@ export function ShipmentDesk() {
           </p>
         ) : null}
 
+        {/* People are the capacity (design/13 E): each run needs someone aboard,
+            and each person rides one run at a time. */}
+        <p className="cg-label" data-testid="people-status" style={{ marginBottom: 10 }}>
+          People: {people.out} of {people.total} out
+          {people.available > 0
+            ? ` · ${people.available} free to send`
+            : ' · everyone’s on the water'}
+        </p>
+
         {!origin ? (
           <p className="cg-label">Nothing to ship — buy product first.</p>
         ) : destinations.length === 0 ? (
@@ -208,8 +221,11 @@ export function ShipmentDesk() {
                 >
                   {m.name}
                   <small>
-                    cap {m.cargoCap}
-                    {m.ownerCutPct > 0 ? ` · owner ${Math.round(m.ownerCutPct * 100)}%` : ''}
+                    cap {m.cargoCap.toLocaleString('en-US')}
+                    {m.owned ? ' · your boat, no cut' : ''}
+                    {!m.owned && m.ownerCutPct > 0
+                      ? ` · owner ${Math.round(m.ownerCutPct * 100)}%`
+                      : ''}
                   </small>
                 </Button>
               ))}
@@ -246,6 +262,38 @@ export function ShipmentDesk() {
                   label="Interdiction odds"
                   note="If boarded: this cargo only — never your stashes"
                 />
+                {/* Teach the run (design/13 E): every odds term, itemized. The
+                    listed terms reconstruct exactly the number rolled on arrival. */}
+                <div
+                  className="cg-label"
+                  data-testid="odds-breakdown"
+                  style={{ marginTop: 10, display: 'grid', gap: 2 }}
+                >
+                  <strong>Why these odds</strong>
+                  {quote.oddsBreakdown.terms.map((t) => (
+                    <div
+                      key={t.label}
+                      style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}
+                    >
+                      <span>{t.label}</span>
+                      <span>
+                        {t.contribution >= 0 ? '+' : '−'}
+                        {Math.abs(Math.round(t.contribution * 100))}%
+                      </span>
+                    </div>
+                  ))}
+                  {quote.oddsBreakdown.escorts > 0 ? (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                      <span>Escorts ({quote.oddsBreakdown.escorts})</span>
+                      <span>×{quote.oddsBreakdown.escortMultiplier.toFixed(2)}</span>
+                    </div>
+                  ) : null}
+                </div>
+                {quote.usingOwnedVessel ? (
+                  <p className="cg-label" data-testid="vessel-note" style={{ marginTop: 6 }}>
+                    Running your own {quote.vesselName} — no owner’s cut, discounted leg.
+                  </p>
+                ) : null}
                 <div className="cg-label" style={{ marginTop: 10 }} data-testid="ship-quote">
                   Transport {money(quote.transportCost)}
                   {quote.ownerCut > 0 ? <> · owner’s cut {money(quote.ownerCut)}</> : null}
@@ -295,7 +343,11 @@ export function ShipmentDesk() {
                   </Button>
                   {!quote.ok && quote.rejected !== 'insufficient-funds' ? (
                     <p className="cg-label" data-testid="launch-hint" style={{ marginTop: 6 }}>
-                      Fix the manifest first.
+                      {quote.rejected === 'helm-busy'
+                        ? 'You’re already at a helm — send crew on this one, or wait for your run to return.'
+                        : quote.rejected === 'over-cargo-cap'
+                          ? 'Too much for this hold — pick a bigger mode or ship less.'
+                          : 'Fix the manifest first.'}
                     </p>
                   ) : null}
                 </div>
@@ -303,6 +355,51 @@ export function ShipmentDesk() {
             ) : null}
           </div>
         )}
+      </Card>
+
+      {/* The fleet — buy a boat outright (design/13 E; Prompt 47). A clean-cash
+          money sink whose return is cut-free, discounted, bigger-hold logistics.
+          Open access: every vessel is offered from minute one, price the only gate. */}
+      <Card heading="The fleet">
+        <p className="cg-label" style={{ marginBottom: 10 }}>
+          Own the boat and there’s no owner to pay, the leg runs cheaper, and the
+          hold grows every upgrade. Bought and upgraded from clean cash.
+        </p>
+        <div style={{ display: 'grid', gap: 8 }}>
+          {fleet.map((v) => (
+            <Panel key={v.id} heading={`${v.name} · ${v.modeName}`}>
+              <div className="cg-label" data-testid="fleet-vessel">
+                {v.blurb}
+                <br />
+                {v.owned ? `Owned · level ${v.level}/${v.maxLevel} · ` : ''}
+                cap {v.cargoCap.toLocaleString('en-US')} · −{v.legDiscountPct}% per leg
+              </div>
+              <div style={{ marginTop: 8 }}>
+                {v.maxed ? (
+                  <p className="cg-label">Fully upgraded.</p>
+                ) : (
+                  <Button
+                    variant={v.owned ? 'secondary' : 'primary'}
+                    disabled={!v.affordable}
+                    data-testid={v.owned ? 'upgrade-vessel' : 'buy-vessel'}
+                    onClick={() => {
+                      if (v.owned && v.vesselId) {
+                        useGameStore.getState().upgradeVessel(v.vesselId);
+                      } else {
+                        useGameStore.getState().buyVessel(v.id);
+                      }
+                    }}
+                  >
+                    {v.owned ? 'Upgrade' : 'Buy'}
+                    <small>
+                      {money(v.nextCost)} clean{!v.affordable ? ' · short' : ''}
+                    </small>
+                  </Button>
+                )}
+              </div>
+            </Panel>
+          ))}
+        </div>
       </Card>
     </>
   );

@@ -221,11 +221,13 @@ describe('B5.3 — repeated patterns: reused ports surcharge heat AND odds, then
     const firstQuote = quoteShipment(state, intent);
     expect(firstQuote.patternOddsSurcharge).toBe(0);
 
-    // Two launches from the same origin port…
+    // Two launches from the same origin port… (clear the in-flight run between
+    // them so the helm is free again — concurrency caps solo runs at one at a
+    // time, but the pattern counter `recentUse` persists across the return).
     for (let i = 0; i < 2; i++) {
       const launched = ship(state, intent);
       expect(launched.ok).toBe(true);
-      state = seedHome(launched.state, { inventory: { weed: 40 } }); // restock to re-run
+      state = seedHome({ ...launched.state, shipments: [] }, { inventory: { weed: 40 } });
     }
 
     // …and the third quote carries the pattern surcharge in heat AND odds.

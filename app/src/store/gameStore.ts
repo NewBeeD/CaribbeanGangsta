@@ -105,6 +105,12 @@ import {
   type ShipResult,
 } from '@/engine/travel';
 import {
+  buyVessel as buyVesselEngine,
+  upgradeVessel as upgradeVesselEngine,
+  type VesselResult,
+} from '@/engine/vessels';
+import type { VesselId } from '@/engine/config/vessels';
+import {
   borrow as borrowEngine,
   repay as repayEngine,
   type BorrowResult,
@@ -336,6 +342,15 @@ export interface GameStore {
   setProductionPaused(opId: string, paused: boolean): void;
   /** Route an op's yield to a same-country destination stash (home when it's `stashes[0]`). */
   setProductionStash(opId: string, stashId: string): void;
+  /**
+   * Owned vessels — the late-game logistics money sink (design/13 E; Prompt 47).
+   * Commit + autosave only on success (funds sufficed, not owned/maxed). The UI
+   * authors no cost/cap math — the fleet card reads `vesselCargoCap`/`vesselUpgradeCost`.
+   */
+  /** Buy the Level-1 vessel of `id`, paid from CLEAN cash (single-buy per id). */
+  buyVessel(id: VesselId): VesselResult | null;
+  /** Upgrade a vessel one level, paid from CLEAN cash at `buy_in × 1.15^level`. */
+  upgradeVessel(vesselId: string): VesselResult | null;
   /** Bring an archetype onto the crew (open access — money/relationships gate it, never a flag). */
   recruitCrew(archetypeId: string): CrewMember | null;
   /** Train a skill by a fixed step, paid from clean cash. Rejects (no commit) if maxed/short. */
@@ -794,6 +809,30 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setProductionStash(opId, stashId) {
     withState(get, set, (state) => setProductionStashEngine(state, opId, stashId));
     void get().persist(AUTOSAVE_SLOT).catch(() => {});
+  },
+
+  buyVessel(id) {
+    const { state } = get();
+    if (!state) return null;
+    const result = buyVesselEngine(state, id);
+    // Only commit + autosave when the vessel was bought (funds sufficed, not owned).
+    if (!result.rejected) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  upgradeVessel(vesselId) {
+    const { state } = get();
+    if (!state) return null;
+    const result = upgradeVesselEngine(state, vesselId);
+    // Only commit + autosave when the upgrade landed (funds sufficed, not maxed).
+    if (!result.rejected) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
   },
 
   recruitCrew(archetypeId) {
