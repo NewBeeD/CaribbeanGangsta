@@ -5,13 +5,22 @@ import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   ARMS_BROKER_COST,
+  ARMS_COUNTRY_IDS,
+  WEAPON_TIER_IDS,
   createInitialState,
+  getArmsPrice,
   hire,
   unlockArmsBroker,
   type GameState,
 } from '@/engine';
 import { LocalSaveStore, useGameStore, type SaveStore } from '@/store';
 import { ArmsScreen } from '@/ui/screens/ArmsScreen';
+import {
+  armsBookCountries,
+  armsCountrySheet,
+  armsPriceBook,
+  armsTierBoard,
+} from '@/ui/screens/armsScreen.model';
 import { productRows } from '@/ui/screens/dealScreen.model';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -115,6 +124,95 @@ describe('ArmsScreen — the trade (weapon tiers, heaviest heat)', () => {
     view.click(pistolRow);
     expect(view.container.textContent).toContain('Seizure chance');
     expect(view.container.querySelector('[data-testid="arms-euc-note"]')).not.toBeNull();
+    view.unmount();
+  });
+});
+
+describe('ArmsScreen — Market / Buy-Sell tabs', () => {
+  it('opens on the trade once the broker is paid, and switches to the market', () => {
+    useGameStore.setState({ state: armed('arms-tabs-open') });
+    const view = mount(<ArmsScreen />);
+    // Unlocked → the Buy/Sell tab is the default: the catalogue commit is live,
+    // the price book is not mounted.
+    expect(view.container.querySelector('[data-testid="arms-commit"]')).not.toBeNull();
+    expect(view.container.querySelector('[data-testid="arms-book-view-tier"]')).toBeNull();
+    // Flip to the market → the price book, no trade panel.
+    view.click(view.container.querySelector('[data-testid="arms-tab-market"]')!);
+    expect(view.container.querySelector('[data-testid="arms-book-view-tier"]')).not.toBeNull();
+    expect(view.container.querySelector('[data-testid="arms-commit"]')).toBeNull();
+    view.unmount();
+  });
+
+  it('opens on the market while the broker is locked (the trade is empty)', () => {
+    useGameStore.setState({ state: { ...createInitialState('arms-tabs-locked'), cleanCash: 0 } });
+    const view = mount(<ArmsScreen />);
+    // Locked → default is the market; the unlock CTA stays above the tabs.
+    expect(view.container.querySelector('[data-testid="arms-book-view-tier"]')).not.toBeNull();
+    expect(view.container.querySelector('[data-testid="arms-broker-unlock"]')).not.toBeNull();
+    view.unmount();
+  });
+});
+
+describe('armsScreen.model — the price book IS getArmsPrice (fairness cross-check; design/13 §H)', () => {
+  it('every tier × every arms country equals what a sale/purchase executes at', () => {
+    const state = createInitialState('arms-book-fair');
+    for (const tier of WEAPON_TIER_IDS) {
+      const board = armsTierBoard(state, tier);
+      expect(board.map((c) => c.countryId)).toEqual([...ARMS_COUNTRY_IDS]);
+      for (const cell of board) {
+        const price = getArmsPrice(state, tier, cell.countryId);
+        expect(cell.price).toBe(price.price);
+        expect(cell.stock).toBe(price.stock);
+        expect(cell.trend).toBe(price.trend);
+        expect(cell.conflict).toBe(price.conflict);
+      }
+    }
+  });
+
+  it('the by-country sheet is the same price read sideways (one price path)', () => {
+    const state = createInitialState('arms-sheet-fair');
+    for (const { id } of armsBookCountries()) {
+      const sheet = armsCountrySheet(state, id);
+      expect(sheet.map((c) => c.tierId)).toEqual([...WEAPON_TIER_IDS]);
+      for (const cell of sheet) {
+        const price = getArmsPrice(state, cell.tierId, id);
+        expect(cell.price).toBe(price.price);
+        // …identical to the same cell read the other way (shared price path).
+        const boardCell = armsTierBoard(state, cell.tierId).find((b) => b.countryId === id)!;
+        expect(cell.price).toBe(boardCell.price);
+      }
+    }
+  });
+
+  it('the full book grid is a tiers × countries matrix sharing the tier-board path', () => {
+    const state = createInitialState('arms-book-grid');
+    const book = armsPriceBook(state);
+    expect(book.tiers.map((t) => t.id)).toEqual([...WEAPON_TIER_IDS]);
+    expect(book.countries.map((c) => c.id)).toEqual([...ARMS_COUNTRY_IDS]);
+    book.tiers.forEach((t, i) => {
+      expect(book.rows[i]).toEqual(armsTierBoard(state, t.id));
+    });
+  });
+
+  it('the whole board is visible from minute one — before the broker is paid', () => {
+    const locked = createInitialState('arms-book-locked');
+    expect(locked.armsBroker).toBe(false);
+    const board = armsTierBoard(locked, 'military');
+    expect(board.length).toBe(ARMS_COUNTRY_IDS.length);
+    expect(board.every((c) => c.price > 0)).toBe(true);
+  });
+
+  it('renders the price book on the screen even while the broker is locked', () => {
+    useGameStore.setState({ state: { ...createInitialState('arms-book-ui'), cleanCash: 0 } });
+    const view = mount(<ArmsScreen />);
+    expect(view.container.querySelector('[data-testid="arms-broker-unlock"]')).not.toBeNull();
+    // The book and its views are present pre-broker (open access).
+    expect(view.container.querySelector('[data-testid="arms-book-view-tier"]')).not.toBeNull();
+    const firstCountry = ARMS_COUNTRY_IDS[0]!;
+    expect(
+      view.container.querySelector(`[data-testid="arms-book-tier-${firstCountry}"]`),
+    ).not.toBeNull();
+    expect(view.container.textContent).toContain('heat/unit');
     view.unmount();
   });
 });

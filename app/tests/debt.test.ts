@@ -6,6 +6,9 @@ import {
   addStash,
   restoreRng,
   debtOwed,
+  netWorth,
+  bankPeaks,
+  endRun,
   // debt — config
   getLender,
   INTEREST_DAYS_PER_WEEK,
@@ -93,6 +96,29 @@ describe('terms are computed and exposed before the player confirms (guarantee #
     expect(r.state.debt.rate).toBe(q.weeklyRate);
     expect(r.state.debt.dueDay).toBe(q.dueDay);
     expect(r.state.debt.active).toBe(true);
+  });
+
+  it('a borrowed loan is a WASH on net worth — the debt cancels the principal', () => {
+    const s = borrower('leverage');
+    const before = netWorth(s);
+    const r = borrow(s, 'papa-cass', 800);
+
+    // The principal lands in clean cash but the loan owed offsets it exactly, so
+    // net worth doesn't budge on the borrow itself — a loan is not free score.
+    expect(netWorth(r.state)).toBe(before);
+    // Interest accruing over time only makes the position WORSE, never better.
+    expect(netWorth(accrueInterest(r.state, 7))).toBeLessThan(before);
+  });
+
+  it('borrowing then ending the run does NOT inflate the banked high score', () => {
+    const s = borrower('score');
+    const withLoan = borrow(s, 'papa-cass', 800).state;
+
+    // Peak-track after taking the loan, then end the run: the banked score is
+    // still the pre-loan peak, not the loan-swollen cash pile.
+    const peaked = bankPeaks(withLoan);
+    const ended = endRun(peaked, 'retired');
+    expect(ended.score).toBe(s.highScore.peakNetWorth);
   });
 
   it('rejects a bad amount, an over-cap ask, and a second loan', () => {

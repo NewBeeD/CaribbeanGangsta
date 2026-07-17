@@ -11,14 +11,18 @@
 
 import { useState } from 'react';
 import type { ArmsBrokerResult, ArmsDealResult, WeaponTierId } from '@/engine';
-import { currentTier, tierDots } from '@/engine';
+import { WEAPON_TIERS, currentTier, tierDots } from '@/engine';
 import { useGameState, useGameStore } from '@/store';
 import { Button, Card, HeatDots, Panel, RiskMeter, SceneText, Stat, TrendArrow } from '@/ui/components';
 import { NewsTicker } from './NewsTicker';
 import {
+  armsBookCountries,
+  armsCountrySheet,
   armsMarketChoices,
+  armsPriceBook,
   armsSceneFor,
   armsSellBust,
+  armsTierBoard,
   armsTierRows,
   brokerIntroProse,
   brokerQuote,
@@ -27,11 +31,49 @@ import {
   hasCustomsPaper,
   maxArmsQty,
   type ArmsMode,
+  type ArmsPriceCell,
 } from './armsScreen.model';
 
 const money = (n: number): string => `$${Math.round(n).toLocaleString('en-US')}`;
 const signedMoney = (n: number): string =>
   `${n < 0 ? '−' : '+'} $${Math.abs(Math.round(n)).toLocaleString('en-US')}`;
+
+type BookView = 'tier' | 'country' | 'book';
+
+/** The page's two top-level sections: the read-only market (the price book) and
+ * the trade (catalogue + buy/sell). Kept in UI state — no engine bearing. */
+type ArmsTab = 'market' | 'trade';
+
+/**
+ * One price-book line, shared by the By-tier and By-country views (README UI
+ * rule: both reads render through one component so their cells can never
+ * diverge). `title` is the country name (tier view) or the tier name (country
+ * view). Every number is `getArmsPrice` verbatim via `armsScreen.model`.
+ */
+function ArmsPriceRow({ cell, title, testid }: {
+  readonly cell: ArmsPriceCell;
+  readonly title: string;
+  readonly testid: string;
+}) {
+  return (
+    <div className="cg-panel" data-testid={testid} style={{ width: '100%' }}>
+      <div
+        style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}
+      >
+        <span className="cg-stat__value">
+          {title}
+          {cell.presence > 0 ? ' ·📍' : ''}
+          {cell.conflict ? ' 🔥' : ''}
+        </span>
+        <TrendArrow direction={cell.trend} />
+      </div>
+      <div className="cg-label" style={{ marginTop: 4 }}>
+        {money(cell.price)} · ~{cell.stock} available · {cell.demandNote} · +{cell.heatPerUnit}{' '}
+        heat/unit ({cell.heatClass})
+      </div>
+    </div>
+  );
+}
 
 export function ArmsScreen() {
   const state = useGameState();
@@ -41,6 +83,11 @@ export function ArmsScreen() {
   const [qty, setQty] = useState(1);
   const [result, setResult] = useState<ArmsDealResult | null>(null);
   const [brokerScene, setBrokerScene] = useState<ArmsBrokerResult | null>(null);
+  const [bookView, setBookView] = useState<BookView>('tier');
+  const [bookTier, setBookTier] = useState<WeaponTierId>('pistols');
+  const [bookCountry, setBookCountry] = useState<string>(armsBookCountries()[0]?.id ?? '');
+  // Open on the trade once the broker's paid; otherwise the market's all there is.
+  const [tab, setTab] = useState<ArmsTab>(state?.armsBroker ? 'trade' : 'market');
 
   // The shell only routes here with a live run; guard so hooks stay unconditional.
   if (!state) return null;
@@ -120,7 +167,10 @@ export function ArmsScreen() {
 
   const openBroker = () => {
     const r = useGameStore.getState().unlockArmsBroker();
-    if (r?.ok) setBrokerScene(r);
+    if (r?.ok) {
+      setBrokerScene(r);
+      setTab('trade');
+    }
   };
 
   const commit = () => {
@@ -177,14 +227,10 @@ export function ArmsScreen() {
 
       <NewsTicker />
 
-      {/* The broker gate — a pure money intro, priced in prose (design/12 Item 1). */}
-      {unlocked ? (
-        <Panel heading="The broker">
-          <p className="cg-label" data-testid="arms-broker-status">
-            You’re on the list. The whole catalogue is open — and so is the risk.
-          </p>
-        </Panel>
-      ) : (
+      {/* The broker gate — a pure money intro, priced in prose (design/12 Item 1).
+          Stays above the tabs while locked: the market's open access, but nothing
+          trades until the introduction is bought. */}
+      {!unlocked && (
         <Card heading="The broker">
           <SceneText tone="default">{brokerIntroProse(state)}</SceneText>
           <p className="cg-label" style={{ marginTop: 8 }}>
@@ -207,6 +253,182 @@ export function ArmsScreen() {
             </Button>
           </div>
         </Card>
+      )}
+
+      {/* The two sections: the read-only Market (price book) and the Buy/Sell
+          trade. Both stay reachable pre-broker — the market's open access. */}
+      <div
+        style={{ display: 'flex', gap: 6, marginBottom: 16 }}
+        role="tablist"
+        aria-label="Arms section"
+      >
+        {([
+          { id: 'market', label: 'Market' },
+          { id: 'trade', label: 'Buy / Sell' },
+        ] as const).map((t) => (
+          <Button
+            key={t.id}
+            variant={t.id === tab ? 'secondary' : 'ghost'}
+            aria-pressed={t.id === tab}
+            data-testid={`arms-tab-${t.id}`}
+            onClick={() => setTab(t.id)}
+          >
+            {t.label}
+          </Button>
+        ))}
+      </div>
+
+      {tab === 'market' && (
+      /* The price book (Prompt 50; design/13 §H) — every tier's price in every
+         arms-trading country, three ways to read it, visible from minute one
+         (open access, before the broker). Informational; trading executes on
+         the Buy/Sell tab, where you stand. */
+      <Card heading="The price book">
+        <p className="cg-label" style={{ marginBottom: 10 }}>
+          Every weapon tier, every market — prices are the arms line’s, verbatim.
+          The money is in a conflict spike 🔥.
+        </p>
+        <div
+          style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}
+          role="tablist"
+          aria-label="Price book view"
+        >
+          {([
+            { id: 'tier', label: 'By tier' },
+            { id: 'country', label: 'By country' },
+            { id: 'book', label: 'Full book' },
+          ] as const).map((v) => (
+            <Button
+              key={v.id}
+              variant={v.id === bookView ? 'secondary' : 'ghost'}
+              aria-pressed={v.id === bookView}
+              data-testid={`arms-book-view-${v.id}`}
+              onClick={() => setBookView(v.id)}
+            >
+              {v.label}
+            </Button>
+          ))}
+        </div>
+
+        {bookView === 'tier' ? (
+          <>
+            <div
+              style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}
+              role="tablist"
+              aria-label="Weapon tier"
+            >
+              {WEAPON_TIERS.map((t) => (
+                <Button
+                  key={t.id}
+                  variant={t.id === bookTier ? 'secondary' : 'ghost'}
+                  aria-pressed={t.id === bookTier}
+                  onClick={() => setBookTier(t.id)}
+                >
+                  {t.name}
+                </Button>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {armsTierBoard(state, bookTier).map((cell) => (
+                <ArmsPriceRow
+                  key={cell.countryId}
+                  cell={cell}
+                  title={cell.countryName}
+                  testid={`arms-book-tier-${cell.countryId}`}
+                />
+              ))}
+            </div>
+          </>
+        ) : null}
+
+        {bookView === 'country' ? (
+          <>
+            <div
+              style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}
+              role="tablist"
+              aria-label="Arms market"
+            >
+              {armsBookCountries().map((c) => (
+                <Button
+                  key={c.id}
+                  variant={c.id === bookCountry ? 'secondary' : 'ghost'}
+                  aria-pressed={c.id === bookCountry}
+                  data-testid={`arms-book-country-${c.id}`}
+                  onClick={() => setBookCountry(c.id)}
+                >
+                  {c.name}
+                </Button>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {armsCountrySheet(state, bookCountry).map((cell) => (
+                <ArmsPriceRow
+                  key={cell.tierId}
+                  cell={cell}
+                  title={cell.tierName}
+                  testid={`arms-book-sheet-${cell.tierId}`}
+                />
+              ))}
+            </div>
+          </>
+        ) : null}
+
+        {bookView === 'book' ? (
+          (() => {
+            const book = armsPriceBook(state);
+            return (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="cg-pricebook">
+              <thead>
+                <tr>
+                  <th scope="col" style={{ textAlign: 'left' }}>
+                    Tier
+                  </th>
+                  {book.countries.map((c) => (
+                    <th key={c.id} scope="col" style={{ textAlign: 'right' }}>
+                      {c.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {book.rows.map((row, i) => (
+                  <tr key={book.tiers[i]!.id}>
+                    <th scope="row" style={{ textAlign: 'left' }}>
+                      {book.tiers[i]!.name}
+                    </th>
+                    {row.map((cell) => (
+                      <td
+                        key={cell.countryId}
+                        data-testid={`arms-book-${cell.tierId}-${cell.countryId}`}
+                        style={{
+                          textAlign: 'right',
+                          color: cell.conflict ? 'var(--cg-brass)' : undefined,
+                          fontWeight: cell.conflict ? 700 : undefined,
+                        }}
+                      >
+                        {money(cell.price)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+            );
+          })()
+        ) : null}
+      </Card>
+      )}
+
+      {tab === 'trade' && (
+      <>
+      {unlocked && (
+        <Panel heading="The broker">
+          <p className="cg-label" data-testid="arms-broker-status">
+            You’re on the list. The whole catalogue is open — and so is the risk.
+          </p>
+        </Panel>
       )}
 
       <Card heading="The catalogue">
@@ -339,6 +561,8 @@ export function ArmsScreen() {
             </small>
           </Button>
         </Card>
+      )}
+      </>
       )}
     </div>
   );

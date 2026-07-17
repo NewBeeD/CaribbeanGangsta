@@ -10,6 +10,7 @@ import {
   hasFirstMove,
   runBatchSim,
   simulateRun,
+  COCAINE_SHARE_TARGET,
   FAIRNESS_MIN_SAMPLES,
   type AnyTelemetryEvent,
 } from '@/telemetry';
@@ -75,6 +76,37 @@ describe('headless batch sim (Prompt 25 acceptance; design/01 §8)', () => {
     const batch = runBatchSim(seeds(10, 'short'), { maxDays: 14 });
     expect(batch.deadOnArrival).toEqual([]);
     for (const run of batch.runs) expect(run.days).toBeLessThanOrEqual(15);
+  });
+});
+
+describe('multi-drug trade mix (design/13 §H — measured, not vibed)', () => {
+  it('cocaine never owns the board, and every seed still reaches the horizon', () => {
+    const batch = runBatchSim(seeds(40));
+
+    // The bar: cocaine's share of the policy's bought volume sits below target,
+    // so it is one drug among ten, not the only trade worth making (Ideas2
+    // round-4 — "I want to trade all drugs because of price hikes").
+    expect(batch.totalUnits).toBeGreaterThan(0);
+    expect(batch.cocaineShare).toBeLessThan(COCAINE_SHARE_TARGET);
+
+    // The mix is genuinely spread — more than one product carries real volume
+    // (a degenerate 100%-of-one-drug board would fail the spirit of the bar).
+    const contributing = Object.values(batch.tradeMix).filter((u) => u > 0);
+    expect(contributing.length).toBeGreaterThanOrEqual(3);
+
+    // Arms never enter the DRUG mix — they trade through their own screen.
+    expect(batch.tradeMix.arms ?? 0).toBe(0);
+
+    // Every seed still reaches the retirement horizon (none spiral out early):
+    // the retune/measurement never came at the cost of survivability.
+    expect(batch.deadOnArrival).toEqual([]);
+    for (const run of batch.runs) expect(run.cause).toBe('retired');
+  }, 15000);
+
+  it('a per-run report carries its own trade mix (reproducible)', () => {
+    const a = simulateRun('mix-repro');
+    const b = simulateRun('mix-repro');
+    expect(a.tradeMix).toEqual(b.tradeMix);
   });
 });
 

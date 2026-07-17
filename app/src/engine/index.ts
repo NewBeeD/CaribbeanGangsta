@@ -577,6 +577,7 @@ export {
   washCut,
   washCleanRate,
   washEtaHours,
+  totalFrontLevels,
   queueWash,
   cancelWash,
   washStep,

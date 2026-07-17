@@ -872,16 +872,28 @@ export function splitCharge(
 }
 
 /**
- * Net worth = all dirty cash (in stashes) + clean cash + dirty in the wash queue +
- * the fleet's invested value. Basis of the peak high score. Queued cash counts at
- * FACE VALUE — it's committed but not yet skimmed — so sending the mules never dents
- * net worth on its own; the `WASH_CUT` is realized only as each batch lands (wash.ts).
- * Owned vessels (design/13 E; Prompt 47) count their invested value, so buying a
- * boat moves capital into an asset rather than reading as a loss (`vesselsValue`).
+ * Net worth = assets minus liabilities. Assets are all dirty cash (in stashes) +
+ * clean cash + dirty in the wash queue + the fleet's invested value; the one
+ * liability netted out is any OUTSTANDING LOAN balance (principal + accrued
+ * interest). Basis of the peak high score, so a borrowed stake can't inflate the
+ * banked score — the loan lands in clean cash but is cancelled by the debt it
+ * creates, and net worth only climbs when you turn that stake into real value
+ * (design/10). Queued cash counts at FACE VALUE — it's committed but not yet
+ * skimmed — so sending the mules never dents net worth on its own; the `WASH_CUT`
+ * is realized only as each batch lands (wash.ts). Owned vessels (design/13 E;
+ * Prompt 47) count their invested value, so buying a boat moves capital into an
+ * asset rather than reading as a loss (`vesselsValue`). Crew back-wages are a
+ * liability too but are deliberately NOT netted here (design/13 D; they're a
+ * settlement claim, not a debt against the score).
  */
 export function netWorth(state: GameState): number {
+  const loanBalance = state.debt.active ? debtOwed(state.debt) : 0;
   return (
-    totalDirtyCash(state) + state.cleanCash + state.wash.queuedDirty + vesselsValue(state)
+    totalDirtyCash(state) +
+    state.cleanCash +
+    state.wash.queuedDirty +
+    vesselsValue(state) -
+    loanBalance
   );
 }
 

@@ -11,6 +11,7 @@
  */
 
 import {
+  ARMS_COUNTRY_IDS,
   WEAPON_TIERS,
   armsBrokerQuote,
   armsBustProbability,
@@ -108,6 +109,119 @@ export function armsTierRows(state: GameState, countryId: string): readonly Arms
       conflict: price.conflict,
     };
   });
+}
+
+// --- The arms price book (Prompt 50; design/13 §H) ----------------------------
+// The gap round-4 named: "arms do not show well… it does not show the prices of
+// the different types… probably a separate arms market." The fix mirrors the
+// World-Market price board (Prompt 42): every tier's price in every arms-trading
+// country, visible FROM MINUTE ONE (open access — before the broker, before a
+// foothold), each number `getArmsPrice` VERBATIM so what's shown is what a
+// sale/purchase there executes at. No engine math here.
+
+export type ArmsHeatClass = 'High' | 'Severe' | 'Extreme' | 'Maximum';
+
+/**
+ * A tier's heat CLASS — a plain-language label over its per-unit heat (the
+ * heaviest in the game, design/12 Item 1: 2.5 → 6.0). Pure read; drives the
+ * "heat class" column the price book discloses.
+ */
+export function armsHeatClass(heatPerUnit: number): ArmsHeatClass {
+  if (heatPerUnit >= 6) return 'Maximum';
+  if (heatPerUnit >= 4.5) return 'Extreme';
+  if (heatPerUnit >= 3.5) return 'Severe';
+  return 'High';
+}
+
+/** One arms-trading country, for the book's country picker (open access — every
+ * country arms move through, not just the ones you have a foothold in). */
+export interface ArmsBookCountry {
+  readonly id: string;
+  readonly name: string;
+}
+
+export function armsBookCountries(): readonly ArmsBookCountry[] {
+  return ARMS_COUNTRY_IDS.map((id) => ({ id, name: getCountry(id).name }));
+}
+
+/**
+ * ONE (tier, country) price cell — the single price path every book view shares
+ * (`armsTierBoard`, `armsCountrySheet`, `armsPriceBook` all funnel through here),
+ * so a number is `getArmsPrice` verbatim no matter which way the book is read.
+ * This is the fairness anchor the cross-check test pins.
+ */
+export interface ArmsPriceCell {
+  readonly countryId: string;
+  readonly countryName: string;
+  readonly tierId: WeaponTierId;
+  readonly tierName: string;
+  /** THE price — a buy/sale here executes at exactly this (getArmsPrice.price). */
+  readonly price: number;
+  readonly trend: ArmsPriceTrend;
+  /** Whole units the broker's line can supply here right now (finite stock). */
+  readonly stock: number;
+  /** True while a conflict event is spiking this market (the money window). */
+  readonly conflict: boolean;
+  /** A one-word demand read: conflict spike, else the drift trend. */
+  readonly demandNote: string;
+  /** Heat per unit moved (the tier's, country-independent). */
+  readonly heatPerUnit: number;
+  readonly heatClass: ArmsHeatClass;
+  /** Stashes the player holds here — presence is where a deal can execute. */
+  readonly presence: number;
+}
+
+function armsDemandNote(trend: ArmsPriceTrend, conflict: boolean): string {
+  if (conflict) return 'Conflict spike';
+  return trend === 'up' ? 'Demand rising' : trend === 'down' ? 'Softening' : 'Quiet';
+}
+
+function armsCell(state: GameState, tier: WeaponTierId, countryId: string): ArmsPriceCell {
+  const cfg = WEAPON_TIERS.find((t) => t.id === tier)!;
+  const price = getArmsPrice(state, tier, countryId);
+  return {
+    countryId,
+    countryName: getCountry(countryId).name,
+    tierId: tier,
+    tierName: cfg.name,
+    price: price.price,
+    trend: price.trend,
+    stock: price.stock,
+    conflict: price.conflict,
+    demandNote: armsDemandNote(price.trend, price.conflict),
+    heatPerUnit: cfg.heatPerUnit,
+    heatClass: armsHeatClass(cfg.heatPerUnit),
+    presence: state.stashes.filter((s) => s.countryId === countryId).length,
+  };
+}
+
+/** By-tier: pick a weapon tier, read its price in EVERY arms-trading country
+ * (the geography read — where a conflict is spiking demand). */
+export function armsTierBoard(state: GameState, tier: WeaponTierId): readonly ArmsPriceCell[] {
+  return ARMS_COUNTRY_IDS.map((id) => armsCell(state, tier, id));
+}
+
+/** By-country: stand in a country, read EVERY tier's price at once (the whole
+ * catalogue for one market — the location-centric mirror of `armsTierBoard`). */
+export function armsCountrySheet(state: GameState, countryId: string): readonly ArmsPriceCell[] {
+  return WEAPON_TIERS.map((t) => armsCell(state, t.id, countryId));
+}
+
+/** The whole book at a glance — a tiers × countries matrix (every price, always). */
+export interface ArmsPriceBook {
+  readonly tiers: readonly { id: WeaponTierId; name: string }[];
+  readonly countries: readonly ArmsBookCountry[];
+  /** Row-major: `rows[tierIndex][countryIndex]`, aligned to `tiers`/`countries`. */
+  readonly rows: readonly (readonly ArmsPriceCell[])[];
+}
+
+export function armsPriceBook(state: GameState): ArmsPriceBook {
+  const tiers = WEAPON_TIERS.map((t) => ({ id: t.id, name: t.name }));
+  return {
+    tiers,
+    countries: armsBookCountries(),
+    rows: tiers.map((t) => armsTierBoard(state, t.id)),
+  };
 }
 
 export type ArmsMode = 'buy' | 'sell';

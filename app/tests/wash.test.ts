@@ -51,6 +51,59 @@ describe('wash queue — committing dirty cash to the mules', () => {
   });
 });
 
+describe('fronts feed the mules — multiplicative in count & levels (design/13 §H)', () => {
+  it('each new front multiplies throughput by ≥ ×1.5; upgrades compound on top', () => {
+    const flatState = withDirty('wash-boost', 100_000);
+    const flat = washRate(flatState);
+    const fmult = flatState.config.fronts.WASH_FRONT_MULT;
+
+    const oneFront: GameState = {
+      ...flatState,
+      fronts: [{ id: 'f1', type: 'cash-front', level: 1 }],
+    };
+    const twoFronts: GameState = {
+      ...flatState,
+      fronts: [
+        { id: 'f1', type: 'cash-front', level: 1 },
+        { id: 'f2', type: 'crypto', level: 1 },
+      ],
+    };
+
+    // A fresh front (level 1) steps the rate up by exactly the front multiplier…
+    expect(washRate(oneFront)).toBeCloseTo(flat * fmult);
+    expect(washRate(twoFronts)).toBeCloseTo(flat * fmult * fmult);
+    // …which is at least ×1.5 per the requirement.
+    expect(washRate(oneFront) / flat).toBeGreaterThanOrEqual(1.5);
+
+    // Upgrading an owned front raises the rate further (levels compound).
+    const upgraded: GameState = {
+      ...oneFront,
+      fronts: [{ id: 'f1', type: 'cash-front', level: 2 }],
+    };
+    expect(washRate(upgraded)).toBeGreaterThan(washRate(oneFront));
+
+    // Faster mules ⇒ a shorter ETA for the same committed batch.
+    const flatEta = washEtaHours(queueWash(flatState, 100_000).state);
+    const boostEta = washEtaHours(queueWash(twoFronts, 100_000).state);
+    expect(boostEta).toBeLessThan(flatEta);
+  });
+
+  it('a fully built empire (all six fronts at max level) launders ≥ $2,000,000/hr', () => {
+    const maxed: GameState = {
+      ...withDirty('wash-max', 100_000),
+      fronts: [
+        { id: 'f1', type: 'cash-front', level: 5 },
+        { id: 'f2', type: 'smurf-network', level: 5 },
+        { id: 'f3', type: 'crypto', level: 5 },
+        { id: 'f4', type: 'shell-company', level: 5 },
+        { id: 'f5', type: 'trade-front', level: 5 },
+        { id: 'f6', type: 'real-estate', level: 5 },
+      ],
+    };
+    expect(washRate(maxed)).toBeGreaterThanOrEqual(2_000_000);
+  });
+});
+
 describe('washStep — draining the queue over online time', () => {
   it('deposits at the mule throughput, landing clean at 1 − cut', () => {
     // Commit more than one hour clears so a single hour is a partial drain.

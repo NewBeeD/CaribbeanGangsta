@@ -166,6 +166,13 @@ function WashCard({ state }: { readonly state: NonNullable<ReturnType<typeof use
             Money mules deposit dirty cash in sub-$10k batches — it turns clean over
             time, minus a {cutPct}% cut. More money, more time.
           </p>
+          {w.frontMultiplier > 1 ? (
+            <p className="cg-label cg-tone-green" style={{ marginBottom: 4 }}>
+              Your {w.frontCount} front{w.frontCount === 1 ? '' : 's'} ({w.frontLevels} level
+              {w.frontLevels === 1 ? '' : 's'}): ×{w.frontMultiplier.toFixed(1)} throughput (
+              {money(w.ratePerHour)}/h).
+            </p>
+          ) : null}
           <QtyInput
             value={pending}
             max={w.availableDirty}

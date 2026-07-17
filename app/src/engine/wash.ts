@@ -27,9 +27,19 @@ import type { GameState, PendingChoice, Stash } from './state';
 
 // --- Rates (shown = charged) -------------------------------------------------
 
-/** The mule throughput in dirty $/hr for this run's tuning (config-driven). */
+/** Σ level across every owned front — the front-coupling driver (design/13 §H). */
+export function totalFrontLevels(state: GameState): number {
+  return state.fronts.reduce((sum, f) => sum + f.level, 0);
+}
+
+/**
+ * The mule throughput in dirty $/hr for this run's tuning (config-driven). Fronts
+ * feed the mules MULTIPLICATIVELY (design/13 §H; Prompt 50): each owned front is
+ * ≥ ×1.5 and each level above the first compounds, so every front bought or
+ * upgraded launders faster — a fully built empire clears ≥ $2M/hr.
+ */
 export function washRate(state: GameState): number {
-  return washRatePerHour(state.config.fronts);
+  return washRatePerHour(state.config.fronts, state.fronts.length, totalFrontLevels(state));
 }
 
 /** Fraction of each laundered dollar the mules/banks skim (design decision). */

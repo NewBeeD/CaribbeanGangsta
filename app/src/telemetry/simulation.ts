@@ -36,6 +36,9 @@ import { HEAT_MAX } from '@/engine/config/heat';
 import { endRun, evaluateSpiral } from '@/engine/endgame';
 import type { RunEndCause } from '@/engine/endgame';
 
+/** Units bought per product over a run — the policy's revealed trade mix. */
+export type TradeMix = Readonly<Partial<Record<ProductId, number>>>;
+
 export interface SimRunReport {
   readonly seed: string;
   /** In-game days survived when the run ended (or the retirement horizon hit). */
@@ -45,6 +48,9 @@ export interface SimRunReport {
   readonly score: number;
   /** True when the end came through the telegraphed spiral, not the horizon. */
   readonly endedBySpiral: boolean;
+  /** Units the policy BOUGHT of each product this run (the acquisition mix —
+   * design/13 §H: the multi-drug acceptance is measured here, not on vibes). */
+  readonly tradeMix: TradeMix;
 }
 
 export interface BatchSimReport {
@@ -52,6 +58,30 @@ export interface BatchSimReport {
   /** Seeds where no first move existed at birth (design/01 §8.7 — target ~0). */
   readonly deadOnArrival: readonly string[];
   readonly medianDays: number;
+  /** Units bought per product summed across every run in the batch. */
+  readonly tradeMix: TradeMix;
+  /** Total units bought across all products (the trade-mix denominator). */
+  readonly totalUnits: number;
+  /** Cocaine's fraction of `totalUnits` (0 when nothing traded). The design/13
+   * §H acceptance bar: this must sit below `COCAINE_SHARE_TARGET`. */
+  readonly cocaineShare: number;
+}
+
+/**
+ * The multi-drug acceptance threshold (design/13 §H; Ideas2 round-4 "I want to
+ * trade all drugs because of price hikes across countries"). Cocaine's share of
+ * the batch policy's bought volume must sit BELOW this — if one drug owned the
+ * board there would be no reason to touch the other nine. The drift-trading
+ * policy already spreads across products because it buys the deepest relative
+ * dip regardless of drug; this bar guards against a retune re-crowning cocaine.
+ */
+export const COCAINE_SHARE_TARGET = 0.6;
+
+/** Fold a run's mix into a running total (pure). */
+function mergeMix(into: Record<string, number>, add: TradeMix): void {
+  for (const [product, units] of Object.entries(add)) {
+    into[product] = (into[product] ?? 0) + (units ?? 0);
+  }
 }
 
 export interface BatchSimOptions {
@@ -67,10 +97,17 @@ export interface BatchSimOptions {
   readonly config?: GameConfig;
 }
 
-/** Products the policy may buy at `countryId` right now (traded, plug held). */
+/**
+ * Products the policy may buy at `countryId` right now (traded, plug held).
+ * Arms are EXCLUDED — like the Deal screen (`dealScreen.model.ts` filters
+ * `p.id !== 'arms'`), they trade through their own broker screen, never on the
+ * drug loop `resolveDeal` runs. Keeping them out makes the trade-mix a true
+ * DRUG mix (design/13 §H — the multi-drug acceptance is a drug-board number).
+ */
 function buyableProducts(state: GameState, countryId: string): ProductId[] {
   return PRODUCT_IDS.filter(
     (p) =>
+      p !== 'arms' &&
       isTraded(countryId, p) &&
       !(requiresPlug(countryId, p) && !state.plugs.includes(countryId)),
   );
@@ -112,9 +149,15 @@ function cheapestFront(
  * dirty→clean route now — design/12 Item 12); lie low when hot. No cleverness —
  * the policy exists to exercise the sim, not to win.
  */
-function policyStep(state: GameState): GameState {
+/** A policy step's outcome: the next state, plus any product bought (for the mix). */
+interface PolicyStep {
+  readonly state: GameState;
+  readonly bought?: { readonly product: ProductId; readonly qty: number };
+}
+
+function policyStep(state: GameState): PolicyStep {
   const home = state.stashes[0];
-  if (!home) return state;
+  if (!home) return { state };
   let next = state;
 
   // Heat management: duck under the worst of it (free, deterministic lever).
@@ -131,7 +174,7 @@ function policyStep(state: GameState): GameState {
     if (factor >= 1) {
       const qty = Math.min(home.inventory[held] ?? 0, 10);
       const intent: DealIntent = { type: 'sell', product: held, qty, stashId: home.id };
-      return resolveDeal(next, intent).state;
+      return { state: resolveDeal(next, intent).state };
     }
   }
 
@@ -146,7 +189,7 @@ function policyStep(state: GameState): GameState {
 
   // Not holding: buy the deepest dip — the affordable product priced furthest
   // below its base (factor < 1), bounded by the street's stock.
-  if (held) return next;
+  if (held) return { state: next };
   const homeNow = next.stashes[0]!;
   const room =
     getStashType(homeNow.type, next.config.stashes.STASH_TYPES).capacity -
@@ -169,9 +212,14 @@ function policyStep(state: GameState): GameState {
       qty: best.qty,
       stashId: homeNow.id,
     };
-    next = resolveDeal(next, intent).state;
+    const result = resolveDeal(next, intent);
+    next = result.state;
+    // Only a landed buy counts toward the mix (a rejected intent moves nothing).
+    if (result.outcome !== 'rejected') {
+      return { state: next, bought: { product: best.product, qty: best.qty } };
+    }
   }
-  return next;
+  return { state: next };
 }
 
 /** Play one seed to its end (spiral death or the retirement horizon). */
@@ -185,6 +233,7 @@ export function simulateRun(
     ? createInitialState(seed, options.config)
     : createInitialState(seed);
   const maxSteps = Math.ceil((maxDays * 24) / hoursPerStep);
+  const mix: Record<string, number> = {};
 
   for (let step = 0; step < maxSteps; step++) {
     if (state.runStatus !== 'active') break;
@@ -196,10 +245,12 @@ export function simulateRun(
         cause: ended.cause,
         score: ended.score,
         endedBySpiral: true,
+        tradeMix: mix,
       };
     }
-    state = policyStep(state);
-    state = tick(state, hoursPerStep);
+    const stepped = policyStep(state);
+    if (stepped.bought) mix[stepped.bought.product] = (mix[stepped.bought.product] ?? 0) + stepped.bought.qty;
+    state = tick(stepped.state, hoursPerStep);
   }
 
   // Horizon reached (or a card-driven terminal status): bank and retire.
@@ -211,6 +262,7 @@ export function simulateRun(
     cause: ended?.cause ?? cause,
     score: ended?.score ?? Math.max(state.highScore.peakNetWorth, netWorth(state)),
     endedBySpiral: false,
+    tradeMix: mix,
   };
 }
 
@@ -241,5 +293,9 @@ export function runBatchSim(
       : sorted.length % 2 === 1
         ? sorted[(sorted.length - 1) / 2]!
         : (sorted[sorted.length / 2 - 1]! + sorted[sorted.length / 2]!) / 2;
-  return { runs, deadOnArrival, medianDays };
+  const tradeMix: Record<string, number> = {};
+  for (const run of runs) mergeMix(tradeMix, run.tradeMix);
+  const totalUnits = Object.values(tradeMix).reduce((a, b) => a + b, 0);
+  const cocaineShare = totalUnits > 0 ? (tradeMix.cocaine ?? 0) / totalUnits : 0;
+  return { runs, deadOnArrival, medianDays, tradeMix, totalUnits, cocaineShare };
 }

@@ -55,5 +55,5 @@ export {
   isD1ReturnProxy,
 } from './instrument';
 
-export { runBatchSim, simulateRun, hasFirstMove } from './simulation';
-export type { BatchSimReport, BatchSimOptions, SimRunReport } from './simulation';
+export { runBatchSim, simulateRun, hasFirstMove, COCAINE_SHARE_TARGET } from './simulation';
+export type { BatchSimReport, BatchSimOptions, SimRunReport, TradeMix } from './simulation';

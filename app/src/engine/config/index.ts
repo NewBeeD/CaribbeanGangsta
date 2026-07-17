@@ -107,6 +107,8 @@ import {
   WASH_MAX_DEPOSIT,
   WASH_DEPOSITS_PER_DAY,
   WASH_CUT,
+  WASH_FRONT_MULT,
+  WASH_LEVEL_MULT,
   type FrontTypeConfig,
 } from './fronts';
 import {
@@ -395,6 +397,10 @@ export interface FrontsTuning {
   readonly WASH_MAX_DEPOSIT: number;
   readonly WASH_DEPOSITS_PER_DAY: number;
   readonly WASH_CUT: number;
+  /** Per-owned-front throughput multiplier — a new front is ≥ ×1.5 (design/13 §H; Prompt 50). */
+  readonly WASH_FRONT_MULT: number;
+  /** Per-front-level multiplier above the first — upgrades compound the wash. */
+  readonly WASH_LEVEL_MULT: number;
 }
 
 /** Crew loyalty / betrayal / development (design/02 §4–§5). */
@@ -732,6 +738,8 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     WASH_MAX_DEPOSIT,
     WASH_DEPOSITS_PER_DAY,
     WASH_CUT,
+    WASH_FRONT_MULT,
+    WASH_LEVEL_MULT,
   },
   crew: {
     LOYALTY_EVENT_BASE,

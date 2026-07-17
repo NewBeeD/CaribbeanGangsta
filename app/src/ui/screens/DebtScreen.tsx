@@ -190,6 +190,7 @@ function BorrowFlow({ state }: { readonly state: GameState }) {
   };
 
   return (
+    <>
     <Card heading="Borrow">
       <p className="cg-label" style={{ marginBottom: 12 }}>
         Every door’s open — what you can draw is set by your reputation and any collateral,
@@ -197,7 +198,7 @@ function BorrowFlow({ state }: { readonly state: GameState }) {
       </p>
 
       {/* Choose the lender (a character, cheapest-consequence first). */}
-      <div style={{ display: 'grid', gap: 8, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gap: 8 }}>
         {lenders.map((l) => (
           <Panel
             key={l.id}
@@ -224,7 +225,9 @@ function BorrowFlow({ state }: { readonly state: GameState }) {
           </Panel>
         ))}
       </div>
+    </Card>
 
+    <Card heading="How much">
       {/* How much — presets against the cap (never over what the shark will lend). */}
       <p className="cg-label" style={{ marginBottom: 6 }}>
         How much (cap {money(cap)})
@@ -271,9 +274,10 @@ function BorrowFlow({ state }: { readonly state: GameState }) {
           </div>
         </div>
       ) : null}
+    </Card>
 
-      {/* Full terms, up front — no hidden balloon (design/10 §3, §4.4). */}
-      <Panel heading="Your terms, in full">
+    {/* Full terms, up front — no hidden balloon (design/10 §3, §4.4). */}
+    <Card heading="Your terms, in full">
         <div style={{ display: 'grid', gap: 8 }}>
           <Stat label="You receive now" value={money(quote.principal)} tone="gold" big />
           <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
@@ -307,16 +311,16 @@ function BorrowFlow({ state }: { readonly state: GameState }) {
               : 'choose an amount'}
           </small>
         </Button>
-      </Panel>
-
-      {/* The whole ladder for this lender, telegraphed before you ever borrow. */}
-      <div style={{ marginTop: 14 }}>
-        <p className="cg-label" style={{ marginBottom: 8 }}>
-          If you default, here’s the whole ladder for {selected.name} — nothing hidden:
-        </p>
-        <LadderTelegraph steps={ladderTelegraph(state, lenderId)} />
-      </div>
     </Card>
+
+    {/* The whole ladder for this lender, telegraphed before you ever borrow. */}
+    <Card heading={`If you default — ${selected.name}’s ladder`}>
+      <p className="cg-label" style={{ marginBottom: 8 }}>
+        Here’s the whole ladder for {selected.name}, up front — nothing hidden:
+      </p>
+      <LadderTelegraph steps={ladderTelegraph(state, lenderId)} />
+    </Card>
+    </>
   );
 }
 

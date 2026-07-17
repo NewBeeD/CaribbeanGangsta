@@ -12,7 +12,7 @@
  */
 
 import { useGameState, useGameStore } from '@/store';
-import { Button, Card, Panel, Stat } from '@/ui/components';
+import { Button, Card, Stat } from '@/ui/components';
 import { navigate } from '@/ui/shell/useHash';
 import {
   EXPANSION_TYPE,
@@ -68,9 +68,12 @@ export function EmpireMap() {
 
       <Card heading="Territory">
         <Stat label="Clean cash" value={money(cleanCash)} tone="gold" big />
+        <p className="cg-label" style={{ marginTop: 8 }}>
+          Every district below is a door — open a route, or reinforce turf you already hold.
+        </p>
+      </Card>
 
-        <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
-          {districts.map((d) => {
+      {districts.map((d) => {
             const highlighted = next?.countryId === d.countryId;
             const isOpen = d.status === 'unowned';
             const blocked = d.blockedByCrew;
@@ -88,7 +91,7 @@ export function EmpireMap() {
                   : money(d.openCost);
 
             return (
-              <Panel
+              <Card
                 key={d.countryId}
                 heading={
                   <span
@@ -182,11 +185,9 @@ export function EmpireMap() {
                   {actionLabel}
                   <small>{costNote}</small>
                 </Button>
-              </Panel>
+              </Card>
             );
           })}
-        </div>
-      </Card>
 
       {/* Moving product lives on its own Transport page now (design/12 Item 8);
           opening the routes it ships between stays here. */}
@@ -203,7 +204,7 @@ export function EmpireMap() {
         </Card>
       ) : null}
 
-      <Panel heading="Empire at a glance">
+      <Card heading="Empire at a glance">
         <div className="cg-label">
           Fronts {summary.fronts} · Crew {summary.crew} · Routes {summary.routes} ·
           Rivals {summary.rivals}
@@ -224,7 +225,7 @@ export function EmpireMap() {
             </Button>
           </>
         ) : null}
-      </Panel>
+      </Card>
     </div>
   );
 }

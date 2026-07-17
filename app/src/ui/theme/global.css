@@ -691,6 +691,73 @@ button {
   backdrop-filter: blur(3px);
 }
 
+/* ===================================================================
+   Responsive — wider screens (tablet / desktop)
+   -------------------------------------------------------------------
+   The design is mobile-first: below the first breakpoint everything is
+   the phone-portrait column exactly as authored above (untouched).
+
+   On roomier viewports we keep the SAME components but let the game use
+   the space instead of stranding a 440px column in an empty void:
+     · the shell grows into a centred, capped "app frame";
+     · each screen's stacked cards reflow into a centred, wrapping row of
+       cards — 2 across on tablet, up to 3 on wide desktop.
+
+   The card flow leans on a structural invariant of the shell: every
+   screen renders exactly ONE wrapper <div> as the sole child of
+   `.cg-shell__main`, holding a <header> + the screen's cards. So the
+   layout is pure CSS here — no screen/JSX changes, class names stay
+   stable. `justify-content: center` keeps the cards CENTERED in the frame
+   at every fill level (a lone card, a half-full last row) — content never
+   hugs the left edge. Headers and intros span the full width above them.
+   =================================================================== */
+@media (min-width: 760px) {
+  /* Centred app frame — grows with the viewport, capped for readability. */
+  .cg-shell {
+    max-width: min(94vw, 1120px);
+  }
+  /* The routed screen area drops its phone-width cap and gains a little air. */
+  .cg-shell__main {
+    max-width: none;
+    padding-left: var(--cg-space-lg);
+    padding-right: var(--cg-space-lg);
+  }
+
+  /* The screen wrapper lays its blocks out as a centred, wrapping flex row. */
+  .cg-shell__main > div {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    gap: var(--cg-space-lg);
+  }
+  /* By default a block spans the full width (the <header>, intro prose,
+     selector rows) — `gap` owns the spacing, so drop the stacked margin. */
+  .cg-shell__main > div > * {
+    flex-basis: 100%;
+    margin-bottom: 0;
+  }
+  /* Cards / panels become flexible, centred columns: they grow to share a
+     row but never past a comfortable reading width, and a short last row
+     (or a lone card) stays centred rather than stranded on the left. */
+  .cg-shell__main > div > .cg-card,
+  .cg-shell__main > div > .cg-panel,
+  .cg-shell__main > div > .cg-dossier {
+    flex: 1 1 300px;
+    max-width: 420px;
+  }
+
+  /* The persistent chrome (header uplinks, bottom nav) simply spans the
+     wider frame; the uplink chips wrap and the nav tabs share the width. */
+}
+
+/* Very wide desktops: hold the frame at its cap and let the sand breathe. */
+@media (min-width: 1280px) {
+  .cg-shell {
+    max-width: 1120px;
+  }
+}
+
 /* ---------------------------------------------------------------- keyframes */
 @keyframes cg-sheen {
   0%,

@@ -232,22 +232,54 @@ export const WASH_DEPOSITS_PER_DAY = 133;
  */
 export const WASH_CUT = 0.1;
 
+/**
+ * Front-coupling, MULTIPLICATIVE (design/13 §H; Prompt 50, refined by user tuning
+ * 2026-07-16). Each OWNED front is placement infrastructure that steps the whole
+ * operation up a gear, so unlocking one multiplies mule throughput by
+ * `WASH_FRONT_MULT` even before it is upgraded — a new front is worth ≥ ×1.5. Each
+ * front LEVEL above the first then compounds by `WASH_LEVEL_MULT`, so upgrades keep
+ * helping. Throughput = flat × `WASH_FRONT_MULT^(fronts owned)` ×
+ * `WASH_LEVEL_MULT^(Σ levels − fronts owned)`.
+ *
+ * Calibrated so a FULLY BUILT empire — all six fronts at Level 5 — launders at
+ * least $2,000,000/hr (the user's floor; asserted in `wash.test.ts`):
+ *   49,875 × 1.5^6 × 1.06^24 ≈ $2.30M/hr.
+ * A single fresh front is ×1.5 (≈ $74.8k/hr); three Level-3 fronts ≈ ×4.3.
+ */
+export const WASH_FRONT_MULT = 1.5;
+
+/** Each front LEVEL above the first multiplies throughput by this (upgrades compound). */
+export const WASH_LEVEL_MULT = 1.06;
+
 /** In-game hours per day — the structural anchor the wash rate divides by. */
 const WASH_HOURS_PER_DAY = 24;
 
 /**
  * Dirty dollars the mules clear per in-game HOUR (derived throughput). Passing a
  * `tuning` (`state.config.fronts`) reads the injected knobs so a save/playtest
- * runs at its own numbers. Shown in-game (the ETA the Money screen displays is
- * `queuedDirty / this`).
+ * runs at its own numbers; `frontCount` (owned fronts) and `totalFrontLevels`
+ * (Σ level over them) apply the multiplicative front-coupling (design/13 §H).
+ * Shown in-game (the ETA the Money screen displays is `queuedDirty / this`).
  */
-export function washRatePerHour(tuning?: {
-  readonly WASH_MAX_DEPOSIT?: number;
-  readonly WASH_DEPOSITS_PER_DAY?: number;
-}): number {
+export function washRatePerHour(
+  tuning?: {
+    readonly WASH_MAX_DEPOSIT?: number;
+    readonly WASH_DEPOSITS_PER_DAY?: number;
+    readonly WASH_FRONT_MULT?: number;
+    readonly WASH_LEVEL_MULT?: number;
+  },
+  frontCount = 0,
+  totalFrontLevels = 0,
+): number {
   const maxDeposit = tuning?.WASH_MAX_DEPOSIT ?? WASH_MAX_DEPOSIT;
   const perDay = tuning?.WASH_DEPOSITS_PER_DAY ?? WASH_DEPOSITS_PER_DAY;
-  return (maxDeposit * perDay) / WASH_HOURS_PER_DAY;
+  const frontMult = tuning?.WASH_FRONT_MULT ?? WASH_FRONT_MULT;
+  const levelMult = tuning?.WASH_LEVEL_MULT ?? WASH_LEVEL_MULT;
+  const flat = (maxDeposit * perDay) / WASH_HOURS_PER_DAY;
+  const fronts = Math.max(0, frontCount);
+  // Every front is at least Level 1, so Σ levels ≥ front count; guard anyway.
+  const extraLevels = Math.max(0, totalFrontLevels - fronts);
+  return flat * Math.pow(frontMult, fronts) * Math.pow(levelMult, extraLevels);
 }
 
 /**

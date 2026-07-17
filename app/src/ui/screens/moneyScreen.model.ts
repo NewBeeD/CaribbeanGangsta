@@ -33,6 +33,8 @@ import {
   washCut,
   washEtaHours,
   washRate,
+  washRatePerHour,
+  totalFrontLevels,
   type Front,
   type FrontType,
   type GameState,
@@ -161,18 +163,29 @@ export interface WashView {
   readonly cut: number;
   /** In-game hours to finish the current queue (0 when idle). */
   readonly etaHours: number;
+  /** Fronts owned — each one multiplies the wash throughput (placement infrastructure). */
+  readonly frontCount: number;
+  /** Σ level across owned fronts — upgrades compound on top of the per-front step. */
+  readonly frontLevels: number;
+  /** Throughput multiplier vs the flat base (1 = no fronts, 3 = 3× faster). */
+  readonly frontMultiplier: number;
 }
 
 export function washView(state: GameState): WashView {
   const queuedDirty = state.wash.queuedDirty;
+  const rate = washRate(state);
+  const flat = washRatePerHour(state.config.fronts, 0, 0);
   return {
     availableDirty: totalDirtyCash(state),
     queuedDirty,
     active: queuedDirty > 0,
     cleanPerHour: washCleanRate(state),
-    ratePerHour: washRate(state),
+    ratePerHour: rate,
     cut: washCut(state),
     etaHours: washEtaHours(state),
+    frontCount: state.fronts.length,
+    frontLevels: totalFrontLevels(state),
+    frontMultiplier: flat > 0 ? rate / flat : 1,
   };
 }
 
