@@ -298,7 +298,13 @@ export function repay(state: GameState, amount: number): RepayResult {
   const principal = state.debt.principal - (pay - toInterest);
   const remaining = principal + accruedInterest;
 
-  if (remaining <= 1e-6) {
+  // Clear the loan once the balance rounds to $0. Interest accrues in fractions
+  // of a dollar, but every repay amount and the whole debt UI are whole dollars —
+  // so "Pay in full" (charging Math.round(owed)) can otherwise leave a sub-dollar
+  // residue that keeps the loan active while displaying as $0, stranding the "You
+  // owe…" card with both repay buttons disabled. Aligning the clear threshold with
+  // the display guarantees: shown balance $0 ⟺ loan cleared (design/10 §3).
+  if (remaining < 0.5) {
     const L = state.config.lenders;
     const clean = state.cleanCash - pay;
     const onTime = state.debt.ladderRung === 0 && state.clock.day <= state.debt.dueDay;

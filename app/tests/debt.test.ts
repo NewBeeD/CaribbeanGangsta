@@ -223,6 +223,25 @@ describe('repayment is always free and resets the shark’s patience (guarantee 
     expect(r.state.reputation.street).toBeGreaterThan(streetBefore); // a bigger line next time
   });
 
+  it('paying the rounded balance clears the loan — no sub-dollar residue strands the card', () => {
+    // Accrue fractional interest so the balance is not a whole dollar, then pay the
+    // whole-dollar amount the UI offers (Math.round of what's owed). The engine must
+    // clear the ledger rather than leave a sub-dollar remainder that keeps the loan
+    // active while displaying as $0 (the "You owe…" card that won't go away).
+    let s = borrow(borrower('residue'), 'papa-cass', 800).state;
+    s = accrueInterest(s, 3);
+    s = { ...s, cleanCash: s.cleanCash + 5_000 };
+    const owed = debtOwed(s.debt);
+    expect(Number.isInteger(owed)).toBe(false); // a genuinely fractional balance
+
+    const r = repay(s, Math.round(owed)); // exactly what "Pay in full" charges
+    expect(r.ok).toBe(true);
+    expect(r.clearedInFull).toBe(true);
+    expect(r.state.debt.active).toBe(false);
+    expect(r.state.debt.lenderId).toBeNull();
+    expect(debtOwed(r.state.debt)).toBe(0);
+  });
+
   it('rejects repaying with no loan, a bad amount, or beyond clean cash', () => {
     const noLoan = borrower('noloan');
     expect(repay(noLoan, 100).rejected).toBe('no-loan');
