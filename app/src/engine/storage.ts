@@ -30,9 +30,18 @@ import {
   type StashTypeConfig,
 } from './config/stashes';
 import { addHeat, rollRaid, type RaidEvent } from './heat';
-import { countryName, crewGateBlocksOpen, footholdCost, isHeldCountry } from './territory';
+import {
+  capitalFloorFor,
+  countryName,
+  crewGateBlocksOpen,
+  expansionOnCooldown,
+  footholdCost,
+  heatBlocksExpansion,
+  isHeldCountry,
+} from './territory';
 import {
   emptyInventory,
+  netWorth,
   totalDirtyCash,
   type GameState,
   type Inventory,
@@ -216,11 +225,18 @@ export type StorageRejectReason =
   /** Cross-country product moves route through shipments (travel.ts, Prompt 30). */
   | 'cross-country'
   /**
-   * Opening a NEW country past the free reach tier needs a lieutenant to run it
-   * (Ideas2 item 5 crew gate; territory.ts). The one rejection that is NOT a money
-   * gate — territory alone relaxes open access (user sign-off).
+   * Opening a NEW country past the free reach tier needs a lieutenant to run it —
+   * and the requirement SCALES with reach (Ideas2 item 5 crew gate; territory.ts).
+   * One of several NON-money rejections that relax open access for TERRITORY alone
+   * (user sign-off; escalated so access gets harder as the empire grows).
    */
-  | 'needs-lieutenant';
+  | 'needs-lieutenant'
+  /** Opening a NEW country too soon after the last open (expansion cooldown; territory.ts). */
+  | 'expansion-cooldown'
+  /** Opening a NEW country while heat is at/above the expansion ceiling (territory.ts). */
+  | 'too-hot'
+  /** Opening a NEW country in an untouched region below the net-worth floor (territory.ts). */
+  | 'insufficient-capital';
 
 /** Result of building a stash: the new state + the created stash, or a rejection. */
 export interface AddStashResult {
@@ -238,9 +254,11 @@ export interface AddStashResult {
  * you don't stack another. Cost comes from `footholdCost` (territory.ts): the FIRST
  * spot of a type in a country already held (or home) pays the plain `base × 1.15^n`
  * open step; OPENING a NEW country pays the reach-and-region surcharge (Ideas2 item
- * 5; Prompt 41). Rejects without mutating on insufficient funds — or, when opening
- * past the free reach tier with no lieutenant to run it, on the crew gate
- * (`needs-lieutenant`). New stashes start empty at level 1.
+ * 5; Prompt 41). Rejects without mutating on insufficient funds — or, when OPENING a
+ * new country, on any of the escalating territory gates (all shown before the act):
+ * the scaling crew gate (`needs-lieutenant`), the expansion cooldown
+ * (`expansion-cooldown`), the heat ceiling (`too-hot`), or the cross-region net-worth
+ * floor (`insufficient-capital`). New stashes start empty at level 1.
  *
  * Opening a new country also (a) stamps `openedAtHours` so the foothold reads as
  * EXPOSED (raid-risk window) and CONTESTED (consolidation hold) — territory.ts;
@@ -264,9 +282,23 @@ export function addStash(
     return { state, stash: null, rejected: 'already-present' };
   }
 
-  // The crew gate is the one non-money rejection (territory relaxes open access).
-  if (opening && crewGateBlocksOpen(state, target)) {
-    return { state, stash: null, rejected: 'needs-lieutenant' };
+  // Territory relaxes open access with several NON-money gates that escalate as the
+  // empire grows (user sign-off). They apply ONLY to OPENING a new country — each is
+  // shown on the Empire map before the player acts, never a hidden lock. Money (the
+  // funds check) stays the final gate below.
+  if (opening) {
+    if (crewGateBlocksOpen(state, target)) {
+      return { state, stash: null, rejected: 'needs-lieutenant' };
+    }
+    if (expansionOnCooldown(state)) {
+      return { state, stash: null, rejected: 'expansion-cooldown' };
+    }
+    if (heatBlocksExpansion(state)) {
+      return { state, stash: null, rejected: 'too-hot' };
+    }
+    if (netWorth(state) < capitalFloorFor(state, target)) {
+      return { state, stash: null, rejected: 'insufficient-capital' };
+    }
   }
 
   const cost = footholdCost(state, type, target);

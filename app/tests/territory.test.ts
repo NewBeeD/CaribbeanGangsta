@@ -2,13 +2,19 @@ import { describe, expect, it } from 'vitest';
 import {
   COUNTRIES,
   addStash,
+  capitalFloorFor,
   consolidationProgress,
   createInitialState,
+  crewGateBlocksOpen,
   empireComposite,
+  expansionCooldownRemaining,
+  expansionOnCooldown,
   footholdCost,
   isCountryConsolidated,
   maxVulnerability,
+  netWorth,
   raidChance,
+  requiredLieutenants,
   spawnCrew,
   stashVulnerability,
   type GameState,
@@ -200,10 +206,13 @@ describe('crew gate — subsequent districts need a lieutenant', () => {
     expect(rejected.rejected).toBe('needs-lieutenant');
     expect(rejected.state).toBe(s);
 
-    // A non-wire lieutenant unlocks it.
+    // A non-wire lieutenant unlocks it — advance past the expansion cooldown so this
+    // isolates the CREW gate (opening os[0] just started the cooldown clock).
+    const cool = s.config.territory.TERRITORY_EXPANSION_COOLDOWN_HOURS;
     const withLt: GameState = {
       ...s,
       crew: [...s.crew, spawnCrew('deon', { id: 'lt', role: 'lieutenant' })],
+      clock: { ...s.clock, hours: s.clock.hours + cool },
     };
     const ok = addStash(withLt, 'floor', { countryId: os[1]!.id });
     expect(ok.stash?.countryId).toBe(os[1]!.id);
@@ -220,5 +229,133 @@ describe('crew gate — subsequent districts need a lieutenant', () => {
     expect(addStash(withWire, 'floor', { countryId: os[1]!.id }).rejected).toBe(
       'needs-lieutenant',
     );
+  });
+});
+
+/** Seed the run holding ESTABLISHED footholds in `countryIds` (no openedAtHours — so
+ *  they neither expose nor start a cooldown), on top of the home stash. */
+function holding(state: GameState, countryIds: readonly string[]): GameState {
+  const home = state.stashes[0]!;
+  // Home is an established stash (no openedAtHours) — copies inherit that, so these
+  // read as controlled from the start (no exposure, no cooldown).
+  const extra: Stash[] = countryIds.map((id, i) => ({
+    ...home,
+    id: `held-${i}`,
+    countryId: id,
+  }));
+  return { ...state, stashes: [home, ...extra] };
+}
+
+/** A lieutenant crew member (non-wire by default). */
+function lts(count: number): ReturnType<typeof spawnCrew>[] {
+  return Array.from({ length: count }, (_, i) =>
+    spawnCrew('deon', { id: `lt-${i}`, role: 'lieutenant' }),
+  );
+}
+
+// --- A. Scaling crew requirement (harder as the empire grows) ----------------
+
+describe('crew gate SCALES — a wider empire needs more lieutenants', () => {
+  it('one lieutenant covers the first tier; a wider empire needs a second', () => {
+    const base = funded('scale');
+    const os = others(base);
+    // Hold 4 countries (home + 3): required = 1 + floor((4-2)/3) = 1.
+    const four = holding(base, os.slice(0, 3).map((c) => c.id));
+    expect(requiredLieutenants(four)).toBe(1);
+    // Hold 5 countries (home + 4): required climbs to 2.
+    const five = holding(base, os.slice(0, 4).map((c) => c.id));
+    expect(requiredLieutenants(five)).toBe(2);
+
+    const target = os[4]!.id; // an un-held country to open next
+    // With five held and a single lieutenant, the next open is crew-blocked…
+    const oneLt: GameState = { ...five, crew: [...five.crew, ...lts(1)] };
+    expect(crewGateBlocksOpen(oneLt, target)).toBe(true);
+    expect(addStash({ ...oneLt, cleanCash: 10_000_000 }, 'floor', { countryId: target }).rejected).toBe(
+      'needs-lieutenant',
+    );
+    // …a second lieutenant clears it.
+    const twoLt: GameState = { ...five, crew: [...five.crew, ...lts(2)] };
+    expect(crewGateBlocksOpen(twoLt, target)).toBe(false);
+  });
+});
+
+// --- B. Expansion cooldown (pace the blob) -----------------------------------
+
+describe('expansion cooldown — opens are paced, reinforcing is not', () => {
+  it('blocks a second open until the cooldown clears, then allows it', () => {
+    // Enough lieutenants + cash so ONLY the cooldown can bite; same-region so no
+    // capital floor and home region is cheap.
+    const base: GameState = { ...funded('cooldown'), crew: [...funded('cooldown').crew, ...lts(3)], heat: 0 };
+    const home = homeCountry(base);
+    const sameRegion = others(base).filter((c) => c.region === home.region);
+    const first = addStash(base, 'floor', { countryId: sameRegion[0]!.id }).state;
+
+    expect(expansionOnCooldown(first)).toBe(true);
+    const blocked = addStash(first, 'floor', { countryId: sameRegion[1]!.id });
+    expect(blocked.rejected).toBe('expansion-cooldown');
+    expect(blocked.state).toBe(first);
+
+    const cool = base.config.territory.TERRITORY_EXPANSION_COOLDOWN_HOURS;
+    const later: GameState = { ...first, clock: { ...first.clock, hours: first.clock.hours + cool } };
+    expect(expansionCooldownRemaining(later)).toBe(0);
+    expect(addStash(later, 'floor', { countryId: sameRegion[1]!.id }).stash?.countryId).toBe(
+      sameRegion[1]!.id,
+    );
+  });
+
+  it('reinforcing a held country is NOT on cooldown', () => {
+    const base: GameState = { ...funded('cooldown-reinforce'), crew: [...funded('cd').crew, ...lts(3)] };
+    const opened = addStash(base, 'floor', { countryId: others(base)[0]!.id }).state;
+    expect(expansionOnCooldown(opened)).toBe(true);
+    // A non-'floor' stash in the HOME country is a reinforce (isHeldCountry) — allowed.
+    const reinforce = addStash(opened, 'buried', { countryId: opened.world.startingCountry.id });
+    expect(reinforce.rejected).toBeUndefined();
+  });
+});
+
+// --- C. Heat ceiling (expansion is loud) -------------------------------------
+
+describe('heat ceiling — too hot to open new turf', () => {
+  it('blocks opening at/above the ceiling, allows it once cool', () => {
+    const ceiling = createInitialState('heat').config.territory.TERRITORY_MAX_HEAT_TO_EXPAND;
+    const target = (s: GameState) => others(s)[0]!.id; // same-region, first open (no crew/cooldown)
+
+    const hot: GameState = { ...funded('too-hot'), heat: ceiling };
+    const blocked = addStash(hot, 'floor', { countryId: target(hot) });
+    expect(blocked.rejected).toBe('too-hot');
+    expect(blocked.state).toBe(hot);
+
+    const cool: GameState = { ...funded('cool'), heat: ceiling - 1 };
+    expect(addStash(cool, 'floor', { countryId: target(cool) }).stash).not.toBeNull();
+  });
+});
+
+// --- D. Cross-region capital floor (no leapfrogging) -------------------------
+
+describe('cross-region capital floor — net worth gates the far continent', () => {
+  it('same-region opens have no floor even when nearly broke', () => {
+    const base = funded('same-region', 50_000);
+    const home = homeCountry(base);
+    const sameRegion = others(base).find((c) => c.region === home.region)!;
+    expect(capitalFloorFor(base, sameRegion.id)).toBe(0);
+    expect(addStash(base, 'floor', { countryId: sameRegion.id }).stash).not.toBeNull();
+  });
+
+  it('a new region rejects below the floor and opens at/above it (shown = enforced)', () => {
+    const asia = COUNTRIES.find((c) => c.region === 'asia')!;
+    const zero = funded('capital', 0);
+    const floor = capitalFloorFor(zero, asia.id);
+    expect(floor).toBeGreaterThan(0);
+    // A fresh run carries some starting dirty cash — offset clean cash off that base
+    // so net worth lands exactly on the floor boundary.
+    const base = netWorth(zero);
+
+    const below: GameState = { ...zero, cleanCash: floor - 1 - base };
+    expect(netWorth(below)).toBe(floor - 1);
+    expect(addStash(below, 'floor', { countryId: asia.id }).rejected).toBe('insufficient-capital');
+
+    const at: GameState = { ...zero, cleanCash: floor - base };
+    expect(netWorth(at)).toBe(floor);
+    expect(addStash(at, 'floor', { countryId: asia.id }).stash?.countryId).toBe(asia.id);
   });
 });

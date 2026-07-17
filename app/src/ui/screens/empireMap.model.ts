@@ -26,15 +26,20 @@
 
 import {
   COUNTRIES,
+  capitalFloorFor,
   cleanCashRate,
   consolidationProgress,
   crewGateBlocksOpen,
   effectiveCapacity,
   empireComposite,
+  expansionCooldownRemaining,
+  expansionOnCooldown,
   footholdCost,
   hasAvailableLieutenant,
+  heatBlocksExpansion,
   isCountryConsolidated,
   nextUpgradeCost,
+  netWorth,
   requiresLieutenant,
   stashUnits,
   stashVulnerability,
@@ -96,11 +101,23 @@ export interface DistrictView {
   /** A stash here is inside its raid-risk VULNERABILITY window (runs hot). */
   readonly exposed: boolean;
   /**
-   * Unowned AND the crew gate blocks opening it — reach past the free tier with
-   * no lieutenant to run it (Prompt 41). The price still shows; the action is
-   * held until a lieutenant is on the crew (the one non-money gate for territory).
+   * Unowned AND the crew gate blocks opening it — reach demands more lieutenants
+   * than are held (Prompt 41, now SCALING). The price still shows; the action is
+   * held until enough lieutenants are on the crew (a non-money gate for territory).
    */
   readonly blockedByCrew: boolean;
+  /** Unowned AND heat is at/above the expansion ceiling — cool down before opening. */
+  readonly blockedByHeat: boolean;
+  /** Unowned AND the expansion cooldown is still running (opened another country too recently). */
+  readonly blockedByCooldown: boolean;
+  /**
+   * Unowned in an untouched REGION AND net worth is below the capital floor for it —
+   * the shown `capitalFloor` must be cleared before this cross-region open (0 when
+   * same-region or already clear).
+   */
+  readonly blockedByCapital: boolean;
+  /** The net-worth floor, $, to open this district (0 when same-region — no floor). */
+  readonly capitalFloor: number;
 }
 
 /**
@@ -179,6 +196,10 @@ export function districtViews(state: GameState): readonly DistrictView[] {
       consolidationPct,
       exposed: here.some((s) => stashVulnerability(state, s) > 0),
       blockedByCrew: !owned && crewGateBlocksOpen(state, c.id),
+      blockedByHeat: !owned && heatBlocksExpansion(state),
+      blockedByCooldown: !owned && expansionOnCooldown(state),
+      blockedByCapital: !owned && netWorth(state) < capitalFloorFor(state, c.id),
+      capitalFloor: owned ? 0 : capitalFloorFor(state, c.id),
     };
   });
 }
@@ -199,6 +220,10 @@ export interface EmpireSummary {
   readonly lieutenantRequired: boolean;
   /** A non-wire lieutenant is on the crew to run a new district. */
   readonly lieutenantReady: boolean;
+  /** Hours of active play still to wait before another country may be opened (0 = clear). */
+  readonly expansionCooldownHours: number;
+  /** Heat is at/above the expansion ceiling — no new country may be opened until it cools. */
+  readonly tooHotToExpand: boolean;
 }
 
 export function empireSummary(state: GameState): EmpireSummary {
@@ -215,6 +240,8 @@ export function empireSummary(state: GameState): EmpireSummary {
     composite: empireComposite(state),
     lieutenantRequired: requiresLieutenant(state),
     lieutenantReady: hasAvailableLieutenant(state),
+    expansionCooldownHours: expansionCooldownRemaining(state),
+    tooHotToExpand: heatBlocksExpansion(state),
   };
 }
 
@@ -233,17 +260,26 @@ export interface NextStep {
 
 /**
  * The next affordable step given current cash — the "one more day" lever. Prefer
- * OPENING the cheapest affordable new route that isn't crew-gated (the biggest
+ * OPENING the cheapest affordable new route that isn't GATED (the biggest
  * `empireComposite` gain); if none can be opened, reinforce the affordable held
  * district with the most room to grow. `null` when nothing is in reach (nothing is
  * highlighted, but every option still shows its price + any gate — never a hidden
- * menu). A crew-gated open is NOT a next step until a lieutenant is on the crew.
+ * menu). A gated open (crew, cooldown, heat, or capital) is NOT a next step until
+ * its gate clears.
  */
 export function nextAffordableStep(state: GameState): NextStep | null {
   const districts = districtViews(state);
 
   const openable = districts
-    .filter((d) => d.status === 'unowned' && !d.blockedByCrew && state.cleanCash >= d.openCost)
+    .filter(
+      (d) =>
+        d.status === 'unowned' &&
+        !d.blockedByCrew &&
+        !d.blockedByCooldown &&
+        !d.blockedByHeat &&
+        !d.blockedByCapital &&
+        state.cleanCash >= d.openCost,
+    )
     .sort((a, b) => a.openCost - b.openCost)[0];
   if (openable) {
     return { countryId: openable.countryId, kind: 'open', cost: openable.openCost };

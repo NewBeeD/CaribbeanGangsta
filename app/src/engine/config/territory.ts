@@ -16,14 +16,23 @@
  *  - **Consolidation hold (time gate).** A new district isn't FULLY CONTROLLED —
  *    doesn't count toward empire reach (`empireComposite`) — until you've HELD it
  *    for `CONSOLIDATION_HOURS` of active play. Until then it reads "contested."
- *  - **Crew requirement (flag gate).** Once you already hold `TERRITORY_LT_REQUIRED_AFTER`
- *    countries, opening ANOTHER requires a (non-wire) lieutenant to run it.
+ *  - **Crew requirement (flag gate).** Past `TERRITORY_LT_REQUIRED_AFTER` countries,
+ *    opening ANOTHER needs a (non-wire) lieutenant to run it — and the requirement
+ *    SCALES: one lieutenant per `TERRITORY_COUNTRIES_PER_LIEUTENANT` held.
+ *  - **Expansion cooldown (time gate).** You must wait `TERRITORY_EXPANSION_COOLDOWN_HOURS`
+ *    of active play between OPENING new countries — consolidate before you blob out.
+ *  - **Heat ceiling (heat gate).** Opening is blocked while heat is at/above
+ *    `TERRITORY_MAX_HEAT_TO_EXPAND` — expansion is loud; cool down first.
+ *  - **Cross-region capital floor (net-worth gate).** Jumping into a region you don't
+ *    yet touch requires a minimum NET WORTH (`TERRITORY_CAPITAL_FLOOR_*`), scaled by
+ *    distance — no leapfrogging to a far continent you can't sustain.
  *
- * The last two RELAX the standing open-access rule (money is the only gate) for
- * TERRITORY specifically — an explicit product decision with user sign-off (Ideas2
- * round 3): the extra realism is worth the gate here, and here only. Every number
- * is a v1 HYPOTHESIS held as config, never a scattered literal (prompts/README.md
- * "Config, not literals"; Prompt 26).
+ * All the gates past the reach cost RELAX the standing open-access rule (money is
+ * the only gate) for TERRITORY specifically — an explicit product decision with user
+ * sign-off (Ideas2 round 3; escalated at the user's request so access gets harder as
+ * the empire grows): the extra realism is worth the gate here, and here only. Every
+ * number is a v1 HYPOTHESIS held as config, never a scattered literal
+ * (prompts/README.md "Config, not literals"; Prompt 26).
  */
 
 /**
@@ -83,6 +92,54 @@ export const CONSOLIDATION_HOURS = 120;
  * territory (user sign-off). Reinforcing a country already held is never gated.
  */
 export const TERRITORY_LT_REQUIRED_AFTER = 2;
+
+/**
+ * Countries a single lieutenant can run BEYOND the free-tier boundary — the crew
+ * gate now SCALES with reach instead of one lieutenant satisfying it forever.
+ * Required lieutenants = `1 + floor((held − TERRITORY_LT_REQUIRED_AFTER) / this)`
+ * once you hold `TERRITORY_LT_REQUIRED_AFTER`+ countries. At `3` (with the free tier
+ * at 2): the first lieutenant is needed to open the 2nd new country and covers you
+ * through ~4 countries, a 2nd is needed around the 5th, a 3rd around the 8th — a wide
+ * empire needs real management depth. A FLAG GATE (relaxes open access for territory,
+ * user sign-off). Reinforcing a country already held is never gated.
+ */
+export const TERRITORY_COUNTRIES_PER_LIEUTENANT = 3;
+
+/**
+ * Hours of ACTIVE play you must wait between OPENING new countries — a fresh
+ * foothold can't be followed by another until this cools. Forces you to consolidate
+ * before blobbing outward; reinforcing/home builds are never on cooldown. Measured
+ * from the most recent open (`openedAtHours`); offline-frozen like every clock (the
+ * in-game clock only advances online). ~2 in-game days at 24h/day. A TIME GATE
+ * (relaxes open access for territory, user sign-off).
+ */
+export const TERRITORY_EXPANSION_COOLDOWN_HOURS = 48;
+
+/**
+ * Heat ceiling (0–100 meter) AT OR ABOVE which opening a NEW country is blocked —
+ * expansion is loud, so you must cool down first. The price still shows; the open
+ * is held until heat drops below this. A HEAT GATE (relaxes open access for
+ * territory, user sign-off). Reinforcing a country already held is never blocked.
+ */
+export const TERRITORY_MAX_HEAT_TO_EXPAND = 60;
+
+/**
+ * The net-worth FLOOR, $, required to open a foothold in a trade REGION you don't
+ * yet touch — a capital-proof gate ON TOP of the one-time open cost, so a lucky
+ * early run can't leapfrog to a far continent it can't sustain. Same-region opens
+ * (region distance 0) have NO floor. The floor scales with distance:
+ * `BASE × (1 + PER_DISTANCE × regionDistance)`. A NET-WORTH GATE (relaxes open
+ * access for territory, user sign-off).
+ */
+export const TERRITORY_CAPITAL_FLOOR_BASE = 500_000;
+
+/**
+ * How steeply the cross-region capital floor climbs with geographic distance:
+ * `TERRITORY_CAPITAL_FLOOR_BASE × (1 + this × regionDistance)`. At `9` with
+ * `BASE = 500k`, an adjacent-region hop (distance ~0.25) needs ~$1.6M net worth and
+ * the farthest continent (distance 1.0) needs ~$5M.
+ */
+export const TERRITORY_CAPITAL_FLOOR_PER_DISTANCE = 9;
 
 /**
  * The reach-and-region adjusted cost of opening a NEW foothold, from primitives

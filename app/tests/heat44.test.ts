@@ -14,8 +14,10 @@ import { describe, expect, it } from 'vitest';
 import {
   ARREST_CHOICE_KIND,
   DEBT_COLLECTOR_CHOICE,
+  DEBT_LETHAL_FLAG,
   DEBT_MARKED_FLAG,
   TICK_STEPS,
+  collectorsClosedAccount,
   applyChaos,
   arrestBond,
   borrow,
@@ -440,6 +442,56 @@ describe('B3 — marked must mean something: telegraphed collector pressure on a
     expect(paid.state.flags[DEBT_MARKED_FLAG]).toBe(false);
     expect(paid.state.enforcement).toBeUndefined();
     // And the step never re-arms without the mark.
+    expect(enforcementStep(paid.state, 1).enforcement).toBeUndefined();
+  });
+
+  it('turns lethal after enough unanswered hits — the final warning, then the kill', () => {
+    const s0 = marked('b3-lethal');
+    const lethalAfter = s0.config.lenders.MARKED_LETHAL_AFTER_HITS;
+
+    // Sit at the last hit before lethal, clock due: the hit lands and the NEXT
+    // warning is the FINAL one (the account gets closed next time).
+    const atThreshold: GameState = {
+      ...s0,
+      enforcement: { stage: lethalAfter - 1, nextAtHours: s0.clock.hours },
+    };
+    const warnedFinal = enforcementStep(atThreshold, 1);
+    expect(warnedFinal.enforcement?.stage).toBe(lethalAfter);
+    expect(collectorsClosedAccount(warnedFinal)).toBe(false);
+    const finalWarning = warnedFinal.pendingChoices
+      .filter((c) => c.kind === DEBT_COLLECTOR_CHOICE)
+      .at(-1);
+    expect(finalWarning?.summary).toContain('close the account');
+
+    // Clock due at the lethal stage: the account is closed — the flag the store
+    // turns into a `killed` run-end goes up, with a final scene, and NO further hit.
+    const due: GameState = {
+      ...warnedFinal,
+      clock: { ...warnedFinal.clock, hours: warnedFinal.enforcement!.nextAtHours },
+    };
+    const closed = enforcementStep(due, 1);
+    expect(collectorsClosedAccount(closed)).toBe(true);
+    expect(closed.flags[DEBT_LETHAL_FLAG]).toBe(true);
+    const kill = closed.pendingChoices.find((c) => c.id.startsWith('debt-collectors-kill'));
+    expect(kill?.kind).toBe(DEBT_COLLECTOR_CHOICE);
+
+    // Idempotent once closed — the step does nothing further while the store ends the run.
+    expect(enforcementStep(closed, 1)).toBe(closed);
+  });
+
+  it('repaying to zero before the lethal move escapes the kill entirely', () => {
+    const s0 = marked('b3-escape');
+    const lethalAfter = s0.config.lenders.MARKED_LETHAL_AFTER_HITS;
+    const oneShyOfLethal: GameState = {
+      ...s0,
+      enforcement: { stage: lethalAfter, nextAtHours: s0.clock.hours + 1 },
+    };
+    // Pay it off before the clock strikes — the mark clears, so the lethal move
+    // can never land (the enforcement record is gone).
+    const owed = oneShyOfLethal.debt.principal + oneShyOfLethal.debt.accruedInterest;
+    const paid = repay({ ...oneShyOfLethal, cleanCash: owed }, owed);
+    expect(paid.state.flags[DEBT_MARKED_FLAG]).toBe(false);
+    expect(collectorsClosedAccount(paid.state)).toBe(false);
     expect(enforcementStep(paid.state, 1).enforcement).toBeUndefined();
   });
 

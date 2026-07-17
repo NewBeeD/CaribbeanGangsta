@@ -117,6 +117,7 @@ import type { VesselId } from '@/engine/config/vessels';
 import {
   borrow as borrowEngine,
   repay as repayEngine,
+  collectorsClosedAccount,
   type BorrowResult,
   type RepayResult,
 } from '@/engine/debt';
@@ -1188,6 +1189,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ state: next });
     // Everything the tick did (raids, beats, arrivals, the spiral) as telemetry.
     trackTick(state, next);
+    // The marked-debt collectors closing the account is the one tick-driven,
+    // fully-telegraphed run-ending hook (design/10 §5 rung 5). It's active-only
+    // (never runs offline) and always escapable by repaying, so absence can't kill
+    // and the death is earned. Bank it through the single run-end path.
+    if (next.runStatus === 'active' && collectorsClosedAccount(next)) {
+      void get().endCurrentRun('killed').catch(() => {});
+    }
   },
 
   startClock() {

@@ -147,10 +147,13 @@ describe('EmpireMap — the whole map is open, money is the only gate (Ideas.md)
     expect(view.container.textContent).toContain('needs a lieutenant');
     view.unmount();
 
-    // …and lifts once a lieutenant is promoted.
+    // …and lifts once a lieutenant is promoted (advance past the expansion cooldown
+    // that opening os[0] started, so this isolates the CREW gate lifting).
+    const cool = s.config.territory.TERRITORY_EXPANSION_COOLDOWN_HOURS;
     const withLt: GameState = {
       ...s,
       crew: [...s.crew, spawnCrew('deon', { id: 'lt', role: 'lieutenant' })],
+      clock: { ...s.clock, hours: s.clock.hours + cool },
     };
     useGameStore.setState({ state: withLt });
     const view2 = mount(<EmpireMap />);

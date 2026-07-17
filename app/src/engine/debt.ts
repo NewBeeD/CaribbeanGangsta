@@ -35,6 +35,7 @@ import {
   HOURS_PER_DAY,
   INTEREST_DAYS_PER_WEEK,
   LADDER_SIGNS,
+  MARKED_LETHAL_AFTER_HITS,
   findLender,
   getLender,
   type LadderRung,
@@ -49,10 +50,13 @@ import {
   type Debt,
   type Front,
   type GameState,
+  type Inventory,
   type MarkedEnforcement,
   type PendingChoice,
   type Stash,
 } from './state';
+import { productDisplayName } from './world';
+import type { ProductId } from './config/countries';
 
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
@@ -364,12 +368,23 @@ interface SeizureOutcome {
 
 const dollars = (n: number): string => `$${Math.round(n).toLocaleString('en-US')}`;
 
-/** "$12,400 dirty and 40 units" — what walked out of a stash, as prose. */
-function stashLossNote(s: Stash): string {
-  const units = Object.values(s.inventory).reduce((sum, v) => sum + v, 0);
+/**
+ * "15 Cocaine, 40 Weed" — the product lines of an inventory, by shelf name and in
+ * canonical product order (design/13 A6: a seizure names EXACTLY what it took, per
+ * drug, never a vague "40 units"). Empty when nothing but cash is on hand.
+ */
+function inventoryNote(state: GameState, inventory: Inventory): string {
+  return (Object.entries(inventory) as [ProductId, number][])
+    .filter(([, qty]) => qty > 0)
+    .map(([id, qty]) => `${Math.floor(qty)} ${productDisplayName(state.world, id)}`)
+    .join(', ');
+}
+
+/** "$12,400 dirty and 15 Cocaine, 40 Weed" — what walked out of a stash, itemized. */
+function stashLossNote(state: GameState, s: Stash): string {
   const parts = [
     s.dirtyCash > 0 ? `${dollars(s.dirtyCash)} dirty` : '',
-    units > 0 ? `${Math.floor(units)} units` : '',
+    inventoryNote(state, s.inventory),
   ].filter(Boolean);
   return parts.join(' and ');
 }
@@ -386,7 +401,7 @@ function seizeOneStash(state: GameState, rng: Rng): SeizureOutcome {
   const collat = state.debt.collateralRef;
   const pledged = collat !== undefined ? state.stashes.find((s) => s.id === collat) : undefined;
   if (pledged) {
-    const loss = stashLossNote(pledged);
+    const loss = stashLossNote(state, pledged);
     return {
       state: { ...state, stashes: state.stashes.filter((s) => s.id !== pledged.id) },
       note: `${pledged.name} is theirs now${loss ? ` — ${loss} gone with it` : ''}.`,
@@ -408,7 +423,7 @@ function seizeOneStash(state: GameState, rng: Rng): SeizureOutcome {
   const maxVal = Math.max(...state.stashes.map(stashValue));
   const top = state.stashes.filter((s) => stashValue(s) === maxVal);
   const target = rng.pick(top);
-  const loss = stashLossNote(target);
+  const loss = stashLossNote(state, target);
   return {
     state: { ...state, stashes: state.stashes.filter((s) => s.id !== target.id) },
     note: `${target.name} is theirs now${loss ? ` — ${loss} gone with it` : ''}.`,
@@ -561,18 +576,51 @@ export function debtStep(state: GameState, dtHours: number): GameState {
 // pressure escalates one telegraphed hit at a time on a visible clock — the
 // warning card first, then: seize dirty cash from the fattest stash → jump an
 // in-flight shipment → lean on a crew member — every hit preceded by its
-// warning, every rate/size in config/lenders.ts. Repaying to zero clears the
-// mark and the pressure instantly (`repay` above). Registered ACTIVE-only in
-// clock.ts, so no collector moves while the player is away (the Prompt 21
-// tested guardrail holds verbatim). Deterministic — no RNG: the fattest stash
-// (ties to the first), the oldest shipment, the most-loyal crew member.
+// warning, every rate/size in config/lenders.ts. And it doesn't loop forever:
+// after `MARKED_LETHAL_AFTER_HITS` unanswered hits the marker turns LETHAL —
+// the final warning goes out, then the account is closed and the run ends
+// `killed` (design/10 §5 rung 5 — "this can end the run"). Repaying to zero
+// clears the mark and the pressure instantly (`repay` above). Registered
+// ACTIVE-only in clock.ts, so no collector moves — and no kill — while the
+// player is away (the Prompt 21 tested guardrail holds verbatim). Deterministic —
+// no RNG: the fattest stash (ties to the first), the oldest shipment, the
+// most-loyal crew member.
 
 /** The beat kind of every collector warning/hit line (the Money-feed scenes). */
 export const DEBT_COLLECTOR_CHOICE = 'debt-collectors';
 
-/** What the NEXT collector move will be — the warning each hit is preceded by. */
+/**
+ * The flag the terminal collector move sets (design/10 §5 rung 5). The STORE reads
+ * it after each active tick and banks the run as `killed` through the single
+ * run-end path — the engine tick itself never sets `runStatus` (GDD §8). Only ever
+ * set after the fully-telegraphed lethal warning, and never offline.
+ */
+export const DEBT_LETHAL_FLAG = 'debt-collectors-lethal';
+
+/** Whether the collectors have closed the account — the run's one tick-driven,
+ * fully-telegraphed run-ending hook. Read by the store to end the run `killed`. */
+export function collectorsClosedAccount(state: GameState): boolean {
+  return state.flags[DEBT_LETHAL_FLAG] === true;
+}
+
+/** Hits that go unanswered before the marker turns lethal (config, legacy fallback). */
+function lethalAfterHits(state: GameState): number {
+  return state.config.lenders.MARKED_LETHAL_AFTER_HITS ?? MARKED_LETHAL_AFTER_HITS;
+}
+
+/**
+ * What the NEXT collector move will be — the warning each hit is preceded by. Once
+ * the count has reached the lethal threshold the warning turns final: the next move
+ * closes the account for good (design/10 §5 rung 5).
+ */
 function collectorWarning(state: GameState, stage: number, atHours: number): string {
   const inHours = Math.max(0, Math.round(atHours - state.clock.hours));
+  if (stage >= lethalAfterHits(state)) {
+    return (
+      `You're marked, and you've ignored every warning. Pay in full now, or in ` +
+      `${inHours} played hours they stop collecting and close the account — for good.`
+    );
+  }
   const move =
     stage === 0
       ? `they take a cut of the cash at ${fattestStash(state)?.name ?? 'your stash'}`
@@ -617,7 +665,7 @@ function collectorShipmentHit(state: GameState): { state: GameState; note: strin
   };
   return {
     state: next,
-    note: `Collectors jumped your load on the water — ${shipment.qty} units gone against what you owe.`,
+    note: `Collectors jumped your load on the water — ${shipment.qty} ${productDisplayName(state.world, shipment.product)} gone against what you owe.`,
   };
 }
 
@@ -645,8 +693,10 @@ function collectorHit(state: GameState, stage: number): { state: GameState; note
  * clock.ts after `debt-interest`). Not marked → any leftover pressure record is
  * dropped. Freshly marked → the warning card goes out with the visible clock
  * (nothing is taken yet). On each clock expiry → the telegraphed hit lands with
- * its numbers, and the NEXT move's warning goes out with a fresh clock. Pure and
- * RNG-free; offline never runs it.
+ * its numbers, and the NEXT move's warning goes out with a fresh clock — until the
+ * count of unanswered hits reaches the lethal threshold, at which point the warned
+ * final move closes the account (sets `DEBT_LETHAL_FLAG`) and the store ends the
+ * run `killed`. Pure and RNG-free; offline never runs it, so absence never kills.
  */
 export function enforcementStep(state: GameState, dtHours: number): GameState {
   if (dtHours <= 0) return state;
@@ -657,6 +707,9 @@ export function enforcementStep(state: GameState, dtHours: number): GameState {
     const { enforcement: _done, ...rest } = state;
     return rest;
   }
+
+  // The account is already closed — the store is ending the run; do nothing more.
+  if (collectorsClosedAccount(state)) return state;
 
   const L = state.config.lenders;
   const queue = (s: GameState, id: string, summary: string): GameState => ({
@@ -682,9 +735,27 @@ export function enforcementStep(state: GameState, dtHours: number): GameState {
 
   if (state.clock.hours < state.enforcement.nextAtHours) return state;
 
+  const stage = state.enforcement.stage;
+
+  // The lethal move: enough telegraphed hits went unanswered, and the final
+  // warning was already shown — the collectors close the account. Set the flag the
+  // store turns into a `killed` run-end; queue the last scene for the feed. This is
+  // the ladder's rung 5 finally biting — earned, escapable (repay to zero clears
+  // it), and active-only (never fired from absence).
+  if (stage >= lethalAfterHits(state)) {
+    const closed: GameState = {
+      ...state,
+      flags: { ...state.flags, [DEBT_LETHAL_FLAG]: true },
+    };
+    return queue(
+      closed,
+      `debt-collectors-kill-${state.clock.hours}`,
+      "You ignored every warning. The collectors came to close the account — this is where it ends.",
+    );
+  }
+
   // The warned hit lands — then the NEXT move's warning goes out (one rung at a
   // time; a long tick still lands at most one hit per step call).
-  const stage = state.enforcement.stage;
   const hit = collectorHit(state, stage);
   const enforcement: MarkedEnforcement = {
     stage: stage + 1,

@@ -497,6 +497,23 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
       state: { ...legacy, crewBackWages: legacy.crewBackWages ?? 0 },
     };
   },
+  // 20 → 21: escalating TERRITORY gates (user request — expansion gets harder as the
+  // empire grows). The saved `config.territory` gains five knobs from the default
+  // FIRST (any other saved territory tuning wins on top): the scaling crew requirement
+  // (`TERRITORY_COUNTRIES_PER_LIEUTENANT`), the expansion cooldown
+  // (`TERRITORY_EXPANSION_COOLDOWN_HOURS`), the heat ceiling
+  // (`TERRITORY_MAX_HEAT_TO_EXPAND`), and the cross-region net-worth floor
+  // (`TERRITORY_CAPITAL_FLOOR_BASE` + `_PER_DISTANCE`). Every gate applies only to
+  // OPENING a new country and is derived from existing state (no new state field).
+  // Nothing the player earned changes: no cash, holdings, or RNG movement.
+  20: (env) => {
+    const legacy = env.state as GameState;
+    const config: GameConfig = {
+      ...legacy.config,
+      territory: { ...DEFAULT_GAME_CONFIG.territory, ...legacy.config.territory },
+    };
+    return { ...env, schemaVersion: 21, state: { ...legacy, config } };
+  },
 };
 
 /**

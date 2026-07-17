@@ -33,6 +33,36 @@ function statusLabel(d: DistrictView): string {
   return 'Route open';
 }
 
+/**
+ * The active OPEN gate for an unowned district, highest priority first (matching
+ * `addStash`'s reject order: crew → cooldown → heat → capital), or `null` when the
+ * only thing standing between you and the route is cash. `note` rides on the button,
+ * `message` is the amber explainer line.
+ */
+function openGate(d: DistrictView): { readonly note: string; readonly message: string } | null {
+  if (d.blockedByCrew)
+    return {
+      note: 'needs a lieutenant',
+      message: 'Reach past your grip — promote a lieutenant to run new turf.',
+    };
+  if (d.blockedByCooldown)
+    return {
+      note: 'consolidate first',
+      message: 'You just moved on fresh turf — lock it down before opening another route.',
+    };
+  if (d.blockedByHeat)
+    return {
+      note: 'too hot',
+      message: 'The heat’s too high to move loud — cool down before you expand.',
+    };
+  if (d.blockedByCapital)
+    return {
+      note: `needs ${money(d.capitalFloor)} net worth`,
+      message: `A new region takes real capital behind you — build to ${money(d.capitalFloor)} net worth first.`,
+    };
+  return null;
+}
+
 export function EmpireMap() {
   const state = useGameState();
   // The shell only routes here with a live run; guard so hooks stay unconditional.
@@ -76,7 +106,8 @@ export function EmpireMap() {
       {districts.map((d) => {
             const highlighted = next?.countryId === d.countryId;
             const isOpen = d.status === 'unowned';
-            const blocked = d.blockedByCrew;
+            const gate = isOpen ? openGate(d) : null;
+            const blocked = gate !== null;
             const affordable = cleanCash >= d.openCost;
             const canAct = isOpen
               ? affordable && !blocked
@@ -86,8 +117,8 @@ export function EmpireMap() {
               ? 'fully upgraded'
               : !affordable
                 ? `${money(d.openCost)} · short`
-                : blocked
-                  ? `${money(d.openCost)} · needs a lieutenant`
+                : gate
+                  ? `${money(d.openCost)} · ${gate.note}`
                   : money(d.openCost);
 
             return (
@@ -125,9 +156,9 @@ export function EmpireMap() {
                     <p className="cg-label" style={{ margin: '2px 0 12px' }}>
                       {d.hooks[0] ?? 'An untapped market — plant a foothold to open it.'}
                     </p>
-                    {blocked ? (
+                    {gate ? (
                       <p className="cg-label cg-tone-amber" style={{ margin: '0 0 12px' }}>
-                        Reach past your grip — promote a lieutenant to run new turf.
+                        {gate.message}
                       </p>
                     ) : null}
                   </>
@@ -224,6 +255,17 @@ export function EmpireMap() {
               Promote a lieutenant on the Crew screen →
             </Button>
           </>
+        ) : null}
+        {summary.expansionCooldownHours > 0 ? (
+          <div className="cg-label cg-tone-amber" style={{ marginTop: 6 }}>
+            Fresh turf still settling — {Math.ceil(summary.expansionCooldownHours)}h before you
+            can open another route.
+          </div>
+        ) : null}
+        {summary.tooHotToExpand ? (
+          <div className="cg-label cg-tone-amber" style={{ marginTop: 6 }}>
+            Too much heat to move loud — cool down before opening new turf.
+          </div>
         ) : null}
       </Card>
     </div>

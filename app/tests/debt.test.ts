@@ -316,8 +316,11 @@ describe('default ladder advances one readable rung past due, each a beat (guara
 
   it('a rung-3 seizure discloses WHAT was taken, with numbers (design/13 A6)', () => {
     let s = borrower('seizure-note');
-    const home = s.stashes[0]!; // holds the starting dirty cash
-    expect(home.dirtyCash).toBeGreaterThan(0);
+    const home0 = s.stashes[0]!; // holds the starting dirty cash
+    expect(home0.dirtyCash).toBeGreaterThan(0);
+    // Put concrete product on the table so the seizure must itemize it by name.
+    const home: typeof home0 = { ...home0, inventory: { ...home0.inventory, cocaine: 15 } };
+    s = { ...s, stashes: [home, ...s.stashes.slice(1)] };
     s = borrow(s, 'papa-cass', 800, home.id).state; // pledged → rung 3 takes it
     s = { ...s, debt: { ...s.debt, dueDay: 2 } };
 
@@ -330,10 +333,11 @@ describe('default ladder advances one readable rung past due, each a beat (guara
 
     const scene = s.pendingChoices.find((c) => c.id.startsWith('debt-default-3'))!;
     expect(scene).toBeTruthy();
-    // The collector's take is never a silent drain — the scene names the stash
-    // and the dirty dollars that went with it.
+    // The collector's take is never a silent drain — the scene names the stash,
+    // the dirty dollars, AND the exact product units that went with it (not "15 units").
     expect(scene.summary).toContain(home.name);
     expect(scene.summary).toContain(`$${Math.round(home.dirtyCash).toLocaleString('en-US')}`);
+    expect(scene.summary).toContain('15 Cocaine');
   });
 
   it('a partial payment before the ladder starts halts escalation (patience)', () => {

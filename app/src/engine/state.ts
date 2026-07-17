@@ -184,8 +184,16 @@ import type {
  *     and pays it down first from clean cash (floored at zero), carrying whatever's
  *     still unpaid forward. Migration seeds `crewBackWages: 0` (a migrated run starts
  *     square) — never player cash, holdings, or the RNG stream.
+ * v21: escalating TERRITORY gates (user request — make expansion harder as the empire
+ *     grows). `config.territory` gains five knobs: the crew requirement now SCALES
+ *     (`TERRITORY_COUNTRIES_PER_LIEUTENANT`), plus an expansion cooldown
+ *     (`TERRITORY_EXPANSION_COOLDOWN_HOURS`), a heat ceiling
+ *     (`TERRITORY_MAX_HEAT_TO_EXPAND`), and a cross-region net-worth floor
+ *     (`TERRITORY_CAPITAL_FLOOR_BASE` + `_PER_DISTANCE`). Migration merges the group
+ *     from the default (any saved territory tuning wins on top) — no player cash,
+ *     holdings, or RNG movement, and every gate applies only to OPENING a new country.
  */
-export const SCHEMA_VERSION = 20 as const;
+export const SCHEMA_VERSION = 21 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 

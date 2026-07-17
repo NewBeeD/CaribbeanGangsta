@@ -250,6 +250,18 @@ export const MARKED_CASH_CUT = 0.25;
  * — routed through `loyaltyDelta`, so it writes memory like every shift. */
 export const MARKED_CREW_LEAN_EVENT = 'leanedOn' as const;
 
+/**
+ * The marker turns LETHAL after this many telegraphed collector hits go unanswered
+ * (design/10 §5 rung 5 — "this can end the run"). A marked player who keeps ignoring
+ * the debt through this many hits gets one final warning, and on the next collector
+ * clock the account is closed for good — the run ends `killed`. Escapable at any
+ * point by repaying to zero (which clears the mark and the pressure instantly), and
+ * ACTIVE-only, so absence never advances it toward the kill. With three distinct
+ * hits (cash → shipment → crew) before the count reaches this, the lethal move is
+ * always the fully-earned, fully-telegraphed last rung — never a cheap dice death.
+ */
+export const MARKED_LETHAL_AFTER_HITS = 4;
+
 // --- Lifeline (design/10 §1; Prompt 11 hook) ---------------------------------
 
 /**

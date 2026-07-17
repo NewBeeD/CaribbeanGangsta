@@ -100,26 +100,110 @@ export function footholdCost(
   );
 }
 
-// --- Crew requirement (flag gate) --------------------------------------------
+// --- Crew requirement (flag gate, SCALES with reach) -------------------------
 
-/** Whether opening ANOTHER new country now requires a lieutenant (reach past the free tier). */
-export function requiresLieutenant(state: GameState): boolean {
-  return distinctCountriesHeld(state) >= state.config.territory.TERRITORY_LT_REQUIRED_AFTER;
-}
-
-/** Whether a non-wire lieutenant is on the crew to run a new district. */
-export function hasAvailableLieutenant(state: GameState): boolean {
-  return state.crew.some((c) => c.role === 'lieutenant' && !c.isWire);
+/** How many non-wire lieutenants are on the crew to run districts. */
+export function availableLieutenantCount(state: GameState): number {
+  return state.crew.filter((c) => c.role === 'lieutenant' && !c.isWire).length;
 }
 
 /**
- * Whether the crew gate BLOCKS opening a new country right now: the reach past
- * the free tier is reached AND no lieutenant is available to run it. Opening an
+ * How many lieutenants the current reach REQUIRES to keep opening new countries:
+ * `0` inside the free tier (`< TERRITORY_LT_REQUIRED_AFTER` countries), then ONE at
+ * the boundary and one MORE for every `TERRITORY_COUNTRIES_PER_LIEUTENANT` countries
+ * held beyond it — `1 + floor((held − free) / per)`. The gate scales: a wider empire
+ * needs more management depth, not a single hire that satisfies it forever.
+ */
+export function requiredLieutenants(state: GameState): number {
+  const cfg = state.config.territory;
+  const held = distinctCountriesHeld(state);
+  const free = cfg.TERRITORY_LT_REQUIRED_AFTER;
+  if (held < free) return 0;
+  const per = cfg.TERRITORY_COUNTRIES_PER_LIEUTENANT;
+  if (per <= 0) return 1;
+  return 1 + Math.floor((held - free) / per);
+}
+
+/** Whether opening ANOTHER new country now requires more lieutenants than are held. */
+export function requiresLieutenant(state: GameState): boolean {
+  return requiredLieutenants(state) > 0;
+}
+
+/** Whether at least one non-wire lieutenant is on the crew (view-model readout). */
+export function hasAvailableLieutenant(state: GameState): boolean {
+  return availableLieutenantCount(state) > 0;
+}
+
+/**
+ * Whether the crew gate BLOCKS opening a new country right now: the reach demands
+ * more lieutenants (`requiredLieutenants`) than are available. Opening an
  * already-held country (reinforcing) is never blocked.
  */
 export function crewGateBlocksOpen(state: GameState, countryId: string): boolean {
   if (isHeldCountry(state, countryId)) return false;
-  return requiresLieutenant(state) && !hasAvailableLieutenant(state);
+  return availableLieutenantCount(state) < requiredLieutenants(state);
+}
+
+// --- Expansion cooldown (time gate) ------------------------------------------
+
+/**
+ * The clock hour of the MOST RECENT country open (the max `openedAtHours` across
+ * stashes), or `undefined` when nothing has been opened (only established/home
+ * stashes — reinforcing never stamps `openedAtHours`). Drives the cooldown.
+ */
+export function lastOpenedAtHours(state: GameState): number | undefined {
+  let latest: number | undefined;
+  for (const s of state.stashes) {
+    if (s.openedAtHours === undefined) continue;
+    if (latest === undefined || s.openedAtHours > latest) latest = s.openedAtHours;
+  }
+  return latest;
+}
+
+/**
+ * Hours of active play still to wait before another country may be OPENED, `0`
+ * when clear. Offline-frozen (the in-game clock only advances online), so absence
+ * neither burns nor extends the cooldown.
+ */
+export function expansionCooldownRemaining(state: GameState): number {
+  const last = lastOpenedAtHours(state);
+  if (last === undefined) return 0;
+  const window = state.config.territory.TERRITORY_EXPANSION_COOLDOWN_HOURS;
+  const remaining = window - (state.clock.hours - last);
+  return remaining > 0 ? remaining : 0;
+}
+
+/** Whether the expansion cooldown currently BLOCKS opening a new country. */
+export function expansionOnCooldown(state: GameState): boolean {
+  return expansionCooldownRemaining(state) > 0;
+}
+
+// --- Heat ceiling (heat gate) ------------------------------------------------
+
+/**
+ * Whether the run is too HOT to open a new country: heat at or above
+ * `TERRITORY_MAX_HEAT_TO_EXPAND` (0–100 meter). Expansion is loud — cool down
+ * first. Reinforcing an already-held country is never blocked by this.
+ */
+export function heatBlocksExpansion(state: GameState): boolean {
+  return state.heat >= state.config.territory.TERRITORY_MAX_HEAT_TO_EXPAND;
+}
+
+// --- Cross-region capital floor (net-worth gate) -----------------------------
+
+/**
+ * The net-worth FLOOR, $, required to open a foothold in `countryId`: `0` for a
+ * country in a region you already touch (or an unknown region — fail-open), else
+ * `BASE × (1 + PER_DISTANCE × regionDistance)` rounded. A capital-proof gate ON
+ * TOP of the one-time open cost. PURE (region distance + config only) so this
+ * module stays free of a `netWorth`/engine import — `storage.addStash` performs
+ * the `netWorth` comparison against this shown figure (fairness law: shown = paid).
+ */
+export function capitalFloorFor(state: GameState, countryId: string): number {
+  const distance = newRegionDistance(state, countryId);
+  if (distance <= 0) return 0;
+  const cfg = state.config.territory;
+  return Math.round(cfg.TERRITORY_CAPITAL_FLOOR_BASE * (1 + cfg.TERRITORY_CAPITAL_FLOOR_PER_DISTANCE * distance));
 }
 
 // --- Vulnerability window (emergent raid risk) -------------------------------
