@@ -37,6 +37,7 @@ import {
   requiresPlug,
   type CountryConfig,
   type ProductId,
+  type Region,
 } from './config/countries';
 import {
   EXOTIC_STRAINS,
@@ -81,7 +82,15 @@ export interface Rival {
   readonly aggression: number;
   readonly cunning: number;
   readonly reach: number;
+  /** The trade region this rival is based in — turf-war ignition biases toward
+   * the player's countries near a rival's home (design "Turf Wars Between
+   * Countries"). Deterministic off the run seed. */
+  readonly homeRegion: Region;
 }
+
+/** The world's trade regions, for a seeded pick (derived from the distance map's
+ * keys so it can't drift from the `Region` union). */
+const REGIONS = Object.keys(REGION_DISTANCE) as Region[];
 
 export interface SupplierMarket {
   readonly countryId: string;
@@ -150,6 +159,10 @@ function resolveRivals(rng: Rng, world: WorldTuning): readonly Rival[] {
       aggression: rng.float(archetype.aggression.min, archetype.aggression.max),
       cunning: rng.float(archetype.cunning.min, archetype.cunning.max),
       reach: rng.float(archetype.reach.min, archetype.reach.max),
+      // Drawn from a per-rival FORK so it never consumes the `rivals` stream —
+      // adding this field leaves every other rival trait byte-identical to before
+      // (determinism preserved; existing seeds unchanged).
+      homeRegion: rng.fork(`rival-region-${i}`).pick(REGIONS),
     });
   }
   return rivals;

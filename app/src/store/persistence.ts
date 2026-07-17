@@ -40,7 +40,7 @@ import {
   type ArmsMarkets,
   type Armory,
 } from '@/engine/arms';
-import { COUNTRY_IDS } from '@/engine/config/countries';
+import { COUNTRY_IDS, getCountry } from '@/engine/config/countries';
 import {
   hydrateLegacyWorld,
   hydrateWorldV11,
@@ -513,6 +513,31 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
       territory: { ...DEFAULT_GAME_CONFIG.territory, ...legacy.config.territory },
     };
     return { ...env, schemaVersion: 21, state: { ...legacy, config } };
+  },
+  // 21 → 22: turf wars (design "Turf Wars Between Countries"). Rivals can now contest
+  // specific held countries as stateful wars. A pre-v22 run has none in flight, so seed
+  // `turfWars: []` — a migrated run simply starts at peace. The saved config gains the
+  // `turfWar` group from the default FIRST (any saved turfWar tuning wins on top).
+  // Nothing the player earned changes: no cash, holdings, or RNG movement.
+  21: (env) => {
+    const legacy = env.state as GameState & { turfWars?: unknown };
+    const config: GameConfig = {
+      ...legacy.config,
+      turfWar: { ...DEFAULT_GAME_CONFIG.turfWar, ...legacy.config.turfWar },
+    };
+    // Backfill `homeRegion` on rivals generated before v22 (the world is stored,
+    // not regenerated). Default to the run's home region so ignition biasing has a
+    // valid value; deterministic and takes nothing from the player.
+    const homeRegion = getCountry(legacy.world.startingCountry.id).region;
+    const rivals = legacy.world.rivals.map((r) =>
+      (r as { homeRegion?: unknown }).homeRegion ? r : { ...r, homeRegion },
+    );
+    const world = { ...legacy.world, rivals };
+    return {
+      ...env,
+      schemaVersion: 22,
+      state: { ...legacy, config, world, turfWars: legacy.turfWars ?? [] },
+    };
   },
 };
 

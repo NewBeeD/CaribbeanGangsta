@@ -26,6 +26,7 @@ import type {
   MarketEventDirection,
 } from './config/events';
 import { DEFAULT_GAME_CONFIG, type GameConfig } from './config';
+import type { TurfWarKind } from './config/turfWar';
 import {
   createInitialMarkets,
   resolveDeal,
@@ -192,8 +193,13 @@ import type {
  *     (`TERRITORY_CAPITAL_FLOOR_BASE` + `_PER_DISTANCE`). Migration merges the group
  *     from the default (any saved territory tuning wins on top) — no player cash,
  *     holdings, or RNG movement, and every gate applies only to OPENING a new country.
+ * v22: turf wars (design "Turf Wars Between Countries"). `GameState.turfWars` carries the
+ *     stateful conflicts of rivals contesting specific held countries; `config.turfWar`
+ *     holds their tuning. Migration seeds `turfWars: []` (a migrated run starts at peace)
+ *     and merges the `turfWar` config group from the default — no player cash, holdings,
+ *     or RNG movement. Ignition/escalation/resolution run on ACTIVE ticks only (GDD §6).
  */
-export const SCHEMA_VERSION = 21 as const;
+export const SCHEMA_VERSION = 22 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -525,6 +531,34 @@ export interface RivalState {
 }
 
 /**
+ * A stateful turf war — a rival contesting a SPECIFIC country the player holds
+ * (design "Turf Wars Between Countries"). Bound to a `(countryId, rivalId)` pair;
+ * one war per country at a time. Escalates over ACTIVE play and is answered with
+ * muscle + weapons + corruption + money (`engine/turfWar.ts`). Offline-frozen.
+ */
+export interface TurfWar {
+  readonly id: string;
+  /** The contested country — always one the player holds a stash in. */
+  readonly countryId: string;
+  /** The `world.rivals` id prosecuting the war. */
+  readonly rivalId: string;
+  /** How the rival fights it, flavored by archetype (config/turfWar.ts). */
+  readonly kind: TurfWarKind;
+  /** Who opened it — a rival raid, or the player going on the offensive. */
+  readonly initiatedBy: 'rival' | 'player';
+  /** In-game hour the war opened (for telegraph/age readouts). */
+  readonly startedAtHours: number;
+  /** 0–100 conflict pressure — grows unanswered, drops on won battles. At the
+   * seize threshold a loss can push the player out of the country. */
+  readonly pressure: number;
+  /** Distinct battles lost in this war — the second guard on the terminal rung. */
+  readonly lossCount: number;
+  /** Whether the rival currently skims tribute from the country's income (set
+   * after a lost battle, cleared on a win or a bought truce). */
+  readonly tributeActive: boolean;
+}
+
+/**
  * A queued return-hook: an event/choice waiting to be presented to the player
  * (e.g. on return from offline). Prompts 12/13 give these real payloads.
  */
@@ -786,6 +820,13 @@ export interface GameState {
    */
   readonly loansTaken: number;
   readonly rivals: readonly RivalState[];
+  /**
+   * Active turf wars — rivals contesting specific held countries (design "Turf
+   * Wars Between Countries"). Empty on a fresh run and on a migrated pre-v22 save.
+   * Ignited/escalated/resolved only on ACTIVE ticks (`turf-war` step), so absence
+   * never opens a war or seizes a country (GDD §6).
+   */
+  readonly turfWars: readonly TurfWar[];
   /** Progression / onboarding gates, keyed by name. */
   readonly flags: Readonly<Record<string, boolean>>;
   /** Ids of narrative beats already fired (design/05 — fire-once bookkeeping). */
@@ -1035,6 +1076,7 @@ export function createInitialState(
     debt: emptyDebt(),
     loansTaken: 0,
     rivals,
+    turfWars: [],
     flags: {},
     beatsFired: [],
     pendingChoices: [],

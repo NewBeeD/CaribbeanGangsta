@@ -19,6 +19,7 @@ export type ScreenId =
   | 'corruption'
   | 'debt'
   | 'arms'
+  | 'turfwar'
   | 'production'
   | 'highscore';
 
@@ -112,6 +113,13 @@ export const SCREEN_NODES: readonly ScreenNode[] = [
     route: 'arms',
     inNav: false,
     tagline: 'The broker deals in war. Highest heat in the game.',
+  },
+  {
+    id: 'turfwar',
+    label: 'Turf War',
+    route: 'turfwar',
+    inNav: false,
+    tagline: 'Rivals want your ground. Take the fight to them.',
   },
   {
     id: 'production',

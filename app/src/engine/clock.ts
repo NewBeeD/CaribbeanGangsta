@@ -38,6 +38,7 @@ import { streetStep } from './street';
 import { crewStep } from './crew';
 import { corruptionStep } from './corruption';
 import { debtStep, enforcementStep } from './debt';
+import { turfWarStep } from './turfWar';
 import { chaosStep } from './chaos';
 import { marketEventStep } from './marketEvents';
 import { beatStep } from './beats';
@@ -197,6 +198,14 @@ export const TICK_STEPS: readonly TickStep[] = [
   // that sets the mark: no collector moves while the player is away (the Prompt
   // 21 tested guardrail). Deterministic — no RNG.
   { id: 'marked-enforcement', modes: ['active', 'incarcerated'], run: (s, dt) => enforcementStep(s, dt) },
+  // Turf wars — rivals contesting specific held countries (design "Turf Wars
+  // Between Countries"). Grows active-war pressure, skims any tribute from clean
+  // cash, and rolls at most one new ignition from an INDEPENDENT run-seeded stream
+  // (so it never perturbs the deal/raid RNG). Active-only: absence never opens a
+  // war, escalates one, or skims a dollar (GDD §6). Runs AFTER corruption/debt so a
+  // war reads this tick's settled protection/heat, and before chaos so a fired war
+  // and a fired event settle together before beats read the board.
+  { id: 'turf-war', modes: ['active', 'incarcerated'], run: (s, dt) => turfWarStep(s, dt) },
   // Procedural world events — the variable-reward core (design/05 §2; design/01
   // §4.7). Prompt 12. Active-only: offline is frozen/safe, so absence never
   // triggers chaos (GDD §6). Draws from an INDEPENDENT run-seeded stream, so it

@@ -547,6 +547,37 @@ export {
   territoryExpansionCost,
 } from './config/territory';
 
+// Turf wars — rivals contesting held countries (design "Turf Wars Between Countries").
+export {
+  activeWars,
+  warForCountry,
+  heldCountries,
+  countryStake,
+  findRival,
+  rivalTension,
+  kindForArchetype,
+  contestableRivals,
+  battleStrength,
+  openTurfWar,
+  declareWar,
+  declareWarCost,
+  resolveBattle,
+  truceCost,
+  sueForTruce,
+  appeaseCost,
+  payTribute,
+  turfWarStep,
+  type StrengthTerm,
+  type BattleBreakdown,
+  type BattleCommitment,
+  type BattleResult,
+  type OpenWarResult,
+  type DeclareWarResult,
+  type TrucePayResult,
+} from './turfWar';
+export type { TurfWar } from './state';
+export type { TurfWarKind } from './config/turfWar';
+
 // Laundering / idle-offline engine — Prompt 07.
 export {
   FRONT_TYPES,

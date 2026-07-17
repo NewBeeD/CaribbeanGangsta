@@ -29,7 +29,7 @@ describe('Screen registry & routing (Ideas.md — open access)', () => {
     expect(nav).toEqual(['Deals', 'Crew', 'Money', 'Heat']);
   });
 
-  it('Empire · Market · Transport · Storage · Corruption · Debt · Arms · Production · High Score live one level up (not in bottom nav)', () => {
+  it('Empire · Market · Transport · Storage · Corruption · Debt · Arms · Turf War · Production · High Score live one level up (not in bottom nav)', () => {
     const up = SCREEN_NODES.filter((n) => !n.inNav).map((n) => n.id);
     expect(up).toEqual([
       'empire',
@@ -39,6 +39,7 @@ describe('Screen registry & routing (Ideas.md — open access)', () => {
       'corruption',
       'debt',
       'arms',
+      'turfwar',
       'production',
       'highscore',
     ]);

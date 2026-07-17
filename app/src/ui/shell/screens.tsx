@@ -20,6 +20,7 @@ import { TransportScreen } from '@/ui/screens/TransportScreen';
 import { CorruptionScreen } from '@/ui/screens/CorruptionScreen';
 import { DebtScreen } from '@/ui/screens/DebtScreen';
 import { ArmsScreen } from '@/ui/screens/ArmsScreen';
+import { TurfWarScreen } from '@/ui/screens/TurfWarScreen';
 import { ProductionScreen } from '@/ui/screens/ProductionScreen';
 import { HighScoreScreen } from '@/ui/screens/HighScoreScreen';
 import type { ScreenId } from './nav';
@@ -37,6 +38,7 @@ export const SCREENS: Readonly<Record<ScreenId, () => JSX.Element>> = {
   corruption: () => <CorruptionScreen />,
   debt: () => <DebtScreen />,
   arms: () => <ArmsScreen />,
+  turfwar: () => <TurfWarScreen />,
   production: () => <ProductionScreen />,
   highscore: () => <HighScoreScreen />,
 };

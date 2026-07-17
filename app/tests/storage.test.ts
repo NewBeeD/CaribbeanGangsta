@@ -21,6 +21,10 @@ import {
   STASH_MAX_LEVEL,
   WIPED_CAPITAL_FLAG,
   spawnCrew,
+  COUNTRIES,
+  capitalFloorFor,
+  footholdCost,
+  netWorth,
   type GameState,
   type Stash,
   type RaidEvent,
@@ -96,6 +100,28 @@ describe('addStash — build cost & upgrade curve (design/09 A.5)', () => {
     expect(result.rejected).toBe('insufficient-funds');
     expect(result.stash).toBeNull();
     expect(result.state).toBe(broke);
+  });
+
+  it('a negative net worth (loan debt) does NOT block a same-region open (no capital floor)', () => {
+    const base = createInitialState('negworth');
+    // A same-region country carries no capital floor (capitalFloorFor === 0).
+    const sameRegion = COUNTRIES.find(
+      (c) => c.id !== base.world.startingCountry.id && capitalFloorFor(base, c.id) === 0,
+    );
+    expect(sameRegion).toBeDefined();
+    const target = (sameRegion as { id: string }).id;
+    const cost = footholdCost(base, 'floor', target);
+    // Cash covers the open, but a big loan pushes net worth deeply negative.
+    const start: GameState = {
+      ...base,
+      cleanCash: cost,
+      debt: { ...base.debt, active: true, principal: cost * 100, accruedInterest: 0 },
+    };
+    expect(netWorth(start)).toBeLessThan(0);
+    const result = addStash(start, 'floor', { countryId: target });
+    // Pre-fix this rejected as 'insufficient-capital' against a phantom $0 floor.
+    expect(result.rejected).toBeUndefined();
+    expect(result.stash?.countryId).toBe(target);
   });
 });
 

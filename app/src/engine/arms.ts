@@ -124,6 +124,34 @@ export function createInitialArmsMarkets(
   return markets;
 }
 
+/** Total weapons held across all tiers — a quick arsenal readout. */
+export function armorySize(armory: Armory): number {
+  return WEAPON_TIER_IDS.reduce((sum, id) => sum + (armory[id] ?? 0), 0);
+}
+
+/**
+ * Spend weapons from the armory for a turf-war battle — the arms system's COMBAT
+ * use (design "Turf Wars Between Countries"). Arms are consumed win or lose, so
+ * firepower is spent, not free. Each tier's request is clamped to what's on hand,
+ * so a caller can never overdraw the arsenal; the returned `spent` is exactly how
+ * many of each tier were committed (the shown = spent number). Pure.
+ */
+export function spendArmory(
+  armory: Armory,
+  request: Readonly<Partial<Record<WeaponTierId, number>>>,
+): { readonly armory: Armory; readonly spent: Readonly<Record<WeaponTierId, number>> } {
+  const next = {} as Record<WeaponTierId, number>;
+  const spent = {} as Record<WeaponTierId, number>;
+  for (const id of WEAPON_TIER_IDS) {
+    const have = armory[id] ?? 0;
+    const want = Math.max(0, Math.floor(request[id] ?? 0));
+    const take = Math.min(have, want);
+    spent[id] = take;
+    next[id] = have - take;
+  }
+  return { armory: next, spent };
+}
+
 // --- Pricing ------------------------------------------------------------------
 
 /**

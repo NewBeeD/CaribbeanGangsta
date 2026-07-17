@@ -29,6 +29,16 @@ import {
   type ArmsBrokerResult,
 } from '@/engine/arms';
 import {
+  declareWar as declareWarEngine,
+  resolveBattle as resolveBattleEngine,
+  sueForTruce as sueForTruceEngine,
+  payTribute as payTributeEngine,
+  type BattleCommitment,
+  type BattleResult,
+  type DeclareWarResult,
+  type TrucePayResult,
+} from '@/engine/turfWar';
+import {
   addStash,
   upgradeStash as upgradeStashEngine,
   moveProduct as moveProductEngine,
@@ -275,6 +285,22 @@ export interface GameStore {
    * when no run is loaded. Autosaves on success so the deeper hold survives a refresh.
    */
   upgradeStash(stashId: string): AddStashResult | null;
+  /**
+   * Turf-war actions (design "Turf Wars Between Countries") — each wraps the pure
+   * `turfWar.ts` engine, commits + autosaves only when the move lands, and never
+   * authors any battle/pressure math in the UI. Rivals contest specific held
+   * countries; the player defends or goes on the offensive.
+   */
+  /** Go on the offensive: declare war on a rival over a held country (money + heat
+   * up front). Returns the result (its `rejected` reason when short/blocked). */
+  declareTurfWar(countryId: string, rivalId: string): DeclareWarResult | null;
+  /** Fight a battle in an active war with committed crew + weapons (arms are
+   * consumed). Returns the outcome (won, seized country, toppled …). */
+  commitBattle(warId: string, commitment: BattleCommitment): BattleResult | null;
+  /** Sue for a full truce — pay the lump sum and END the war. */
+  sueForTruce(warId: string): TrucePayResult | null;
+  /** Pay tribute — appease the rival to drop pressure without ending the war. */
+  payTribute(warId: string): TrucePayResult | null;
   /**
    * Storage actions (Prompt 20) — each wraps the pure `storage.ts` engine, commits
    * only when the operation lands (valid + funds/inventory sufficed), and autosaves
@@ -677,6 +703,52 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const result = upgradeStashEngine(state, stashId);
     // Only commit + autosave when the upgrade actually landed (level < max, funds ok).
     if (result.stash && result.rejected === undefined) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  declareTurfWar(countryId, rivalId) {
+    const { state } = get();
+    if (!state) return null;
+    const result = declareWarEngine(state, countryId, rivalId);
+    // Only commit + autosave when the war actually opened (funds + gates ok).
+    if (result.war && result.rejected === undefined) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  commitBattle(warId, commitment) {
+    const { state } = get();
+    if (!state) return null;
+    const result = resolveBattleEngine(state, warId, commitment);
+    // Only commit + autosave when a battle actually resolved (a live war).
+    if (result.rejected === undefined) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  sueForTruce(warId) {
+    const { state } = get();
+    if (!state) return null;
+    const result = sueForTruceEngine(state, warId);
+    if (result.rejected === undefined) {
+      set({ state: result.state });
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  payTribute(warId) {
+    const { state } = get();
+    if (!state) return null;
+    const result = payTributeEngine(state, warId);
+    if (result.rejected === undefined) {
       set({ state: result.state });
       void get().persist(AUTOSAVE_SLOT).catch(() => {});
     }

@@ -296,7 +296,10 @@ export function addStash(
     if (heatBlocksExpansion(state)) {
       return { state, stash: null, rejected: 'too-hot' };
     }
-    if (netWorth(state) < capitalFloorFor(state, target)) {
+    // Only a cross-region open carries a floor (`capitalFloorFor` > 0); a same-region
+    // open has none, so a negative net worth (e.g. carried loan debt) must NOT trip it.
+    const floor = capitalFloorFor(state, target);
+    if (floor > 0 && netWorth(state) < floor) {
       return { state, stash: null, rejected: 'insufficient-capital' };
     }
   }

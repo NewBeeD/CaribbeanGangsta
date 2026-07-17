@@ -275,6 +275,42 @@ import {
   TERRITORY_CAPITAL_FLOOR_PER_DISTANCE,
 } from './territory';
 import {
+  IGNITION_RATE_PER_HOUR,
+  IGNITION_TENSION_THRESHOLD,
+  IGNITION_AGGRESSION_WEIGHT,
+  IGNITION_REACH_WEIGHT,
+  IGNITION_VULNERABILITY_WEIGHT,
+  IGNITION_HEAT,
+  MAX_ACTIVE_WARS,
+  PRESSURE_GROWTH_PER_HOUR,
+  PRESSURE_SEIZE_THRESHOLD,
+  SEIZE_COUNTRY_AFTER_LOSSES,
+  BATTLE_BASE_STRENGTH,
+  BATTLE_MUSCLE_WEIGHT,
+  BATTLE_ARMS_TIER_WEIGHT,
+  BATTLE_GUARD_WEIGHT,
+  BATTLE_LOYALTY_WEIGHT,
+  BATTLE_OFFICIAL_WEIGHT,
+  RIVAL_AGGRESSION_WEIGHT,
+  RIVAL_REACH_WEIGHT,
+  RIVAL_TENSION_WEIGHT,
+  BATTLE_WIN_CHANCE_MIN,
+  BATTLE_WIN_CHANCE_MAX,
+  KIND_RIVAL_MULTIPLIER,
+  BATTLE_WIN_PRESSURE_DROP,
+  WAR_RESOLVED_PRESSURE,
+  BATTLE_LOSS_PRESSURE_GAIN,
+  BATTLE_LOSS_HEAT,
+  BATTLE_LOSS_REP,
+  CASUALTY_LOYALTY_HIT,
+  TRIBUTE_PCT,
+  DECLARE_WAR_COST,
+  DECLARE_WAR_HEAT,
+  TRUCE_COST_VALUE_MULTIPLE,
+  TRUCE_COST_MIN,
+  type TurfWarKind,
+} from './turfWar';
+import {
   WEAPON_TIERS,
   ARMS_BROKER_COST,
   ARMS_BROKER_HEAT,
@@ -296,6 +332,7 @@ import {
   ARMS_BUST_HEAT_MULT,
   ARMS_CUSTOMS_SEIZURE_RELIEF,
   type WeaponTierConfig,
+  type WeaponTierId,
 } from './arms';
 import type { Region } from './countries';
 import {
@@ -631,6 +668,45 @@ export interface ArmsTuning {
   readonly ARMS_CUSTOMS_SEIZURE_RELIEF: number;
 }
 
+/** Turf wars — rivals contesting specific held countries with battles fought by
+ * muscle + arms + corruption + money (design "Turf Wars Between Countries"). The
+ * layer that finally SPENDS the armory. */
+export interface TurfWarTuning {
+  readonly IGNITION_RATE_PER_HOUR: number;
+  readonly IGNITION_TENSION_THRESHOLD: number;
+  readonly IGNITION_AGGRESSION_WEIGHT: number;
+  readonly IGNITION_REACH_WEIGHT: number;
+  readonly IGNITION_VULNERABILITY_WEIGHT: number;
+  readonly IGNITION_HEAT: number;
+  readonly MAX_ACTIVE_WARS: number;
+  readonly PRESSURE_GROWTH_PER_HOUR: number;
+  readonly PRESSURE_SEIZE_THRESHOLD: number;
+  readonly SEIZE_COUNTRY_AFTER_LOSSES: number;
+  readonly BATTLE_BASE_STRENGTH: number;
+  readonly BATTLE_MUSCLE_WEIGHT: number;
+  readonly BATTLE_ARMS_TIER_WEIGHT: Readonly<Record<WeaponTierId, number>>;
+  readonly BATTLE_GUARD_WEIGHT: number;
+  readonly BATTLE_LOYALTY_WEIGHT: number;
+  readonly BATTLE_OFFICIAL_WEIGHT: number;
+  readonly RIVAL_AGGRESSION_WEIGHT: number;
+  readonly RIVAL_REACH_WEIGHT: number;
+  readonly RIVAL_TENSION_WEIGHT: number;
+  readonly BATTLE_WIN_CHANCE_MIN: number;
+  readonly BATTLE_WIN_CHANCE_MAX: number;
+  readonly KIND_RIVAL_MULTIPLIER: Readonly<Record<TurfWarKind, number>>;
+  readonly BATTLE_WIN_PRESSURE_DROP: number;
+  readonly WAR_RESOLVED_PRESSURE: number;
+  readonly BATTLE_LOSS_PRESSURE_GAIN: number;
+  readonly BATTLE_LOSS_HEAT: number;
+  readonly BATTLE_LOSS_REP: number;
+  readonly CASUALTY_LOYALTY_HIT: number;
+  readonly TRIBUTE_PCT: number;
+  readonly DECLARE_WAR_COST: number;
+  readonly DECLARE_WAR_HEAT: number;
+  readonly TRUCE_COST_VALUE_MULTIPLE: number;
+  readonly TRUCE_COST_MIN: number;
+}
+
 /** First-session onboarding budget (design/01 §6; GDD §9 — data for Prompt 24). */
 export interface OnboardingTuning {
   readonly SESSION_TARGET_MIN_MINUTES: number;
@@ -664,6 +740,7 @@ export interface GameConfig {
   readonly plugs: PlugsTuning;
   readonly territory: TerritoryTuning;
   readonly arms: ArmsTuning;
+  readonly turfWar: TurfWarTuning;
   readonly onboarding: OnboardingTuning;
 }
 
@@ -929,6 +1006,41 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     ARMS_BUST_MAX,
     ARMS_BUST_HEAT_MULT,
     ARMS_CUSTOMS_SEIZURE_RELIEF,
+  },
+  turfWar: {
+    IGNITION_RATE_PER_HOUR,
+    IGNITION_TENSION_THRESHOLD,
+    IGNITION_AGGRESSION_WEIGHT,
+    IGNITION_REACH_WEIGHT,
+    IGNITION_VULNERABILITY_WEIGHT,
+    IGNITION_HEAT,
+    MAX_ACTIVE_WARS,
+    PRESSURE_GROWTH_PER_HOUR,
+    PRESSURE_SEIZE_THRESHOLD,
+    SEIZE_COUNTRY_AFTER_LOSSES,
+    BATTLE_BASE_STRENGTH,
+    BATTLE_MUSCLE_WEIGHT,
+    BATTLE_ARMS_TIER_WEIGHT,
+    BATTLE_GUARD_WEIGHT,
+    BATTLE_LOYALTY_WEIGHT,
+    BATTLE_OFFICIAL_WEIGHT,
+    RIVAL_AGGRESSION_WEIGHT,
+    RIVAL_REACH_WEIGHT,
+    RIVAL_TENSION_WEIGHT,
+    BATTLE_WIN_CHANCE_MIN,
+    BATTLE_WIN_CHANCE_MAX,
+    KIND_RIVAL_MULTIPLIER,
+    BATTLE_WIN_PRESSURE_DROP,
+    WAR_RESOLVED_PRESSURE,
+    BATTLE_LOSS_PRESSURE_GAIN,
+    BATTLE_LOSS_HEAT,
+    BATTLE_LOSS_REP,
+    CASUALTY_LOYALTY_HIT,
+    TRIBUTE_PCT,
+    DECLARE_WAR_COST,
+    DECLARE_WAR_HEAT,
+    TRUCE_COST_VALUE_MULTIPLE,
+    TRUCE_COST_MIN,
   },
   onboarding: {
     SESSION_TARGET_MIN_MINUTES,

@@ -175,6 +175,9 @@ export function districtViews(state: GameState): readonly DistrictView[] {
     const lead = leadStash(here);
     const upgradeCost = lead ? nextUpgradeCost(state, lead) : null;
     const reinforceMaxed = owned && upgradeCost === null;
+    // A capital floor only exists for a cross-region open (>0); a same-region open
+    // has none, so it must never gate on a negative net worth (e.g. loan debt).
+    const capitalFloor = owned ? 0 : capitalFloorFor(state, c.id);
     const openCost = owned
       ? (upgradeCost ?? 0)
       : footholdCost(state, EXPANSION_TYPE, c.id);
@@ -198,8 +201,8 @@ export function districtViews(state: GameState): readonly DistrictView[] {
       blockedByCrew: !owned && crewGateBlocksOpen(state, c.id),
       blockedByHeat: !owned && heatBlocksExpansion(state),
       blockedByCooldown: !owned && expansionOnCooldown(state),
-      blockedByCapital: !owned && netWorth(state) < capitalFloorFor(state, c.id),
-      capitalFloor: owned ? 0 : capitalFloorFor(state, c.id),
+      blockedByCapital: !owned && capitalFloor > 0 && netWorth(state) < capitalFloor,
+      capitalFloor,
     };
   });
 }

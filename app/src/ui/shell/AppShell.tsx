@@ -190,8 +190,14 @@ export function AppShell() {
         </div>
         <nav className="cg-shell__uplinks" aria-label="Overview">
           {topNodes.map((n) => {
-            // A small count of what's in flight on the Transport uplink (Item 8).
-            const badge = n.id === 'transport' ? state.shipments.length : 0;
+            // A small count of what's in flight on the Transport uplink (Item 8),
+            // and of active turf wars on the Turf War uplink (design "Turf Wars").
+            const badge =
+              n.id === 'transport'
+                ? state.shipments.length
+                : n.id === 'turfwar'
+                  ? state.turfWars.length
+                  : 0;
             return (
               <button
                 key={n.id}
@@ -204,8 +210,8 @@ export function AppShell() {
                 {badge > 0 ? (
                   <span
                     className="cg-uplink__badge"
-                    aria-label={`${badge} in flight`}
-                    data-testid="transport-badge"
+                    aria-label={n.id === 'turfwar' ? `${badge} active` : `${badge} in flight`}
+                    data-testid={n.id === 'turfwar' ? 'turfwar-badge' : 'transport-badge'}
                     style={{ marginLeft: 6 }}
                   >
                     {badge}
