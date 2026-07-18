@@ -38,6 +38,7 @@ import { streetStep } from './street';
 import { crewStep } from './crew';
 import { corruptionStep } from './corruption';
 import { debtStep, enforcementStep } from './debt';
+import { consignmentStep } from './consignment';
 import { turfWarStep } from './turfWar';
 import { chaosStep } from './chaos';
 import { marketEventStep } from './marketEvents';
@@ -198,6 +199,19 @@ export const TICK_STEPS: readonly TickStep[] = [
   // that sets the mark: no collector moves while the player is away (the Prompt
   // 21 tested guardrail). Deterministic — no RNG.
   { id: 'marked-enforcement', modes: ['active', 'incarcerated'], run: (s, dt) => enforcementStep(s, dt) },
+  // Drug fronts / consignment (v23): interest, the compressed two-rung ladder,
+  // and the plug's collector clock — the quicker walk to the lethal end. Same
+  // 3-in-game-hour cadence as debt interest; ACTIVE-only, so absence never
+  // grows the front, escalates it, or kills (design/10 §4.2 verbatim).
+  // Deterministic — no RNG (the fattest stash ties to the first).
+  {
+    id: 'consignment',
+    modes: ['active', 'incarcerated'],
+    run: (s, dt) => {
+      const hours = periodHoursCrossed(s.clock.hours - dt, dt, PRICE_INTEREST_PERIOD_HOURS);
+      return hours > 0 ? consignmentStep(s, hours) : s;
+    },
+  },
   // Turf wars — rivals contesting specific held countries (design "Turf Wars
   // Between Countries"). Grows active-war pressure, skims any tribute from clean
   // cash, and rolls at most one new ignition from an INDEPENDENT run-seeded stream

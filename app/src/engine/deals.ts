@@ -306,8 +306,10 @@ export function restockMarkets(state: GameState, dtHours: number): GameState {
   return { ...state, markets };
 }
 
-/** Replace one market's stock pool (immutably), leaving its factors alone. */
-function withMarketStock(
+/** Replace one market's stock pool (immutably), leaving its factors alone.
+ * Exported for `consignment.ts` — a fronted package draws down the same street
+ * pool a cash buy does (design/12 Item 10: one supply, however it's paid). */
+export function withMarketStock(
   state: GameState,
   countryId: string,
   product: ProductId,

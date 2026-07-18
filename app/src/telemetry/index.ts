@@ -46,6 +46,8 @@ export {
   trackReturnToAllocate,
   trackBorrow,
   trackRepay,
+  trackConsignmentTaken,
+  trackConsignmentRepaid,
   trackBribe,
   trackOfficialHired,
   trackShipmentLaunched,

@@ -10,11 +10,11 @@
  */
 
 import { useState } from 'react';
-import type { ConvertResult, DealResult } from '@/engine';
+import type { ConsignmentQuote, ConvertResult, DealResult } from '@/engine';
 import { useGameState, useGameStore } from '@/store';
 import { Button, Card, HeatDots, Panel, QtyInput, RiskMeter, SceneText, Stat, TrendArrow } from '@/ui/components';
 import { currentTier, tierDots } from '@/engine';
-import type { DealIntent, GameState, ProductId } from '@/engine';
+import type { DealIntent, GameState, ProductId, Stash } from '@/engine';
 import { navigate } from '@/ui/shell/useHash';
 import {
   buyBoundLabel,
@@ -24,6 +24,9 @@ import {
   dealStashes,
   defaultMode,
   defaultProduct,
+  frontOffer,
+  frontQuote,
+  frontSceneFor,
   marketName,
   maxQty,
   plugGateProse,
@@ -90,6 +93,11 @@ export function DealScreen() {
   const [cooked, setCooked] = useState<{ row: ConversionRow; result: ConvertResult } | null>(
     null,
   );
+  const [fronted, setFronted] = useState<{
+    readonly sceneKey: string;
+    readonly quote: ConsignmentQuote;
+    readonly productName: string;
+  } | null>(null);
 
   // The shell only routes here with a live run; guard so hooks stay unconditional.
   if (!state) return null;
@@ -112,6 +120,37 @@ export function DealScreen() {
           setResult(null);
         }}
       />
+    );
+  }
+
+  // A taken front reads as a scene too — with the debt it opened on the label.
+  if (fronted) {
+    const scene = frontSceneFor(fronted.sceneKey);
+    return (
+      <Card heading="The front">
+        <SceneText tone={scene.tone} who={scene.who}>
+          {scene.text}
+        </SceneText>
+        <div style={{ marginTop: 12 }}>
+          <Stat
+            label={`You owe by day ${fronted.quote.dueDay}`}
+            value={money(fronted.quote.totalToRepayAtDue)}
+            tone="red"
+            big
+          />
+        </div>
+        <p className="cg-label" style={{ marginTop: 8 }} data-testid="front-outcome-terms">
+          {fronted.quote.qty} {fronted.productName.toLowerCase()} fronted ·{' '}
+          {money(fronted.quote.principal)} on the books · due in {fronted.quote.dueDays} in-game{' '}
+          {fronted.quote.dueDays === 1 ? 'day' : 'days'}. The clock only runs while you play —
+          but the plug doesn’t send letters. Track it on the Debt page.
+        </p>
+        <div style={{ marginTop: 16 }}>
+          <Button variant="primary" fullWidth onClick={() => setFronted(null)}>
+            Back to the corner
+          </Button>
+        </div>
+      </Card>
     );
   }
 
@@ -338,6 +377,20 @@ export function DealScreen() {
                     : 'No room / no cash'}
           </small>
         </Button>
+
+        {/* The plug's front — product on credit (v23): no cash down, a short
+            clock, and a plug who doesn't send letters. Shown only where the
+            connection can front (his products, intro bought). */}
+        {mode === 'buy' ? (
+          <FrontPanel
+            state={state}
+            product={selected}
+            stash={stash}
+            onDone={(sceneKey, quote) =>
+              setFronted({ sceneKey, quote, productName: row.name })
+            }
+          />
+        ) : null}
       </Card>
 
       {/* The kitchen — cook crack / press hash at this stash (Ideas2 §4). */}
@@ -353,6 +406,87 @@ export function DealScreen() {
       {/* The crew's corners — cooked crack dripping back as dirty cash (Item 5d). */}
       <StreetStatusLine state={state} />
     </div>
+  );
+}
+
+/**
+ * The plug's front — take the package on credit instead of cash (v23). Shown in
+ * buy mode only where the connection can front: his products, intro bought. The
+ * full terms (owed at markup, due day in PLAYED days, the total at due) are on
+ * the label BEFORE commit — `frontQuote` is exactly what the engine books — and
+ * the short fuse is stated plainly, never fine print. Its own stepper: a front
+ * needs no cash down, so the cash-bound buy max never clamps it.
+ */
+function FrontPanel({
+  state,
+  product,
+  stash,
+  onDone,
+}: {
+  readonly state: GameState;
+  readonly product: ProductId;
+  readonly stash: Stash;
+  readonly onDone: (sceneKey: string, quote: ConsignmentQuote) => void;
+}) {
+  const [qty, setQty] = useState(1);
+  const offer = frontOffer(state, product, stash);
+  if (!offer) return null;
+
+  const max = offer.frontActive ? 0 : offer.maxQty;
+  const clamped = clampQty(qty, max);
+  const canFront = max > 0;
+  const quote = frontQuote(state, product, Math.max(1, clamped), stash);
+
+  const take = () => {
+    if (!canFront) return;
+    const result = useGameStore
+      .getState()
+      .takeConsignment(stash.countryId, product, clamped, stash.id);
+    if (!result) return;
+    onDone(
+      result.ok ? 'consignment.success' : `consignment.reject.${result.rejected}`,
+      result.quote,
+    );
+  };
+
+  return (
+    <Panel heading="Or take it on the arm" style={{ marginTop: 14 }}>
+      {offer.frontActive ? (
+        <p className="cg-label" data-testid="front-blocked">
+          The plug already has a package on your name. Square that before he fronts another.
+        </p>
+      ) : (
+        <>
+          <p className="cg-label" style={{ marginBottom: 10 }} data-testid="front-terms">
+            No cash down — {money(quote.principal)} on the books ({money(quote.unitPrice)} / unit
+            + the plug’s cut), {money(quote.totalToRepayAtDue)} due by day {quote.dueDay} (
+            {quote.dueDays} played days). Miss it and this gets ugly fast — he can end you.
+          </p>
+          <QtyInput
+            value={clamped}
+            max={max}
+            onChange={setQty}
+            ariaLabel="Quantity to take on credit"
+            boundLabel={offer.boundLabel ?? undefined}
+            disabled={!canFront}
+          />
+          <Button
+            variant="secondary"
+            fullWidth
+            onClick={take}
+            disabled={!canFront}
+            data-testid="take-front"
+          >
+            Take the front
+            <small>
+              {canFront
+                ? `owe ${money(quote.totalToRepayAtDue)} by day ${quote.dueDay}`
+                : 'nothing frontable right now'}
+            </small>
+          </Button>
+        </>
+      )}
+    </Panel>
   );
 }
 

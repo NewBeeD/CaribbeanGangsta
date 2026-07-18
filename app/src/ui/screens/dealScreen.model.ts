@@ -20,6 +20,7 @@ import {
   CONVERSION_RECIPES,
   PRODUCTS,
   computeBustProbability,
+  consignmentCap,
   convertBinding,
   effectiveCapacity,
   getCountry,
@@ -29,10 +30,12 @@ import {
   maxBatches,
   plugQuote,
   productDisplayName,
+  quoteConsignment,
   requiresPlug,
   spendableAt,
   stashUnits,
   streetRevenuePerDay,
+  type ConsignmentQuote,
   type ConvertRejectReason,
   type GameState,
   type PriceTrend,
@@ -307,6 +310,101 @@ export const DEAL_SCENES: Readonly<Record<string, DealScene>> = {
  */
 export function sceneFor(sceneKey: string): DealScene {
   return DEAL_SCENES[sceneKey] ?? { tone: 'default', text: 'Nothing changed hands.' };
+}
+
+// --- Drug fronts — product on credit from the plug (v23) -----------------------
+
+/**
+ * The plug's standing front offer for `product` at this stash's market — shown
+ * beside the cash Buy whenever the connection can front here. `null` when this
+ * country's plug doesn't move the product or the intro hasn't been bought (the
+ * plug fronts CONNECTIONS only — the same money gate as buying at the source).
+ */
+export interface FrontOffer {
+  /** True when a front is already on the books (one at a time — the blocker). */
+  readonly frontActive: boolean;
+  /** Most units the plug will front right now: value cap, street stock, and
+   * stash capacity — the tightest of the three. 0 with `frontActive` aside. */
+  readonly maxQty: number;
+  /** Which limit pins `maxQty`, told in-world (never a surprise clamp). */
+  readonly boundLabel: string | null;
+  /** The current fronted-value cap in $ (grows with street rep). */
+  readonly cap: number;
+}
+
+export function frontOffer(
+  state: GameState,
+  product: ProductId,
+  stash: Stash,
+): FrontOffer | null {
+  const countryId = marketCountryId(stash);
+  if (!requiresPlug(countryId, product)) return null; // not a plug product here
+  if (!hasPlug(state, countryId)) return null; // no connection — the buy gate prose covers it
+  const price = getMarketPrice(state, product, countryId);
+  const cap = consignmentCap(state);
+  const unitOwed = price.price * state.config.consignment.CONSIGNMENT_MARKUP;
+  const byCap = unitOwed > 0 ? Math.floor(cap / unitOwed) : 0;
+  const capacityLeft = effectiveCapacity(state, stash) - stashUnits(stash);
+  const maxQty = Math.max(0, Math.min(byCap, capacityLeft, price.stock));
+  let boundLabel: string | null = null;
+  if (maxQty > 0) {
+    boundLabel =
+      maxQty === byCap
+        ? 'all the plug will front you'
+        : maxQty === capacityLeft
+          ? 'all this stash can hold'
+          : "all the street's holding";
+  }
+  return {
+    frontActive: state.consignment.active,
+    maxQty,
+    boundLabel,
+    cap,
+  };
+}
+
+/** The front's full terms at `qty` — `quoteConsignment` verbatim (what commits). */
+export function frontQuote(
+  state: GameState,
+  product: ProductId,
+  qty: number,
+  stash: Stash,
+): ConsignmentQuote {
+  return quoteConsignment(state, marketCountryId(stash), product, qty);
+}
+
+/** Front rejections as scenes (design/13 A1 — never copy that reads like success). */
+export const FRONT_SCENES: Readonly<Record<string, DealScene>> = {
+  'consignment.success': {
+    tone: 'win',
+    who: 'The plug',
+    text: 'hands it over without counting anything. “You know what it costs. You know when.”',
+  },
+  'consignment.reject.consignment-active': {
+    tone: 'default',
+    text: 'No front — you already owe him for the last package. Square that first.',
+  },
+  'consignment.reject.exceeds-cap': {
+    tone: 'default',
+    text: 'No front — he won’t put that much on your name yet. Pay some fronts off first.',
+  },
+  'consignment.reject.no-supply': {
+    tone: 'default',
+    text: 'No front — the street can’t supply that many right now. Wait for the re-up.',
+  },
+  'consignment.reject.insufficient-capacity': {
+    tone: 'default',
+    text: 'No front — this stash can’t hold the load. Make room first.',
+  },
+  'consignment.reject.no-plug': {
+    tone: 'default',
+    text: 'No front — the source doesn’t front strangers. Buy the introduction first.',
+  },
+};
+
+/** Resolve front prose for a scene key (fallback = nothing happened, A1). */
+export function frontSceneFor(sceneKey: string): DealScene {
+  return FRONT_SCENES[sceneKey] ?? { tone: 'default', text: 'Nothing changed hands.' };
 }
 
 // --- Conversions — cook crack / press hash (Prompt 31; Ideas2 §4) --------------

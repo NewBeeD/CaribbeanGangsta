@@ -19,6 +19,7 @@
 import {
   SCHEMA_VERSION,
   emptyArmory,
+  emptyConsignment,
   emptyDebt,
   emptyInventory,
   emptyStreetStock,
@@ -537,6 +538,24 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
       ...env,
       schemaVersion: 22,
       state: { ...legacy, config, world, turfWars: legacy.turfWars ?? [] },
+    };
+  },
+  // 22 → 23: drug fronts / consignment (user request — drugs on loan with a short
+  // fuse). A pre-v23 run owes no plug anything, so seed `consignment:
+  // emptyConsignment()` — a migrated run simply starts square. The saved config
+  // gains the `consignment` group from the default FIRST (any saved consignment
+  // tuning wins on top). Nothing the player earned changes: no cash, holdings, or
+  // RNG movement.
+  22: (env) => {
+    const legacy = env.state as GameState & { consignment?: unknown };
+    const config: GameConfig = {
+      ...legacy.config,
+      consignment: { ...DEFAULT_GAME_CONFIG.consignment, ...legacy.config.consignment },
+    };
+    return {
+      ...env,
+      schemaVersion: 23,
+      state: { ...legacy, config, consignment: legacy.consignment ?? emptyConsignment() },
     };
   },
 };

@@ -261,6 +261,19 @@ import {
 } from './street';
 import { PLUG_MEETING_HEAT } from './plugs';
 import {
+  CONSIGNMENT_DUE_DAYS,
+  CONSIGNMENT_MARKUP,
+  CONSIGNMENT_WEEKLY_RATE,
+  CONSIGNMENT_MAX_VALUE,
+  CONSIGNMENT_CAP_REPUTATION_FLOOR,
+  CONSIGNMENT_CAP_REPUTATION_SCALE,
+  CONSIGNMENT_LADDER_DAYS_PER_RUNG,
+  CONSIGNMENT_ENFORCEMENT_PERIOD_HOURS,
+  CONSIGNMENT_CASH_CUT,
+  CONSIGNMENT_LETHAL_AFTER_HITS,
+  CONSIGNMENT_REPAY_REP_BONUS,
+} from './consignment';
+import {
   TERRITORY_REACH_GROWTH,
   TERRITORY_NEW_REGION_JUMP,
   TERRITORY_TAKEOVER_HEAT,
@@ -625,6 +638,22 @@ export interface PlugsTuning {
   readonly PLUG_MEETING_HEAT: number;
 }
 
+/** Drug fronts — product on loan from your plug: short due date, quicker death
+ * (v23 user request; the design/10 §4 guarantees hold verbatim). */
+export interface ConsignmentTuning {
+  readonly CONSIGNMENT_DUE_DAYS: number;
+  readonly CONSIGNMENT_MARKUP: number;
+  readonly CONSIGNMENT_WEEKLY_RATE: number;
+  readonly CONSIGNMENT_MAX_VALUE: number;
+  readonly CONSIGNMENT_CAP_REPUTATION_FLOOR: number;
+  readonly CONSIGNMENT_CAP_REPUTATION_SCALE: number;
+  readonly CONSIGNMENT_LADDER_DAYS_PER_RUNG: number;
+  readonly CONSIGNMENT_ENFORCEMENT_PERIOD_HOURS: number;
+  readonly CONSIGNMENT_CASH_CUT: number;
+  readonly CONSIGNMENT_LETHAL_AFTER_HITS: number;
+  readonly CONSIGNMENT_REPAY_REP_BONUS: number;
+}
+
 /** Meaningful territory expansion — reach cost, exposure, hold, crew gate
  * (Ideas2 item 5; Prompt 41). The last two relax open access for territory. */
 export interface TerritoryTuning {
@@ -738,6 +767,7 @@ export interface GameConfig {
   readonly markets: MarketsTuning;
   readonly street: StreetTuning;
   readonly plugs: PlugsTuning;
+  readonly consignment: ConsignmentTuning;
   readonly territory: TerritoryTuning;
   readonly arms: ArmsTuning;
   readonly turfWar: TurfWarTuning;
@@ -971,6 +1001,19 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     STREET_HEAT_PER_UNIT,
   },
   plugs: { PLUG_MEETING_HEAT },
+  consignment: {
+    CONSIGNMENT_DUE_DAYS,
+    CONSIGNMENT_MARKUP,
+    CONSIGNMENT_WEEKLY_RATE,
+    CONSIGNMENT_MAX_VALUE,
+    CONSIGNMENT_CAP_REPUTATION_FLOOR,
+    CONSIGNMENT_CAP_REPUTATION_SCALE,
+    CONSIGNMENT_LADDER_DAYS_PER_RUNG,
+    CONSIGNMENT_ENFORCEMENT_PERIOD_HOURS,
+    CONSIGNMENT_CASH_CUT,
+    CONSIGNMENT_LETHAL_AFTER_HITS,
+    CONSIGNMENT_REPAY_REP_BONUS,
+  },
   territory: {
     TERRITORY_REACH_GROWTH,
     TERRITORY_NEW_REGION_JUMP,

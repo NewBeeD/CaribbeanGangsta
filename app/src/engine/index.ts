@@ -118,10 +118,12 @@ export {
   applyIntent,
   emptyInventory,
   emptyDebt,
+  emptyConsignment,
   emptyStreetStock,
   emptyArmory,
   emptyWash,
   debtOwed,
+  consignmentOwed,
   totalDirtyCash,
   spendableAt,
   splitCharge,
@@ -156,6 +158,7 @@ export type {
   PaidPort,
   Corruption,
   Debt,
+  Consignment,
   RivalState,
   PendingChoice,
   HighScore,
@@ -839,6 +842,43 @@ export type {
   LenderOffer,
   DebtRejectReason,
 } from './debt';
+
+// Drug fronts / consignment — product on loan from your plug (v23).
+export {
+  CONSIGNMENT_DUE_DAYS,
+  CONSIGNMENT_MARKUP,
+  CONSIGNMENT_WEEKLY_RATE,
+  CONSIGNMENT_MAX_VALUE,
+  CONSIGNMENT_CAP_REPUTATION_FLOOR,
+  CONSIGNMENT_CAP_REPUTATION_SCALE,
+  CONSIGNMENT_LADDER_DAYS_PER_RUNG,
+  CONSIGNMENT_ENFORCEMENT_PERIOD_HOURS,
+  CONSIGNMENT_CASH_CUT,
+  CONSIGNMENT_LETHAL_AFTER_HITS,
+  CONSIGNMENT_REPAY_REP_BONUS,
+  CONSIGNMENT_SIGNS,
+} from './config/consignment';
+export type { ConsignmentRung } from './config/consignment';
+export {
+  consignmentCap,
+  quoteConsignment,
+  takeConsignment,
+  repayConsignment,
+  consignmentStep,
+  consignmentClosedAccount,
+  isConsignmentMarked,
+  CONSIGNMENT_MARKED_FLAG,
+  CONSIGNMENT_LETHAL_FLAG,
+  CONSIGNMENT_DEFAULT_CHOICE,
+  CONSIGNMENT_CLEARED_CHOICE,
+  CONSIGNMENT_COLLECTOR_CHOICE,
+} from './consignment';
+export type {
+  ConsignmentQuote,
+  TakeConsignmentResult,
+  RepayConsignmentResult,
+  ConsignmentRejectReason,
+} from './consignment';
 
 // Endgame — death spiral, permadeath, high score & prestige — Prompt 11.
 export {

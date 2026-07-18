@@ -198,8 +198,16 @@ import type {
  *     holds their tuning. Migration seeds `turfWars: []` (a migrated run starts at peace)
  *     and merges the `turfWar` config group from the default — no player cash, holdings,
  *     or RNG movement. Ignition/escalation/resolution run on ACTIVE ticks only (GDD §6).
+ * v23: drug fronts / consignment (user request — drugs on loan, shorter due date, quicker
+ *     death). `GameState.consignment` is a second, independent ledger beside `debt`: the
+ *     country's PLUG fronts product into a stash and is owed its marked-up contract value
+ *     on a 3-day clock, repayable from dirty OR clean cash (`engine/consignment.ts`);
+ *     `config.consignment` holds the tuning. Migration seeds `consignment:
+ *     emptyConsignment()` (a migrated run owes nothing) and merges the config group from
+ *     the default — no player cash, holdings, or RNG movement. Interest/ladder/hits run
+ *     on ACTIVE ticks only (design/10 §4.2 verbatim).
  */
-export const SCHEMA_VERSION = 22 as const;
+export const SCHEMA_VERSION = 23 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -522,6 +530,39 @@ export interface Debt {
   readonly active: boolean;
 }
 
+/**
+ * A drug front on the books — product consigned by a country's PLUG (v23;
+ * extends design/10's borrowing economy). A second, independent ledger beside
+ * `Debt`: the package is already in a stash; what's owed is its marked-up
+ * contract value in cash (dirty or clean — the plug takes street money), due on
+ * a much shorter clock with a much shorter walk to the lethal end
+ * (`engine/consignment.ts`). One front at a time; `countryId === null` means
+ * none. The design/10 §4 guarantees hold verbatim: opt-in, offline-frozen,
+ * telegraphed, terms shown in full.
+ */
+export interface Consignment {
+  /** The plug country fronting the package, or `null` when there is no front. */
+  readonly countryId: string | null;
+  /** What was fronted (for prose/repossession; the units live in the stash). */
+  readonly product: ProductId | null;
+  readonly qty: number;
+  /** $ owed at the fronted contract value × markup — fixed once taken. */
+  readonly principal: number;
+  /** Weekly interest rate as a fraction (compounds at `rate/7` per active day). */
+  readonly rate: number;
+  /** Interest accrued to date, $ (kept separate so `principal` is a clean floor). */
+  readonly accruedInterest: number;
+  /** In-game day the soft due date falls on — consequences BEGIN here. */
+  readonly dueDay: number;
+  /** The compressed ladder: 0 = good standing, 1 = warned, 2 = marked. */
+  readonly ladderRung: number;
+  /** Collector pressure clock while marked (mirrors `MarkedEnforcement`).
+   * Cleared with the ledger the instant the balance hits zero. */
+  readonly enforcement?: MarkedEnforcement;
+  /** Interest accrues only while `active` AND the player is online (§4.2). */
+  readonly active: boolean;
+}
+
 /** Per-run relationship layer over `world.rivals`. Prompt 08/12 flesh this out. */
 export interface RivalState {
   /** Matches the `id` of a `world.rivals` entry. */
@@ -812,6 +853,12 @@ export interface GameState {
   readonly corruption: Corruption;
   readonly debt: Debt;
   /**
+   * The drug-front ledger (v23) — product consigned by a plug, owed in cash on
+   * a short clock (`engine/consignment.ts`). Independent of `debt`: a front can
+   * run alongside a cash loan. Advanced on ACTIVE ticks only (GDD §6).
+   */
+  readonly consignment: Consignment;
+  /**
    * How many loans this RUN has taken (design/10; Ideas2 item 4; Prompt 40). A
    * monotonic counter bumped by `borrow`, so the FIRST loan is the one live while
    * `loansTaken === 1` — used to bite the opening loan sooner (`FIRST_LOAN_VIG_DAYS`)
@@ -885,6 +932,26 @@ export function debtOwed(debt: Debt): number {
   return debt.principal + debt.accruedInterest;
 }
 
+/** A ledger with no active front — the run's starting (and post-payoff) consignment. */
+export function emptyConsignment(): Consignment {
+  return {
+    countryId: null,
+    product: null,
+    qty: 0,
+    principal: 0,
+    rate: 0,
+    accruedInterest: 0,
+    dueDay: 0,
+    ladderRung: 0,
+    active: false,
+  };
+}
+
+/** Total owed on the drug front = principal + accrued interest. */
+export function consignmentOwed(consignment: Consignment): number {
+  return consignment.principal + consignment.accruedInterest;
+}
+
 /** Sum of dirty cash across all stashes (dirty cash is located — design/01 §1). */
 export function totalDirtyCash(state: GameState): number {
   return state.stashes.reduce((sum, s) => sum + s.dirtyCash, 0);
@@ -937,12 +1004,16 @@ export function splitCharge(
  */
 export function netWorth(state: GameState): number {
   const loanBalance = state.debt.active ? debtOwed(state.debt) : 0;
+  // The drug front nets out the same way (v23): the fronted product raised the
+  // asset side, so the balance owed cancels it until the flip realizes a margin.
+  const frontBalance = state.consignment.active ? consignmentOwed(state.consignment) : 0;
   return (
     totalDirtyCash(state) +
     state.cleanCash +
     state.wash.queuedDirty +
     vesselsValue(state) -
-    loanBalance
+    loanBalance -
+    frontBalance
   );
 }
 
@@ -1074,6 +1145,7 @@ export function createInitialState(
     crewBackWages: 0,
     corruption: { officials: [], payrollPerWeek: 0, paidPorts: [], lastPayrollWeek: 1 },
     debt: emptyDebt(),
+    consignment: emptyConsignment(),
     loansTaken: 0,
     rivals,
     turfWars: [],

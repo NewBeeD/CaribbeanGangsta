@@ -9,11 +9,15 @@
  * on-device `LocalSink` the overlay reads. Local-first, no PII (design/06).
  */
 
-import { netWorth, debtOwed, type GameState } from '@/engine/state';
+import { netWorth, debtOwed, consignmentOwed, type GameState } from '@/engine/state';
 import type { DealIntent, DealResult } from '@/engine/deals';
 import { cleanCashRate, type OfflineReport } from '@/engine/laundering';
 import type { FrontResult } from '@/engine/laundering';
 import { borrowCap, type BorrowResult, type RepayResult } from '@/engine/debt';
+import type {
+  TakeConsignmentResult,
+  RepayConsignmentResult,
+} from '@/engine/consignment';
 import type { LenderId } from '@/engine/config/lenders';
 import type { HireResult, PayBribeResult } from '@/engine/corruption';
 import type { ShipResult } from '@/engine/travel';
@@ -208,6 +212,39 @@ export function trackRepay(before: GameState, result: RepayResult): void {
     remaining: debtOwed(result.state.debt),
     clearedInFull: result.clearedInFull,
     dugOut: result.clearedInFull && before.debt.ladderRung > 0,
+  });
+}
+
+// --- Drug fronts (consignment, v23) — the plug's short-fuse credit ------------
+
+export function trackConsignmentTaken(
+  before: GameState,
+  result: TakeConsignmentResult,
+): void {
+  if (!result.ok) return;
+  const worth = netWorth(before);
+  telemetry.track('consignment_taken', {
+    countryId: result.quote.countryId,
+    product: result.quote.product,
+    qty: result.quote.qty,
+    principal: result.quote.principal,
+    cap: result.quote.cap,
+    leverage: worth > 0 ? result.quote.principal / worth : result.quote.principal,
+  });
+}
+
+export function trackConsignmentRepaid(
+  before: GameState,
+  result: RepayConsignmentResult,
+): void {
+  if (!result.ok) return;
+  telemetry.track('consignment_repaid', {
+    paid: result.paid,
+    fromDirty: result.fromDirty,
+    fromClean: result.fromClean,
+    remaining: consignmentOwed(result.state.consignment),
+    clearedInFull: result.clearedInFull,
+    dugOut: result.clearedInFull && before.consignment.ladderRung > 0,
   });
 }
 

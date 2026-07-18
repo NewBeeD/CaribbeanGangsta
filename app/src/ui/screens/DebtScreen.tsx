@@ -22,14 +22,19 @@ import { useState } from 'react';
 import { useGameState, useGameStore } from '@/store';
 import { Button, Card, Panel, SceneText, Stat } from '@/ui/components';
 import {
+  activeFront,
   activeLoan,
   borrowQuote,
   collateralOptions,
+  consignmentScenes,
   debtScenes,
+  frontLadderTelegraph,
+  frontRepayPlan,
   ladderTelegraph,
   lenderOptions,
   lifeline,
   repayPlan,
+  type ActiveFront,
   type ActiveLoan,
   type LadderStep,
   type LifelineView,
@@ -102,6 +107,95 @@ function RepayControls({ state }: { readonly state: GameState }) {
         Early or partial, you’re only ever charged what you owe — no prepayment penalty.
       </p>
     </div>
+  );
+}
+
+/** Pay the plug — the front's repay actions. Dirty money welcome (v23). */
+function FrontRepayControls({ state }: { readonly state: GameState }) {
+  const plan = frontRepayPlan(state);
+  const repay = (amount: number) => useGameStore.getState().repayConsignment(amount);
+
+  return (
+    <div style={{ display: 'grid', gap: 8 }}>
+      <Button
+        variant="primary"
+        fullWidth
+        disabled={!plan.canPayFull}
+        onClick={() => repay(plan.fullAmount)}
+        data-testid="front-repay-full"
+      >
+        Pay the plug in full
+        <small>{plan.canPayFull ? money(plan.fullAmount) : `${money(plan.fullAmount)} · short`}</small>
+      </Button>
+      <Button
+        variant="secondary"
+        fullWidth
+        disabled={!plan.canPayPartial}
+        onClick={() => repay(plan.partialAmount)}
+        data-testid="front-repay-partial"
+      >
+        Pay something (partial)
+        <small>
+          {plan.canPayPartial ? `${money(plan.partialAmount)} · resets his clock` : 'pay full instead'}
+        </small>
+      </Button>
+      <p className="cg-label">
+        He takes street money — dirty cash pays this straight, no wash needed. Early or partial,
+        you’re only ever charged what you owe.
+      </p>
+    </div>
+  );
+}
+
+/** The live drug front: balance, the short countdown, and its compressed ladder. */
+function ActiveFrontCard({
+  front,
+  state,
+}: {
+  readonly front: ActiveFront;
+  readonly state: GameState;
+}) {
+  const dueLine = front.overdue
+    ? `Past due by ${front.overdueDays} in-game ${front.overdueDays === 1 ? 'day' : 'days'}`
+    : `Due in ${front.daysUntilDue} in-game ${front.daysUntilDue === 1 ? 'day' : 'days'} (day ${front.dueDay})`;
+
+  return (
+    <Card heading={`The front — ${front.countryName}`}>
+      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <Stat label="Owed on the front" value={money(front.owed)} tone="red" big />
+        <Stat label="Weekly rate" value={`${front.weeklyRatePct}%`} tone="default" />
+      </div>
+      <p className="cg-label" style={{ marginTop: 8 }}>
+        {front.qty} {front.productName.toLowerCase()} fronted · {money(front.principal)} principal
+        + {money(front.accruedInterest)} interest so far
+      </p>
+
+      <p
+        className={front.overdue ? 'cg-label cg-tone-red' : 'cg-label'}
+        style={{ marginTop: 6 }}
+        data-testid="front-due-countdown"
+      >
+        {dueLine}. The clock only runs on days you play — but it runs fast: this is the
+        shortest fuse you can owe on.
+      </p>
+
+      <SceneText tone={front.overdue || front.marked ? 'bust' : 'default'} who="The plug:">
+        {front.patienceProse}
+      </SceneText>
+
+      <div style={{ marginTop: 12 }}>
+        <FrontRepayControls state={state} />
+      </div>
+
+      <details style={{ marginTop: 12 }} open={front.overdue}>
+        <summary className="cg-label" style={{ cursor: 'pointer' }}>
+          If you don’t pay — how fast it gets fatal
+        </summary>
+        <div style={{ marginTop: 8 }}>
+          <LadderTelegraph steps={frontLadderTelegraph(state)} />
+        </div>
+      </details>
+    </Card>
   );
 }
 
@@ -351,9 +445,12 @@ export function DebtScreen() {
   if (!state) return null;
 
   const loan = activeLoan(state);
+  const front = activeFront(state);
   const scenes = debtScenes(state);
+  const frontScenes = consignmentScenes(state);
   const life = lifeline(state);
   const hasDefaultScene = scenes.some((s) => s.kind === 'default');
+  const hasFrontPressure = frontScenes.some((s) => s.kind === 'default');
 
   return (
     <div>
@@ -368,12 +465,34 @@ export function DebtScreen() {
       >
         <span className="cg-kicker">Debt</span>
         <span className="cg-label" aria-live="polite">
-          {loan ? `Owe ${money(loan.owed)} to ${loan.lenderName}` : 'No loan — the door’s open'}
+          {loan
+            ? `Owe ${money(loan.owed)} to ${loan.lenderName}`
+            : front
+              ? `Owe ${money(front.owed)} on the front`
+              : 'No loan — the door’s open'}
         </span>
       </header>
 
       {/* The lifeline out of the spiral — presented prominently as the way back. */}
       {life ? <LifelineCard life={life} /> : null}
+
+      {/* Front story-beats — the plug's pressure reads as scenes with the repay
+          actions right there (the intervention window). */}
+      {frontScenes.length > 0 ? (
+        <Card heading={hasFrontPressure ? 'The plug wants his money' : 'Word from the plug'}>
+          <div style={{ display: 'grid', gap: 10 }}>
+            {frontScenes.map((s) => (
+              <SceneText key={s.id} tone={s.kind === 'cleared' ? 'win' : 'bust'}>
+                {s.text}
+              </SceneText>
+            ))}
+            {hasFrontPressure && front ? <FrontRepayControls state={state} /> : null}
+          </div>
+        </Card>
+      ) : null}
+
+      {/* The live drug front — a second ledger beside the loan (v23). */}
+      {front ? <ActiveFrontCard front={front} state={state} /> : null}
 
       {/* Debt story-beats surfaced as scenes (design/10 §5). Default rungs carry the
           intervention actions here; the full negotiate/favor/remove card presenter

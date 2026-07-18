@@ -137,6 +137,26 @@ export interface TelemetryEventMap {
     readonly marked: boolean;
   };
 
+  // --- Drug fronts / consignment (v23 — the plug's short-fuse credit) ---
+  consignment_taken: {
+    readonly countryId: string;
+    readonly product: string;
+    readonly qty: number;
+    readonly principal: number;
+    readonly cap: number;
+    /** Fronted value ÷ net worth at the moment of taking (leverage row). */
+    readonly leverage: number;
+  };
+  consignment_repaid: {
+    readonly paid: number;
+    readonly fromDirty: number;
+    readonly fromClean: number;
+    readonly remaining: number;
+    readonly clearedInFull: boolean;
+    /** True when this clears a front that HAD gone overdue (dig-out-rate row). */
+    readonly dugOut: boolean;
+  };
+
   // --- Corruption / storage (design/09) ---
   raid_resolved: {
     readonly stashId: string;

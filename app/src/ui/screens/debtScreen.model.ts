@@ -20,24 +20,34 @@
 import {
   CAP_COLLATERAL_FRACTION,
   CEILING_MAX_RUNG,
+  CONSIGNMENT_CLEARED_CHOICE,
+  CONSIGNMENT_COLLECTOR_CHOICE,
+  CONSIGNMENT_DEFAULT_CHOICE,
+  CONSIGNMENT_SIGNS,
   DEBT_CLEARED_CHOICE,
   DEBT_DEFAULT_CHOICE,
   LADDER_MAX_RUNG,
   LADDER_SIGNS,
   LENDERS,
   borrowCap,
+  consignmentOwed,
   debtOwed,
   findLender,
+  getCountry,
   getFrontType,
   getLender,
+  isConsignmentMarked,
   lifelineOffer,
+  productDisplayName,
   quoteLoan,
+  totalDirtyCash,
   type ConsequenceCeiling,
   type Front,
   type FrontType,
   type GameState,
   type LadderRung,
   type LenderId,
+  type ProductId,
 } from '@/engine';
 
 /** A weekly rate fraction (0.2) as a display percent (20). */
@@ -328,6 +338,152 @@ export function debtScenes(state: GameState): readonly DebtScene[] {
     if (c.kind === DEBT_DEFAULT_CHOICE) {
       scenes.push({ id: c.id, kind: 'default', text: c.summary });
     } else if (c.kind === DEBT_CLEARED_CHOICE) {
+      scenes.push({ id: c.id, kind: 'cleared', text: c.summary });
+    }
+  }
+  return scenes;
+}
+
+// --- The drug front (consignment, v23) — the plug's short-fuse ledger ---------
+
+/**
+ * The live front, or `null` when nothing is on the arm. Mirrors `ActiveLoan`:
+ * days in PLAYED time, patience as prose, the compressed ladder position. The
+ * repay pools differ from a loan's — the plug takes DIRTY money too.
+ */
+export interface ActiveFront {
+  readonly countryId: string;
+  readonly countryName: string;
+  readonly productName: string;
+  readonly qty: number;
+  readonly principal: number;
+  readonly accruedInterest: number;
+  readonly owed: number;
+  readonly weeklyRatePct: number;
+  readonly dueDay: number;
+  readonly daysUntilDue: number;
+  readonly overdue: boolean;
+  readonly overdueDays: number;
+  /** 0 good / 1 warned / 2 marked — the compressed ladder. */
+  readonly ladderRung: number;
+  readonly marked: boolean;
+  readonly patienceProse: string;
+}
+
+/** The plug's patience as prose — short fuse, stated plainly. */
+function frontPatienceProse(rung: number, daysUntilDue: number, marked: boolean): string {
+  if (marked) return CONSIGNMENT_SIGNS[2];
+  if (rung >= 1) return CONSIGNMENT_SIGNS[1];
+  if (daysUntilDue < 0) {
+    return "You're past due on the front. Pay something before his people come find you.";
+  }
+  if (daysUntilDue <= 1) {
+    return 'The front comes due tomorrow. The plug expects his money — all of it.';
+  }
+  return "The plug isn't calling yet. Flip the package and square up early — the line grows.";
+}
+
+export function activeFront(state: GameState): ActiveFront | null {
+  const c = state.consignment;
+  if (!c.active || c.countryId === null || c.product === null) return null;
+  const daysUntilDue = c.dueDay - state.clock.day;
+  const marked = isConsignmentMarked(state);
+  return {
+    countryId: c.countryId,
+    countryName: getCountry(c.countryId).name,
+    productName: productDisplayName(state.world, c.product as ProductId),
+    qty: c.qty,
+    principal: Math.round(c.principal),
+    accruedInterest: Math.round(c.accruedInterest),
+    owed: Math.round(consignmentOwed(c)),
+    weeklyRatePct: ratePct(c.rate),
+    dueDay: c.dueDay,
+    daysUntilDue,
+    overdue: daysUntilDue < 0,
+    overdueDays: Math.max(0, -daysUntilDue),
+    ladderRung: c.ladderRung,
+    marked,
+    patienceProse: frontPatienceProse(c.ladderRung, daysUntilDue, marked),
+  };
+}
+
+/**
+ * The front's repay surface. Unlike a loan (clean cash only), the plug takes
+ * street money: coverage spans ALL dirty cash plus clean (`repayConsignment`
+ * draws dirty fattest-stash-first, then clean).
+ */
+export interface FrontRepayPlan {
+  readonly owed: number;
+  /** Everything the payment can draw on: total dirty + clean. */
+  readonly coverable: number;
+  readonly fullAmount: number;
+  readonly canPayFull: boolean;
+  readonly partialAmount: number;
+  readonly canPayPartial: boolean;
+}
+
+export function frontRepayPlan(state: GameState): FrontRepayPlan {
+  const owed = Math.round(consignmentOwed(state.consignment));
+  const coverable = totalDirtyCash(state) + state.cleanCash;
+  const partial = Math.min(Math.max(1, Math.round(owed / 2)), Math.floor(coverable), owed);
+  return {
+    owed,
+    coverable,
+    fullAmount: owed,
+    canPayFull: owed > 0 && coverable >= owed,
+    partialAmount: partial,
+    canPayPartial: owed > 0 && coverable > 0 && partial < owed,
+  };
+}
+
+/**
+ * The front's whole telegraphed escalation, up front — the compressed ladder
+ * (warned → marked), the collector hits, and the fatal end, always visible
+ * (design/10 §4.3 verbatim). Reuses `LadderStep` so the same component renders it.
+ */
+export function frontLadderTelegraph(state: GameState): readonly LadderStep[] {
+  const c = state.consignment;
+  const onFront = c.active;
+  const stage = c.enforcement?.stage ?? 0;
+  return [
+    {
+      rung: 1 as LadderRung,
+      sign: CONSIGNMENT_SIGNS[1],
+      fatal: false,
+      reached: onFront && c.ladderRung >= 1,
+    },
+    {
+      rung: 2 as LadderRung,
+      sign: CONSIGNMENT_SIGNS[2],
+      fatal: false,
+      reached: onFront && c.ladderRung >= 2,
+    },
+    {
+      rung: 3 as LadderRung,
+      sign: 'His people start taking — a cut of your cash, then the product back. One warned hit at a time.',
+      fatal: false,
+      reached: onFront && stage >= 1,
+    },
+    {
+      rung: 4 as LadderRung,
+      sign: 'Ignore it all and he closes the account. That ends the run.',
+      fatal: true,
+      reached: false,
+    },
+  ];
+}
+
+/**
+ * Queued front story-beats as readable scenes — ladder rungs and collector
+ * warnings/hits read as pressure, the payoff reads as the win. Kept separate
+ * from `debtScenes` so each card's repay controls target the right ledger.
+ */
+export function consignmentScenes(state: GameState): readonly DebtScene[] {
+  const scenes: DebtScene[] = [];
+  for (const c of state.pendingChoices) {
+    if (c.kind === CONSIGNMENT_DEFAULT_CHOICE || c.kind === CONSIGNMENT_COLLECTOR_CHOICE) {
+      scenes.push({ id: c.id, kind: 'default', text: c.summary });
+    } else if (c.kind === CONSIGNMENT_CLEARED_CHOICE) {
       scenes.push({ id: c.id, kind: 'cleared', text: c.summary });
     }
   }

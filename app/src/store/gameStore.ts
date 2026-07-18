@@ -131,6 +131,13 @@ import {
   type BorrowResult,
   type RepayResult,
 } from '@/engine/debt';
+import {
+  takeConsignment as takeConsignmentEngine,
+  repayConsignment as repayConsignmentEngine,
+  consignmentClosedAccount,
+  type TakeConsignmentResult,
+  type RepayConsignmentResult,
+} from '@/engine/consignment';
 import type { LenderId } from '@/engine/config/lenders';
 import { applyChoice, cardForPending } from '@/engine/cards';
 import {
@@ -161,6 +168,8 @@ import {
   trackBorrow,
   trackBribe,
   trackCardChoice,
+  trackConsignmentRepaid,
+  trackConsignmentTaken,
   trackDeal,
   trackFront,
   trackOfficialHired,
@@ -439,6 +448,29 @@ export interface GameStore {
    * (funds sufficed, a loan is active); returns the full `RepayResult`, or `null`.
    */
   repayLoan(amount: number): RepayResult | null;
+  /**
+   * Drug-front actions (v23) — product on loan from the plug: shorter due date,
+   * quicker death. Each wraps the pure `consignment.ts` engine, commits only when
+   * it lands, and autosaves. The UI authors no cap/interest/ladder math.
+   */
+  /**
+   * Take a front from `countryId`'s plug into the stash standing there (opt-in
+   * only — guarantee #1). Terms are disclosed by `quoteConsignment` BEFORE this
+   * is called and committed verbatim. Returns the full `TakeConsignmentResult`
+   * (its `rejected` reason otherwise), or `null` when no run is loaded.
+   */
+  takeConsignment(
+    countryId: string,
+    product: ProductId,
+    qty: number,
+    stashId: string,
+  ): TakeConsignmentResult | null;
+  /**
+   * Repay toward the front — DIRTY cash first (fattest stash), then clean; the
+   * plug takes street money. Partial/early is always free and resets his
+   * patience. Returns the full `RepayConsignmentResult`, or `null`.
+   */
+  repayConsignment(amount: number): RepayConsignmentResult | null;
   /**
    * Story-card presenter (Prompt 22) — resolve a queued scene's chosen option. Folds
    * the choice's declarative effects through the engine (`applyChoice`, the ONE place a
@@ -1043,6 +1075,32 @@ export const useGameStore = create<GameStore>((set, get) => ({
     return result;
   },
 
+  takeConsignment(countryId, product, qty, stashId) {
+    const { state } = get();
+    if (!state) return null;
+    const result = takeConsignmentEngine(state, countryId, product, qty, stashId);
+    // Only commit + autosave when the front actually opened (opt-in, within cap).
+    if (result.ok) {
+      set({ state: result.state });
+      trackConsignmentTaken(state, result);
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
+  repayConsignment(amount) {
+    const { state } = get();
+    if (!state) return null;
+    const result = repayConsignmentEngine(state, amount);
+    // Only commit + autosave when the payment landed (funds sufficed, front active).
+    if (result.ok) {
+      set({ state: result.state });
+      trackConsignmentRepaid(state, result);
+      void get().persist(AUTOSAVE_SLOT).catch(() => {});
+    }
+    return result;
+  },
+
   resolveCardChoice(choiceId, choiceIndex) {
     const { state } = get();
     if (!state) return;
@@ -1266,6 +1324,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // (never runs offline) and always escapable by repaying, so absence can't kill
     // and the death is earned. Bank it through the single run-end path.
     if (next.runStatus === 'active' && collectorsClosedAccount(next)) {
+      void get().endCurrentRun('killed').catch(() => {});
+    }
+    // The plug's collectors closing the account over a drug front is the second
+    // such hook (v23) — same guarantees: active-only, telegraphed at every step,
+    // always escapable by repaying. Same single run-end path.
+    else if (next.runStatus === 'active' && consignmentClosedAccount(next)) {
       void get().endCurrentRun('killed').catch(() => {});
     }
   },

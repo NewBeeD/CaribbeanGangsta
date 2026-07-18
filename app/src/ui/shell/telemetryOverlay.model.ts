@@ -78,6 +78,10 @@ export function describeEvent(event: AnyTelemetryEvent): string {
       return `${dollars(event.props.paid)}${event.props.clearedInFull ? ' · cleared' : ''}${event.props.dugOut ? ' · dug out' : ''}`;
     case 'debt_ladder_advanced':
       return `rung ${event.props.rung}${event.props.marked ? ' · MARKED' : ''}`;
+    case 'consignment_taken':
+      return `${event.props.qty} ${event.props.product} fronted · owe ${dollars(event.props.principal)}`;
+    case 'consignment_repaid':
+      return `${dollars(event.props.paid)}${event.props.clearedInFull ? ' · cleared' : ''}${event.props.dugOut ? ' · dug out' : ''}`;
     case 'raid_resolved':
       return event.props.seized
         ? `${event.props.stashId} · ${pct(event.props.lossPct)} of product${event.props.wiped ? ' · WIPE' : ''}`
