@@ -45,12 +45,13 @@ export function ShipmentDesk() {
   const origins = originOptions(state);
   const inFlight = inFlightViews(state);
   const scenes = shipmentScenes(state);
-  const modes = modeOptions(state);
   const people = peopleStatus(state);
   const fleet = fleetOptions(state);
 
   // Resolve the working selection against live state (stale picks fall back).
   const origin = origins.find((o) => o.id === fromId) ?? origins[0] ?? null;
+  // Mode availability is per-origin (the semi-sub charters only from its yards).
+  const modes = modeOptions(state, origin?.id);
   const cargo = origin?.cargo.find((c) => c.id === product) ?? origin?.cargo[0] ?? null;
   const destinations = origin ? destinationOptions(state, origin.id) : [];
   const dest = destinations.find((d) => d.id === toId) ?? destinations[0] ?? null;
@@ -210,22 +211,32 @@ export function ShipmentDesk() {
               boundLabel={cargo ? 'all this stash is holding' : undefined}
             />
 
-            {/* The mode table — priced trade-offs, all open from minute one. */}
+            {/* The mode table — priced trade-offs, all open from minute one. The one
+                sourcing rule (semi-sub charters out of Colombia/Mexico only) greys
+                the row WITH its reason — never a silent lock. */}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} role="radiogroup" aria-label="Transport">
               {modes.map((m) => (
                 <Button
                   key={m.id}
                   variant={mode === m.id ? 'secondary' : 'ghost'}
                   aria-pressed={mode === m.id}
+                  disabled={!m.available}
+                  data-testid={`mode-${m.id}`}
                   onClick={() => setMode(m.id)}
                 >
                   {m.name}
                   <small>
-                    cap {m.cargoCap.toLocaleString('en-US')}
-                    {m.owned ? ' · your boat, no cut' : ''}
-                    {!m.owned && m.ownerCutPct > 0
-                      ? ` · owner ${Math.round(m.ownerCutPct * 100)}%`
-                      : ''}
+                    {m.available ? (
+                      <>
+                        cap {m.cargoCap.toLocaleString('en-US')}
+                        {m.owned ? ' · your boat, no cut' : ''}
+                        {!m.owned && m.ownerCutPct > 0
+                          ? ` · owner ${Math.round(m.ownerCutPct * 100)}%`
+                          : ''}
+                      </>
+                    ) : (
+                      m.unavailableHint
+                    )}
                   </small>
                 </Button>
               ))}
@@ -347,7 +358,9 @@ export function ShipmentDesk() {
                         ? 'You’re already at a helm — send crew on this one, or wait for your run to return.'
                         : quote.rejected === 'over-cargo-cap'
                           ? 'Too much for this hold — pick a bigger mode or ship less.'
-                          : 'Fix the manifest first.'}
+                          : quote.rejected === 'semi-sub-origin'
+                            ? 'Semi-subs charter out of Colombia or Mexico only — launch from there, or own the sub to run it from anywhere.'
+                            : 'Fix the manifest first.'}
                     </p>
                   ) : null}
                 </div>

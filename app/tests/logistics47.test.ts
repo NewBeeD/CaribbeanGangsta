@@ -99,14 +99,27 @@ function shipIntent(mode: TransportId, qty: number, extra: Partial<ShipIntent> =
 
 describe('the five-mode charter table (design/13 E)', () => {
   it('adds container-ship and semi-sub as bulk charters, all quotable & resolvable', () => {
-    const state = fixture();
+    // The semi-sub charter is origin-gated to its yards (v24 — the user-signed
+    // sourcing rule), so its leg launches from a stocked Colombia stash; every
+    // other mode launches from home.
+    let state = withStashIn(fixture(), 'colombia');
+    state = {
+      ...state,
+      stashes: state.stashes.map((s) =>
+        s.id === 'stash-colombia' ? { ...s, inventory: { ...s.inventory, cocaine: 5_000 } } : s,
+      ),
+    };
     for (const mode of TRANSPORTS) {
       const qty = Math.min(20, mode.cargoCap);
-      const quote = quoteShipment(state, shipIntent(mode.id, qty));
+      const intent =
+        mode.id === 'semi-sub'
+          ? shipIntent(mode.id, qty, { fromStashId: 'stash-colombia' })
+          : shipIntent(mode.id, qty);
+      const quote = quoteShipment(state, intent);
       expect(quote.ok).toBe(true);
       expect(quote.transportCost).toBeGreaterThan(0);
       // The launch charges exactly the quote (or rejects) — no hidden math.
-      const result = ship(state, shipIntent(mode.id, qty));
+      const result = ship(state, intent);
       expect(result.ok).toBe(true);
     }
   });

@@ -10,6 +10,13 @@
  * owner takes a cut of the cargo; the ferry is cheap and low-profile but slow
  * and small; the plane is dear, fastest, and middling risk.
  *
+ * ONE user-signed exception (like the Territory carve-out): the SEMI-SUB
+ * charter is geographically sourced. Narco subs are built in the source-country
+ * yards, so a chartered sub only launches from `SEMI_SUB_CHARTER_ORIGINS`
+ * (Colombia/Mexico) — buy product from the plug there and the sub is on the
+ * dock. OWNING one (config/vessels.ts, $20M) lifts the restriction: your own
+ * boat is based wherever you are. Still money-gated, never flag-gated.
+ *
  * The interdiction-odds weights below are the inputs to `travel.
  * interdictionChance` — the ONE number shown on the quote and rolled on
  * arrival (the fairness law, design/01 §0.3).
@@ -119,6 +126,14 @@ export function getTransport(
   if (!transport) throw new Error(`getTransport(): unknown transport "${id}"`);
   return transport;
 }
+
+/**
+ * Countries whose ports CHARTER semi-subs (the yards that build them — leg-ORIGIN
+ * gated, user-signed exception to open access). A semi-sub shipment must depart
+ * one of these unless an owned semi-sub is in the fleet (`travel.modeAvailableFrom`).
+ * Every other mode charters from anywhere; this list gates nothing else.
+ */
+export const SEMI_SUB_CHARTER_ORIGINS: readonly string[] = ['colombia', 'mexico'];
 
 // --- Interdiction odds tuning (design/11 §3; the fairness clamp) --------------
 

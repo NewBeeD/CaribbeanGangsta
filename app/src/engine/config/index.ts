@@ -231,6 +231,7 @@ import {
   ARREST_BOND_MIN,
   ARREST_BOND_HEAT,
   ARREST_SENTENCE_HOURS,
+  SEMI_SUB_CHARTER_ORIGINS,
   type TransportConfig,
 } from './transport';
 import {
@@ -590,6 +591,8 @@ export interface TransportTuning {
   readonly ESCORT_ODDS_REDUCTION: number;
   readonly COURIER_SKIM_PCT: number;
   readonly CONSIGNED_BUST_HEAT_FACTOR: number;
+  /** Leg-origin countries that charter semi-subs (user-signed sourcing rule). */
+  readonly SEMI_SUB_CHARTER_ORIGINS: readonly string[];
   /** Self-run arrest — the bond-or-sentence consequence (design/13 B4). */
   readonly ARREST_BOND_FRACTION: number;
   readonly ARREST_BOND_MIN: number;
@@ -975,6 +978,7 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     ARREST_BOND_MIN,
     ARREST_BOND_HEAT,
     ARREST_SENTENCE_HOURS,
+    SEMI_SUB_CHARTER_ORIGINS,
   },
   conversions: { CONVERSION_RECIPES },
   vessels: {

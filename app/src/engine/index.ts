@@ -323,6 +323,7 @@ export {
   ARREST_BOND_FRACTION,
   ARREST_BOND_MIN,
   ARREST_BOND_HEAT,
+  SEMI_SUB_CHARTER_ORIGINS,
 } from './config/transport';
 export type { TransportId, TransportConfig } from './config/transport';
 export {
@@ -347,6 +348,7 @@ export {
   peopleOut,
   peopleAvailable,
   effectiveCargoCap,
+  modeAvailableFrom,
 } from './travel';
 export type {
   Shipment,

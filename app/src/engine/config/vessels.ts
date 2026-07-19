@@ -14,8 +14,12 @@
  *
  * Open access (Ideas.md — the tested guardrail): every vessel is buyable from
  * minute one. The $5M–$50M price is the ONLY gate — never a license, never a
- * progression flag. The vessel is a sink, not a permission slip: chartering the
- * same mode is always available to anyone who can pay the per-leg charter.
+ * progression flag. Chartering the go-fast and container-ship modes stays open
+ * to anyone who can pay the per-leg charter; the ONE exception is the semi-sub,
+ * whose charter is sourced from the yards that build them (config/transport.ts
+ * `SEMI_SUB_CHARTER_ORIGINS` — Colombia/Mexico, the user-signed rule). Owning
+ * `owned-semi-sub` is what bases the sub anywhere — the $20M buy-in is a
+ * capability unlock as well as a discount, still cash-gated, never flag-gated.
  *
  * A vessel OPERATES one charter `mode` (config/transport.ts) — owning the go-fast
  * vessel makes go-fast runs cut-free and discounted; owning the container-ship
@@ -76,7 +80,8 @@ export const VESSELS: readonly VesselConfig[] = [
     buyIn: 20_000_000,
     baseCargoCap: 800,
     legDiscount: 0.5,
-    blurb: 'A submarine of your own. The lowest odds on the water, no charter to rent.',
+    blurb:
+      'A submarine of your own — based wherever you are, not just the Colombia/Mexico yards. The lowest odds on the water.',
   },
   {
     id: 'owned-container-ship',

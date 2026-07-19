@@ -135,7 +135,13 @@ export type ShipRejectReason =
    * E; Prompt 47). People are the capacity: send crew instead, or wait for the
    * helmed run to return.
    */
-  | 'helm-busy';
+  | 'helm-busy'
+  /**
+   * A semi-sub CHARTER launched outside its yards (config/transport.ts
+   * `SEMI_SUB_CHARTER_ORIGINS` — Colombia/Mexico; the user-signed sourcing
+   * rule). Own the sub (config/vessels.ts) and it launches from anywhere.
+   */
+  | 'semi-sub-origin';
 
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
@@ -224,6 +230,25 @@ export function peopleOut(state: GameState): number {
 /** People free to launch a new run right now (`peopleTotal − peopleOut`). */
 export function peopleAvailable(state: GameState): number {
   return peopleTotal(state) - peopleOut(state);
+}
+
+/**
+ * Whether `mode` can launch a leg FROM `countryId` right now. Every mode charters
+ * from anywhere (open access — cash the only gate) EXCEPT the semi-sub: the yards
+ * that build them charter them, so a semi-sub leg must originate in a
+ * `SEMI_SUB_CHARTER_ORIGINS` country (Colombia/Mexico — buy from the plug there
+ * and the sub is on the dock) UNLESS an owned semi-sub is in the fleet, which is
+ * based wherever you are. The user-signed sourcing exception; the UI mode picker
+ * and `validate` both read this one predicate.
+ */
+export function modeAvailableFrom(
+  state: GameState,
+  mode: TransportId,
+  countryId: string,
+): boolean {
+  if (mode !== 'semi-sub') return true;
+  if (ownedVesselForMode(state, mode) !== null) return true;
+  return state.config.transport.SEMI_SUB_CHARTER_ORIGINS.includes(countryId);
 }
 
 /**
@@ -672,6 +697,8 @@ function validate(state: GameState, intent: ShipIntent): ShipRejectReason | null
     return 'no-stash';
   }
   if (from.countryId === to.countryId) return 'same-country';
+  // Semi-sub charters launch only from their yards; an owned sub launches anywhere.
+  if (!modeAvailableFrom(state, intent.mode, from.countryId)) return 'semi-sub-origin';
   // An owned vessel operating this mode raises the hold (design/13 E; Prompt 47).
   if (intent.qty > effectiveCargoCap(state, intent.mode)) {
     return 'over-cargo-cap';

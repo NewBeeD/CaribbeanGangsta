@@ -558,6 +558,19 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
       state: { ...legacy, config, consignment: legacy.consignment ?? emptyConsignment() },
     };
   },
+  // 23 → 24: semi-sub charter sourcing (user request — the signed open-access
+  // exception). The transport config group gains `SEMI_SUB_CHARTER_ORIGINS` from
+  // the default (any saved transport tuning wins on top). Nothing the player holds
+  // changes — no cash, holdings, or RNG movement — and the gate applies only to
+  // LAUNCHING a new semi-sub leg; anything already in flight sails on.
+  23: (env) => {
+    const legacy = env.state as GameState;
+    const config: GameConfig = {
+      ...legacy.config,
+      transport: { ...DEFAULT_GAME_CONFIG.transport, ...legacy.config.transport },
+    };
+    return { ...env, schemaVersion: 24, state: { ...legacy, config } };
+  },
 };
 
 /**

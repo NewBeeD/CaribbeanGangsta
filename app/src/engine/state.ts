@@ -206,8 +206,15 @@ import type {
  *     emptyConsignment()` (a migrated run owes nothing) and merges the config group from
  *     the default — no player cash, holdings, or RNG movement. Interest/ladder/hits run
  *     on ACTIVE ticks only (design/10 §4.2 verbatim).
+ * v24: semi-sub charter sourcing (user request — the user-signed open-access exception).
+ *     A chartered semi-sub launches only from `config.transport.SEMI_SUB_CHARTER_ORIGINS`
+ *     (Colombia/Mexico — the yards); an OWNED semi-sub launches from anywhere
+ *     (`travel.modeAvailableFrom`). Migration merges the transport config group from the
+ *     default so the new knob lands (any saved transport tuning wins on top) — no player
+ *     cash, holdings, or RNG movement; in-flight shipments are untouched (the gate
+ *     applies only to LAUNCHING a new leg).
  */
-export const SCHEMA_VERSION = 23 as const;
+export const SCHEMA_VERSION = 24 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 

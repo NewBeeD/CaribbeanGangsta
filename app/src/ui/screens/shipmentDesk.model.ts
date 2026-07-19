@@ -16,6 +16,7 @@ import {
   quoteShipment,
   shipmentRoute,
   effectiveCargoCap,
+  modeAvailableFrom,
   ownedVesselForMode,
   peopleAvailable,
   peopleOut,
@@ -64,6 +65,11 @@ export interface ModeOption {
   readonly ownerCutPct: number;
   /** True when an OWNED vessel flies this mode — cut-free & discounted (design/13 E). */
   readonly owned: boolean;
+  /** False when this mode can't launch from the chosen origin (`modeAvailableFrom` —
+   * today only the semi-sub charter outside its Colombia/Mexico yards). */
+  readonly available: boolean;
+  /** WHY it's unavailable, disclosed on the greyed row (never a hidden trap). */
+  readonly unavailableHint?: string;
 }
 
 /** An idle crew member who can ride as courier/escort (Ideas2 §1). */
@@ -109,10 +115,17 @@ export function destinationOptions(
     .map((s) => ({ id: s.id, name: s.name, countryName: countryName(s) }));
 }
 
-/** The mode table for the picker (config, not literals), with owned-vessel state. */
-export function modeOptions(state: GameState): readonly ModeOption[] {
+/** The mode table for the picker (config, not literals), with owned-vessel state
+ * and per-origin availability (`fromStashId` = the chosen origin stash). */
+export function modeOptions(state: GameState, fromStashId?: string): readonly ModeOption[] {
+  const fromCountryId = fromStashId
+    ? state.stashes.find((s) => s.id === fromStashId)?.countryId
+    : undefined;
   return TRANSPORTS.map((t) => {
     const owned = ownedVesselForMode(state, t.id) !== null;
+    // No origin chosen yet ⇒ list everything; the engine's validate re-checks.
+    const available =
+      fromCountryId === undefined || modeAvailableFrom(state, t.id, fromCountryId);
     return {
       id: t.id,
       name: t.name,
@@ -120,6 +133,13 @@ export function modeOptions(state: GameState): readonly ModeOption[] {
       // An owned vessel pays no owner cut (design/13 E) — surface 0 when you own it.
       ownerCutPct: owned ? 0 : (t.ownerCutPct ?? 0),
       owned,
+      available,
+      ...(available
+        ? {}
+        : {
+            unavailableHint:
+              'Charters out of Colombia or Mexico only — buy there, or own the sub to run it from anywhere.',
+          }),
     };
   });
 }
