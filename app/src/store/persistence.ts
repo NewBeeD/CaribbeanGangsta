@@ -588,6 +588,24 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
     );
     return { ...env, schemaVersion: 25, state: { ...legacy, config, turfWars } };
   },
+  // 25 → 26: protection turf (design/15 Workstream B — held, defended turf pays).
+  // A pre-v26 run has won no protection claims, so seed `turfClaims: []` — turf is
+  // earned in the fight, never granted. The saved config gains the protection knobs
+  // from the default turfWar group FIRST (any saved turfWar tuning wins on top).
+  // Nothing the player earned changes: no cash, holdings, or RNG movement — the
+  // drip only ever ADDS, and only on ACTIVE ticks after a war is won.
+  25: (env) => {
+    const legacy = env.state as GameState & { turfClaims?: unknown };
+    const config: GameConfig = {
+      ...legacy.config,
+      turfWar: { ...DEFAULT_GAME_CONFIG.turfWar, ...legacy.config.turfWar },
+    };
+    return {
+      ...env,
+      schemaVersion: 26,
+      state: { ...legacy, config, turfClaims: legacy.turfClaims ?? [] },
+    };
+  },
 };
 
 /**

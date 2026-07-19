@@ -221,8 +221,17 @@ import type {
  *     Migration seeds `repEarned: 0` on any in-flight war and merges the turfWar config
  *     group from the default — no player cash, holdings, or RNG movement; rewards apply
  *     only inside `resolveBattle` (a player action — offline stays frozen).
+ * v26: protection turf (design/15 Workstream B — held, defended turf PAYS).
+ *     `GameState.turfClaims` lists the countries whose wars ended in the player's favor
+ *     (a defensive war fought off, or an offensive topple — never a bought truce); each
+ *     claim drips weekly DIRTY protection income into the country's stash via the
+ *     ACTIVE-only `turf-income` tick step (`PROTECTION_PCT × wealthIndex ×
+ *     PROTECTION_BASE_PER_WEEK`, static wealth — never the player's stake there). A new
+ *     war over claimed turf suspends the drip; losing the last stash there lapses the
+ *     claim. Migration seeds `turfClaims: []` and merges the turfWar config group from
+ *     the default — no player cash, holdings, or RNG movement (offline stays frozen).
  */
-export const SCHEMA_VERSION = 25 as const;
+export const SCHEMA_VERSION = 26 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -618,6 +627,23 @@ export interface TurfWar {
 }
 
 /**
+ * A protection-turf claim (design/15 Workstream B; v26) — a country whose war
+ * ended in the player's favor, now paying weekly DIRTY protection income into
+ * its stash (`turf-income` tick step, ACTIVE-only). Created only by a won
+ * resolution in `resolveBattle` — a bought truce never claims turf. Suspended
+ * (not lost) while a new war contests the country; lapses for good if the last
+ * stash there is sold or lost (the drip needs somewhere to land).
+ */
+export interface TurfClaim {
+  /** The claimed country — held a stash when the war was won. */
+  readonly countryId: string;
+  /** In-game hour the claiming war was won (for age readouts). */
+  readonly wonAtHours: number;
+  /** How the turf was won: a defensive war fought off, or an offensive topple. */
+  readonly source: 'defense' | 'topple';
+}
+
+/**
  * A queued return-hook: an event/choice waiting to be presented to the player
  * (e.g. on return from offline). Prompts 12/13 give these real payloads.
  */
@@ -892,6 +918,13 @@ export interface GameState {
    * never opens a war or seizes a country (GDD §6).
    */
   readonly turfWars: readonly TurfWar[];
+  /**
+   * Protection-turf claims — countries won in a turf war, paying weekly dirty
+   * income (design/15 B; v26). Empty on a fresh run and on a migrated pre-v26
+   * save. The drip runs on ACTIVE ticks only (`turf-income` step), so absence
+   * never earns (GDD §6).
+   */
+  readonly turfClaims: readonly TurfClaim[];
   /** Progression / onboarding gates, keyed by name. */
   readonly flags: Readonly<Record<string, boolean>>;
   /** Ids of narrative beats already fired (design/05 — fire-once bookkeeping). */
@@ -1167,6 +1200,7 @@ export function createInitialState(
     loansTaken: 0,
     rivals,
     turfWars: [],
+    turfClaims: [],
     flags: {},
     beatsFired: [],
     pendingChoices: [],

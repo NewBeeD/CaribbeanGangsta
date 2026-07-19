@@ -26,11 +26,16 @@ import { createRng, type Rng } from './rng';
 import { addHeat } from './heat';
 import { spendArmory, type Armory } from './arms';
 import { getWeaponTier, type WeaponTierId } from './config/arms';
-import { COUNTRY_IDS, getCountry, REGION_DISTANCE } from './config/countries';
+import {
+  COUNTRY_IDS,
+  countryWealthIndex,
+  getCountry,
+  REGION_DISTANCE,
+} from './config/countries';
 import { hasPoliticalProtection, hasCustomsProtection } from './corruption';
 import type { TurfWarTuning } from './config';
 import type { TurfWarKind } from './config/turfWar';
-import type { GameState, PendingChoice, TurfWar } from './state';
+import type { GameState, PendingChoice, TurfClaim, TurfWar } from './state';
 import type { Rival } from './world';
 
 const HOURS_PER_WEEK = 24 * 7;
@@ -421,6 +426,88 @@ function describeCapture(capture: Readonly<Partial<Record<WeaponTierId, number>>
   return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
+// --- Protection turf (design/15 Workstream B — turf that PAYS) ------------------
+
+/** Every standing protection-turf claim (a thin, stable accessor for the UI). */
+export function protectionClaims(state: GameState): readonly TurfClaim[] {
+  return state.turfClaims;
+}
+
+/** The claim on a given country, if the player holds one. */
+export function claimForCountry(state: GameState, countryId: string): TurfClaim | undefined {
+  return state.turfClaims.find((c) => c.countryId === countryId);
+}
+
+/**
+ * Weekly protection income a claimed country pays, $ dirty —
+ * `PROTECTION_PCT × wealthIndex × PROTECTION_BASE_PER_WEEK`. Scales off the
+ * country's STATIC wealth character (`countryWealthIndex`), never the player's
+ * stake there (design/15 §0.5 — parked cash must not grow the drip). The single
+ * source for the tick step, the win telegraph, and the UI (shown = applied).
+ */
+export function protectionPerWeek(
+  state: GameState,
+  countryId: string,
+  tuning: TurfWarTuning = state.config.turfWar,
+): number {
+  return Math.round(
+    tuning.PROTECTION_PCT * countryWealthIndex(countryId) * tuning.PROTECTION_BASE_PER_WEEK,
+  );
+}
+
+/** Whether a claim's drip is suspended — a new war is contesting the country
+ * (rivals want profitable turf back; the drip resumes when the war resolves). */
+export function claimSuspended(state: GameState, countryId: string): boolean {
+  return warForCountry(state, countryId) !== undefined;
+}
+
+/** Stake (or re-stake) the protection claim a won war just earned — one claim
+ * per country, the fresh win replacing any earlier one. */
+function stakeClaim(
+  state: GameState,
+  countryId: string,
+  source: TurfClaim['source'],
+): GameState {
+  const claim: TurfClaim = { countryId, wonAtHours: state.clock.hours, source };
+  return {
+    ...state,
+    turfClaims: [...state.turfClaims.filter((c) => c.countryId !== countryId), claim],
+  };
+}
+
+/**
+ * The `turf-income` tick step (clock.ts, ACTIVE-only — frozen offline and while
+ * incarcerated, like every other income system; GDD §6). Each standing claim
+ * drips its weekly protection income, pro-rated over `dtHours`, as DIRTY cash
+ * into the claimed country's stash (located, like street-team proceeds — it
+ * feeds the wash pipeline). A claim whose country is under a live war is
+ * SUSPENDED (kept, not paid); a claim whose country no longer holds a stash
+ * LAPSES for good (the drip needs somewhere to land). Deterministic — no RNG.
+ */
+export function turfIncomeStep(state: GameState, dtHours: number): GameState {
+  if (dtHours <= 0 || state.turfClaims.length === 0) return state;
+  let stashes = state.stashes;
+  const survivors: TurfClaim[] = [];
+  let changed = false;
+  for (const claim of state.turfClaims) {
+    const target = stashes.find((s) => s.countryId === claim.countryId);
+    if (!target) {
+      changed = true; // the ground is gone — the claim lapses with it
+      continue;
+    }
+    survivors.push(claim);
+    if (warForCountry(state, claim.countryId)) continue; // contested — suspended
+    const drip =
+      (protectionPerWeek(state, claim.countryId) * dtHours) / HOURS_PER_WEEK;
+    if (drip <= 0) continue;
+    stashes = stashes.map((s) =>
+      s.id === target.id ? { ...s, dirtyCash: s.dirtyCash + drip } : s,
+    );
+    changed = true;
+  }
+  return changed ? { ...state, stashes, turfClaims: survivors } : state;
+}
+
 // --- Resolving a battle --------------------------------------------------------
 
 export interface BattleResult {
@@ -441,6 +528,8 @@ export interface BattleResult {
   readonly spoils?: number;
   /** Street rep this win paid, after the per-war cap (A3). */
   readonly repGained?: number;
+  /** Weekly protection income the won war's turf claim starts paying (B). */
+  readonly protectionPerWeek?: number;
 }
 
 /** The independent per-battle RNG stream — deterministic per run, per war, per
@@ -468,7 +557,13 @@ function updateWar(state: GameState, warId: string, patch: Partial<TurfWar>): Ga
  * base can't be taken, so a war there stays a drain, never a wipe. */
 function seizeCountry(state: GameState, countryId: string): GameState {
   if (countryId === state.world.startingCountry.id) return state;
-  return { ...state, stashes: state.stashes.filter((s) => s.countryId !== countryId) };
+  return {
+    ...state,
+    stashes: state.stashes.filter((s) => s.countryId !== countryId),
+    // Any protection claim falls with the ground (design/15 B — the drip needs
+    // somewhere to land, and the rival holds the country now).
+    turfClaims: state.turfClaims.filter((c) => c.countryId !== countryId),
+  };
 }
 
 /**
@@ -539,12 +634,19 @@ export function resolveBattle(
         spoils = toppleSpoils(state, war.rivalId, cfg);
         next = depositDirty(next, war.countryId, spoils);
       }
+      // Protection turf (design/15 B): a war ended in the player's favor turns
+      // the ground into PAYING turf — defense fought off or an offensive
+      // topple; a bought truce never earns this. The telegraph names the exact
+      // weekly figure the `turf-income` step will drip (shown = applied).
+      const perWeek = protectionPerWeek(next, war.countryId, cfg);
+      next = stakeClaim(next, war.countryId, toppled ? 'topple' : 'defense');
+      const turfNote = ` The locals pay protection now — ${dollars(perWeek)} a week.`;
       next = queue(
         next,
         'turf-war-won',
         toppled
-          ? `You broke ${rivalName} for good. ${place} is yours, and their operation pays: ${dollars(spoils ?? 0)} dirty, seized on the ground.${haulNote}`
-          : `You pushed ${rivalName} out of ${place}. The war's over.${haulNote}`,
+          ? `You broke ${rivalName} for good. ${place} is yours, and their operation pays: ${dollars(spoils ?? 0)} dirty, seized on the ground.${haulNote}${turfNote}`
+          : `You pushed ${rivalName} out of ${place}. The war's over.${haulNote}${turfNote}`,
       );
       return {
         state: next,
@@ -554,6 +656,7 @@ export function resolveBattle(
         toppled,
         captured,
         repGained,
+        protectionPerWeek: perWeek,
         ...(spoils !== undefined ? { spoils } : {}),
       };
     }

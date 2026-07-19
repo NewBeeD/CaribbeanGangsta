@@ -9,11 +9,14 @@ import {
   activeWars,
   battleCapture,
   battleStrength,
+  claimSuspended,
   contestableRivals,
   countryStake,
   declareWarCost,
   findRival,
   heldCountries,
+  protectionClaims,
+  protectionPerWeek,
   rivalTension,
   toppleSpoils,
   truceCost,
@@ -23,6 +26,7 @@ import {
   type BattleCommitment,
   type BattleBreakdown,
   type GameState,
+  type TurfClaim,
   type TurfWar,
   type TurfWarKind,
 } from '@/engine';
@@ -69,6 +73,9 @@ export interface WarRow {
   /** Dirty spoils a topple would seize — only on a player-declared war (a
    * defensive win ends the war without breaking the rival). */
   readonly spoilsOnTopple: number | null;
+  /** Weekly protection income winning this war out starts (or resumes) — the
+   * exact figure the `turf-income` step drips (design/15 B; shown = applied). */
+  readonly protectionPerWeek: number;
 }
 
 /** Name a capture record for display, tier by tier ("3 rifles and 1 automatic"). */
@@ -105,6 +112,7 @@ function warRow(state: GameState, war: TurfWar): WarRow {
     winRep: winRepAvailable(state, war),
     spoilsOnTopple:
       war.initiatedBy === 'player' ? toppleSpoils(state, war.rivalId) : null,
+    protectionPerWeek: protectionPerWeek(state, war.countryId),
   };
 }
 
@@ -113,6 +121,33 @@ export function turfWarRows(state: GameState): readonly WarRow[] {
   return activeWars(state)
     .map((w) => warRow(state, w))
     .sort((a, b) => (a.isHome ? 1 : 0) - (b.isHome ? 1 : 0) || b.pressure - a.pressure);
+}
+
+/** A presentable protection-turf claim (design/15 B) — turf that PAYS. */
+export interface ClaimRow {
+  readonly countryId: string;
+  readonly countryName: string;
+  /** The weekly dirty drip — the exact `turf-income` figure (shown = applied). */
+  readonly perWeek: number;
+  /** A live war is contesting this turf — the drip is suspended until it ends. */
+  readonly suspended: boolean;
+  readonly source: TurfClaim['source'];
+  /** In-game hour the claiming war was won. */
+  readonly wonAtHours: number;
+}
+
+/** Every standing protection claim, richest turf first. */
+export function turfClaimRows(state: GameState): readonly ClaimRow[] {
+  return protectionClaims(state)
+    .map((c) => ({
+      countryId: c.countryId,
+      countryName: getCountry(c.countryId).name,
+      perWeek: protectionPerWeek(state, c.countryId),
+      suspended: claimSuspended(state, c.countryId),
+      source: c.source,
+      wonAtHours: c.wonAtHours,
+    }))
+    .sort((a, b) => b.perWeek - a.perWeek);
 }
 
 /** A weapon tier the player can commit, with how many are on hand. */

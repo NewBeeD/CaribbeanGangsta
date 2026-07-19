@@ -610,6 +610,17 @@ export function findCountry(id: string): CountryConfig | undefined {
   return COUNTRY_BY_ID.get(id);
 }
 
+/**
+ * A country's STATIC wealth index — the midpoint of its fixed `demandBias`
+ * band (~0.75 Golden Crescent to ~1.5 London). The scale for protection-turf
+ * income (design/15 §B1): static config, never the per-run resolved demand and
+ * never the player's stake there, so the drip can't be farmed or compounded.
+ */
+export function countryWealthIndex(id: string): number {
+  const { demandBias } = getCountry(id);
+  return (demandBias.min + demandBias.max) / 2;
+}
+
 /** Whether `product` trades at `countryId` (Ideas2 §5 regional cultures). */
 export function isTraded(countryId: string, product: ProductId): boolean {
   return findCountry(countryId)?.traded.includes(product) ?? false;

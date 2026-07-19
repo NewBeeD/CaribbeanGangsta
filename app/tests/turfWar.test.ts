@@ -5,11 +5,14 @@ import {
   addStash,
   battleCapture,
   battleStrength,
+  claimForCountry,
+  countryWealthIndex,
   createInitialState,
   declareWar,
   emptyArmory,
   openTurfWar,
   payTribute,
+  protectionPerWeek,
   resolveBattle,
   settleOffline,
   spawnCrew,
@@ -17,6 +20,7 @@ import {
   toppleSpoils,
   truceCost,
   tunedConfig,
+  turfIncomeStep,
   turfWarStep,
   warForCountry,
   winRepAvailable,
@@ -370,6 +374,202 @@ describe('turf-war rewards', () => {
     expect(r.spoils).toBeUndefined();
     expect(r.repGained).toBeUndefined();
     expect(r.state.armory).toEqual(s.armory);
+  });
+});
+
+// --- Protection turf (design/15 Workstream B — Prompt 58) -----------------------
+
+describe('protection turf', () => {
+  const commit: BattleCommitment = { crewIds: [], arms: {} };
+  const HOURS_PER_WEEK = 24 * 7;
+
+  /** Win a rival-initiated war outright, leaving a fresh 'defense' claim. */
+  function defendedTurf(seed = 'turf-claim'): {
+    state: GameState;
+    countryId: string;
+  } {
+    const { state, rivalId, countryId } = warReady(seed);
+    let s = openTurfWar(state, countryId, rivalId, 'rival').state;
+    s = { ...s, turfWars: s.turfWars.map((w) => ({ ...w, pressure: 1 })) };
+    const r = resolveBattle(s, s.turfWars[0]!.id, commit, fixedRng(0));
+    expect(r.warEnded).toBe(true);
+    return { state: r.state, countryId };
+  }
+
+  it('a defensive war fought off stakes a defense claim, telegraph naming the weekly figure', () => {
+    const { state, rivalId, countryId } = warReady();
+    let s = openTurfWar(state, countryId, rivalId, 'rival').state;
+    s = { ...s, turfWars: s.turfWars.map((w) => ({ ...w, pressure: 1 })) };
+    const perWeek = protectionPerWeek(s, countryId);
+    const r = resolveBattle(s, s.turfWars[0]!.id, commit, fixedRng(0));
+    expect(r.warEnded).toBe(true);
+    expect(r.toppled).toBe(false);
+    expect(r.protectionPerWeek).toBe(perWeek);
+    expect(claimForCountry(r.state, countryId)?.source).toBe('defense');
+    const summary = r.state.pendingChoices.at(-1)!.summary;
+    expect(summary).toContain(`$${perWeek.toLocaleString('en-US')}`);
+  });
+
+  it('a topple stakes a topple claim on the same drip', () => {
+    const { state, rivalId, countryId } = warReady();
+    let s = declareWar(state, countryId, rivalId).state;
+    s = { ...s, turfWars: s.turfWars.map((w) => ({ ...w, pressure: 1 })) };
+    const r = resolveBattle(s, s.turfWars[0]!.id, commit, fixedRng(0));
+    expect(r.toppled).toBe(true);
+    expect(claimForCountry(r.state, countryId)?.source).toBe('topple');
+    expect(r.protectionPerWeek).toBe(protectionPerWeek(s, countryId));
+  });
+
+  it('a bought truce never creates a claim — pay-for-peace is not dominance', () => {
+    const { state, rivalId, countryId } = warReady();
+    const s = openTurfWar(state, countryId, rivalId, 'rival').state;
+    const r = sueForTruce(s, s.turfWars[0]!.id);
+    expect(r.rejected).toBeUndefined();
+    expect(claimForCountry(r.state, countryId)).toBeUndefined();
+  });
+
+  it('a loss and a mid-war win stake nothing', () => {
+    const { state, rivalId, countryId } = warReady();
+    const s = openTurfWar(state, countryId, rivalId, 'rival').state;
+    const lost = resolveBattle(s, s.turfWars[0]!.id, commit, fixedRng(1));
+    expect(claimForCountry(lost.state, countryId)).toBeUndefined();
+    // A win that does NOT end the war (pressure stays high) claims nothing yet.
+    const high = { ...s, turfWars: s.turfWars.map((w) => ({ ...w, pressure: 90 })) };
+    const midWin = resolveBattle(high, high.turfWars[0]!.id, commit, fixedRng(0));
+    expect(midWin.warEnded).toBeUndefined();
+    expect(claimForCountry(midWin.state, countryId)).toBeUndefined();
+  });
+
+  it('drips perWeek pro-rated over the tick into the claimed country stash, dirty', () => {
+    const { state, countryId } = defendedTurf();
+    const perWeek = protectionPerWeek(state, countryId);
+    const before = state.stashes.find((s) => s.countryId === countryId)!.dirtyCash;
+    const after = turfIncomeStep(state, HOURS_PER_WEEK);
+    const stash = after.stashes.find((s) => s.countryId === countryId)!;
+    expect(stash.dirtyCash).toBeCloseTo(before + perWeek, 6);
+    // Pro-rating: half the hours, half the drip.
+    const half = turfIncomeStep(state, HOURS_PER_WEEK / 2);
+    expect(half.stashes.find((s) => s.countryId === countryId)!.dirtyCash).toBeCloseTo(
+      before + perWeek / 2,
+      6,
+    );
+  });
+
+  it('scales off the country STATIC wealth index, never the player stake (anti-compounding)', () => {
+    const { state, countryId } = defendedTurf();
+    const cfg = state.config.turfWar;
+    expect(protectionPerWeek(state, countryId)).toBe(
+      Math.round(cfg.PROTECTION_PCT * countryWealthIndex(countryId) * cfg.PROTECTION_BASE_PER_WEEK),
+    );
+    // Parking $1M more in the country changes the drip not one dollar.
+    const parked: GameState = {
+      ...state,
+      stashes: state.stashes.map((s) =>
+        s.countryId === countryId ? { ...s, dirtyCash: s.dirtyCash + 1_000_000 } : s,
+      ),
+    };
+    expect(protectionPerWeek(parked, countryId)).toBe(protectionPerWeek(state, countryId));
+  });
+
+  it('a new war over claimed turf suspends the drip; resolution resumes it', () => {
+    const { state, countryId } = defendedTurf();
+    // A second rival moves on the profitable turf.
+    const nextRival = state.world.rivals.find(
+      (r) => !state.rivals.find((rs) => rs.id === r.id)?.toppled,
+    )!;
+    const contested = openTurfWar(state, countryId, nextRival.id, 'rival').state;
+    const during = turfIncomeStep(contested, HOURS_PER_WEEK);
+    expect(during.stashes.find((s) => s.countryId === countryId)!.dirtyCash).toBe(
+      contested.stashes.find((s) => s.countryId === countryId)!.dirtyCash,
+    );
+    expect(claimForCountry(during, countryId)).toBeDefined(); // suspended, not lost
+    // Fight the war off — the drip resumes.
+    const rewon = resolveBattle(
+      { ...contested, turfWars: contested.turfWars.map((w) => ({ ...w, pressure: 1 })) },
+      contested.turfWars[0]!.id,
+      commit,
+      fixedRng(0),
+    ).state;
+    const resumed = turfIncomeStep(rewon, HOURS_PER_WEEK);
+    expect(
+      resumed.stashes.find((s) => s.countryId === countryId)!.dirtyCash,
+    ).toBeGreaterThan(rewon.stashes.find((s) => s.countryId === countryId)!.dirtyCash);
+  });
+
+  it('the claim lapses for good when the last stash in the country is gone', () => {
+    const { state, countryId } = defendedTurf();
+    const sold: GameState = {
+      ...state,
+      stashes: state.stashes.filter((s) => s.countryId !== countryId),
+    };
+    const after = turfIncomeStep(sold, 1);
+    expect(claimForCountry(after, countryId)).toBeUndefined();
+  });
+
+  it('a terminal seizure removes the claim with the ground', () => {
+    const { state, countryId } = defendedTurf();
+    const cfg = state.config.turfWar;
+    const nextRival = state.world.rivals[1]!;
+    let s = openTurfWar(state, countryId, nextRival.id, 'rival').state;
+    s = {
+      ...s,
+      turfWars: s.turfWars.map((w) => ({
+        ...w,
+        pressure: cfg.PRESSURE_SEIZE_THRESHOLD,
+        lossCount: cfg.SEIZE_COUNTRY_AFTER_LOSSES - 1,
+      })),
+    };
+    const r = resolveBattle(s, s.turfWars[0]!.id, commit, fixedRng(1));
+    expect(r.seizedCountry).toBe(true);
+    expect(claimForCountry(r.state, countryId)).toBeUndefined();
+  });
+
+  it('offline earns zero — settleOffline moves neither stash cash nor claims', () => {
+    const { state, countryId } = defendedTurf();
+    const dirtyBefore = state.stashes.find((s) => s.countryId === countryId)!.dirtyCash;
+    const { state: settled } = settleOffline(state, 72);
+    expect(settled.stashes.find((s) => s.countryId === countryId)!.dirtyCash).toBe(dirtyBefore);
+    expect(settled.turfClaims).toEqual(state.turfClaims);
+  });
+});
+
+// --- Migration (v25 → v26: protection turf) -------------------------------------
+
+describe('v25 → v26 migration', () => {
+  it('seeds an empty claim list and the protection knobs; nothing seized', () => {
+    const { state, rivalId, countryId } = warReady('mig-58');
+    const current = openTurfWar(state, countryId, rivalId, 'rival').state;
+    // A real v25 save: no turfClaims field, config without the protection knobs.
+    const legacyTurfWar = { ...current.config.turfWar } as Record<string, unknown>;
+    delete legacyTurfWar.PROTECTION_PCT;
+    delete legacyTurfWar.PROTECTION_BASE_PER_WEEK;
+    const { turfClaims: _turfClaims, ...rest } = current;
+    const legacy = {
+      ...rest,
+      config: { ...current.config, turfWar: legacyTurfWar },
+    } as unknown as GameState;
+
+    const migrated = migrateEnvelope({
+      slot: 's',
+      schemaVersion: 25,
+      savedAt: 0,
+      seed: current.seed,
+      runStatus: current.runStatus,
+      day: current.clock.day,
+      state: legacy,
+    });
+
+    expect(migrated).not.toBeNull();
+    const m = migrated as GameState;
+    expect(m.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(m.turfClaims).toEqual([]);
+    expect(m.config.turfWar.PROTECTION_PCT).toBeGreaterThan(0);
+    expect(m.config.turfWar.PROTECTION_BASE_PER_WEEK).toBeGreaterThan(0);
+    // Nothing the player holds moved.
+    expect(m.cleanCash).toBe(current.cleanCash);
+    expect(m.stashes).toEqual(current.stashes);
+    expect(m.turfWars).toEqual(current.turfWars);
+    expect(m.rngState).toEqual(current.rngState);
   });
 });
 

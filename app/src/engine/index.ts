@@ -92,6 +92,7 @@ export {
   PRODUCT_IDS,
   getCountry,
   findCountry,
+  countryWealthIndex,
   isTraded,
   requiresPlug,
 } from './config/countries';
@@ -575,6 +576,11 @@ export {
   battleCapture,
   toppleSpoils,
   winRepAvailable,
+  protectionClaims,
+  claimForCountry,
+  protectionPerWeek,
+  claimSuspended,
+  turfIncomeStep,
   type StrengthTerm,
   type BattleBreakdown,
   type BattleCommitment,
@@ -583,7 +589,7 @@ export {
   type DeclareWarResult,
   type TrucePayResult,
 } from './turfWar';
-export type { TurfWar } from './state';
+export type { TurfWar, TurfClaim } from './state';
 export type { TurfWarKind } from './config/turfWar';
 
 // Laundering / idle-offline engine — Prompt 07.

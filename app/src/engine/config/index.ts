@@ -329,6 +329,8 @@ import {
   TOPPLE_AGGRESSION_WEIGHT,
   BATTLE_WIN_REP,
   WIN_REP_CAP_PER_WAR,
+  PROTECTION_PCT,
+  PROTECTION_BASE_PER_WEEK,
   type TurfWarKind,
 } from './turfWar';
 import {
@@ -753,6 +755,8 @@ export interface TurfWarTuning {
   readonly TOPPLE_AGGRESSION_WEIGHT: number;
   readonly BATTLE_WIN_REP: number;
   readonly WIN_REP_CAP_PER_WAR: number;
+  readonly PROTECTION_PCT: number;
+  readonly PROTECTION_BASE_PER_WEEK: number;
 }
 
 /** First-session onboarding budget (design/01 §6; GDD §9 — data for Prompt 24). */
@@ -1111,6 +1115,8 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     TOPPLE_AGGRESSION_WEIGHT,
     BATTLE_WIN_REP,
     WIN_REP_CAP_PER_WAR,
+    PROTECTION_PCT,
+    PROTECTION_BASE_PER_WEEK,
   },
   onboarding: {
     SESSION_TARGET_MIN_MINUTES,

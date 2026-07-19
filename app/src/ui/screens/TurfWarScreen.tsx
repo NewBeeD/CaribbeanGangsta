@@ -21,6 +21,7 @@ import {
   declareTargets,
   fighterRows,
   rivalsStanding,
+  turfClaimRows,
   turfWarRows,
 } from './turfWarScreen.model';
 
@@ -39,6 +40,7 @@ export function TurfWarScreen() {
   if (!state) return null;
 
   const wars = turfWarRows(state);
+  const claims = turfClaimRows(state);
   const targets = declareTargets(state);
   const heat = tierDots(state);
   const standing = rivalsStanding(state);
@@ -77,6 +79,13 @@ export function TurfWarScreen() {
           )}
           {result.repGained !== undefined && result.repGained > 0 && (
             <Stat label="Street rep" value={`+${result.repGained}`} />
+          )}
+          {result.protectionPerWeek !== undefined && (
+            <Stat
+              label="Protection turf"
+              value={`${money(result.protectionPerWeek)}/week dirty`}
+              tone="gold"
+            />
           )}
         </div>
         <div style={{ marginTop: 16 }}>
@@ -202,6 +211,7 @@ export function TurfWarScreen() {
               w.winCaptureNote ? `their guns (${w.winCaptureNote})` : null,
               w.winRep > 0 ? `+${w.winRep} street rep` : null,
               w.spoilsOnTopple !== null ? `topple seizes ${money(w.spoilsOnTopple)} dirty` : null,
+              `win it out and the turf pays ${money(w.protectionPerWeek)}/week`,
             ]
               .filter((s): s is string => s !== null)
               .join(' · ') || 'the war ends'}
@@ -340,6 +350,41 @@ export function TurfWarScreen() {
           )}
         </Card>
       ))}
+
+      {/* Protection turf — countries won in a war, paying a weekly dirty drip. */}
+      {claims.length > 0 && (
+        <Card heading="Protection turf">
+          <p className="cg-label" style={{ marginBottom: 10 }}>
+            Turf you won in a war pays protection — a weekly dirty drip into the local
+            stash. Lose the stash there and the claim lapses; a new war suspends it
+            until you settle things again.
+          </p>
+          {claims.map((c) => (
+            <div
+              key={c.countryId}
+              data-testid={`turf-claim-${c.countryId}`}
+              style={{
+                display: 'flex',
+                alignItems: 'baseline',
+                justifyContent: 'space-between',
+                gap: 10,
+                marginBottom: 6,
+              }}
+            >
+              <span className="cg-stat__value">
+                {c.countryName}
+                <span className="cg-label">
+                  {' '}
+                  · {c.source === 'topple' ? 'taken in a topple' : 'defended and held'}
+                </span>
+              </span>
+              <span className="cg-label">
+                {c.suspended ? 'contested — suspended' : `${money(c.perWeek)}/week dirty`}
+              </span>
+            </div>
+          ))}
+        </Card>
+      )}
 
       {/* Go on the offensive — declare war to seize ground or topple a rival. */}
       {targets.length > 0 && (

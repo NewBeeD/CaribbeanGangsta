@@ -39,7 +39,7 @@ import { crewStep } from './crew';
 import { corruptionStep } from './corruption';
 import { debtStep, enforcementStep } from './debt';
 import { consignmentStep } from './consignment';
-import { turfWarStep } from './turfWar';
+import { turfIncomeStep, turfWarStep } from './turfWar';
 import { chaosStep } from './chaos';
 import { marketEventStep } from './marketEvents';
 import { beatStep } from './beats';
@@ -220,6 +220,14 @@ export const TICK_STEPS: readonly TickStep[] = [
   // war reads this tick's settled protection/heat, and before chaos so a fired war
   // and a fired event settle together before beats read the board.
   { id: 'turf-war', modes: ['active', 'incarcerated'], run: (s, dt) => turfWarStep(s, dt) },
+  // Protection-turf income (design/15 B; v26): every standing claim drips its
+  // weekly dirty protection cut into the claimed country's stash, pro-rated over
+  // the tick — suspended while a war contests the country, lapsed if the last
+  // stash there is gone. Runs AFTER turf-war so a war this tick ignited suspends
+  // the drip the same tick it opens. Active-only AND frozen while incarcerated
+  // (the B4 sentence rule, like laundering/street sales): nobody collects with
+  // the boss inside, and absence never earns (GDD §6). Deterministic — no RNG.
+  { id: 'turf-income', modes: ['active'], run: (s, dt) => turfIncomeStep(s, dt) },
   // Procedural world events — the variable-reward core (design/05 §2; design/01
   // §4.7). Prompt 12. Active-only: offline is frozen/safe, so absence never
   // triggers chaos (GDD §6). Draws from an INDEPENDENT run-seeded stream, so it

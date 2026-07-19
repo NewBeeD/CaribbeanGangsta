@@ -229,6 +229,23 @@ export const BATTLE_WIN_REP = 3;
  * `TurfWar.repEarned`) — belt-and-braces against grinding one long war. */
 export const WIN_REP_CAP_PER_WAR = 9;
 
+// --- Protection turf (design/15 Workstream B — turf that PAYS) ------------------
+
+/**
+ * Weekly protection income from a claimed country =
+ * `PROTECTION_PCT × wealthIndex × PROTECTION_BASE_PER_WEEK`, landing as DIRTY
+ * cash in the country's stash (located, like street-team proceeds — it feeds
+ * the wash pipeline). `wealthIndex` is the country's STATIC demand-character
+ * midpoint (`countryWealthIndex`, config/countries.ts — ~0.75 Golden Crescent
+ * to ~1.5 London), NEVER the player's stake there — scaling off stashed cash
+ * would compound (park cash → bigger drip → park more; design/15 §0.5).
+ * `PROTECTION_PCT` is the master lever: tune it DOWN if the batch sim shows
+ * turf income crowding out dealing as the main game (< ~20% of late-run
+ * income is the target band).
+ */
+export const PROTECTION_PCT = 0.75;
+export const PROTECTION_BASE_PER_WEEK = 60_000;
+
 // --- Player offense (declare war) ----------------------------------------------
 
 /** Up-front cost, $, to DECLARE war on a rival over a country you hold — arming
