@@ -134,4 +134,19 @@ Copy this checklist into any PR touching player-facing loops:
 - `31_world_market_and_travel_ui.md` ✅ implemented (World Market screen,
   deal-screen market switcher & kitchen, shipment desk on the Empire map)
 
+**Phase 5 — Deployment: cloud, web launch & mobile apps (design/14)**
+- `51_supabase_auth_and_client.md` — Supabase project, anonymous-first auth
+  (optional email upgrade), null-client offline guarantee
+- `52_cloud_saves_and_meta_sync.md` — implement `CloudSaveStore` +
+  `CloudMetaProgressStore`; debounced push / boot pull / conflict prompt;
+  client-owned migrations
+- `53_remote_leaderboard.md` — implement `RemoteLeaderboard`; `submit_run`
+  Edge Function (dedup, rate limit, bounds); Global | Local boards
+- `54_web_deploy_pwa_and_ci.md` — GitHub Actions gate, Vercel deploy, PWA
+  manifest + offline shell (implements Prompt 27's PWA subset) — the launch
+- `55_capacitor_mobile_shell.md` — committed iOS/Android Capacitor projects;
+  `appStateChange` wired into the existing pause/settle path
+- `56_store_submission_pass.md` — signing, listings, rating questionnaires
+  (see design/14 §11 content-rating risk), Play first then Apple
+
 Each prompt is written to be executed independently given its dependencies are done.

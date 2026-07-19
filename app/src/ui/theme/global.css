@@ -245,6 +245,20 @@ button {
   width: 100%;
 }
 
+/* Sublabel line — EVERY variant drops its <small> onto its own line (never
+   inline against the main label) in the body face, dimmed. */
+.cg-btn small {
+  display: block;
+  margin-top: 5px;
+  font-family: var(--cg-font-body);
+  font-weight: 600;
+  font-size: 0.84rem;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.4;
+  color: var(--cg-paper-dim);
+}
+
 /* Primary = bright mango foil with a moving sheen. One primary per screen. */
 .cg-btn--primary {
   padding: 15px 16px;
@@ -277,6 +291,10 @@ button {
 .cg-btn--primary:disabled::after {
   animation: none;
 }
+/* On the mango foil the dim teal-grey is illegible — use dark cocoa instead. */
+.cg-btn--primary small {
+  color: rgba(58, 36, 0, 0.78);
+}
 @media (prefers-reduced-motion: reduce) {
   .cg-btn--primary::after {
     animation: none;
@@ -304,13 +322,6 @@ button {
   border-left-color: var(--cg-brass);
   background: #fffdf8;
   box-shadow: 0 6px 16px rgba(35, 58, 71, 0.09);
-}
-.cg-btn--secondary small {
-  display: block;
-  margin-top: 5px;
-  font-weight: 600;
-  font-size: 0.84rem;
-  color: var(--cg-paper-dim);
 }
 
 /* Ghost = recessive text action */
