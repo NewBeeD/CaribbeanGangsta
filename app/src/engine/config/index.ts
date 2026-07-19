@@ -322,6 +322,13 @@ import {
   DECLARE_WAR_HEAT,
   TRUCE_COST_VALUE_MULTIPLE,
   TRUCE_COST_MIN,
+  CAPTURE_UNITS_BY_KIND,
+  CAPTURE_AGGRESSION_SCALE,
+  TOPPLE_SPOILS_BASE,
+  TOPPLE_REACH_WEIGHT,
+  TOPPLE_AGGRESSION_WEIGHT,
+  BATTLE_WIN_REP,
+  WIN_REP_CAP_PER_WAR,
   type TurfWarKind,
 } from './turfWar';
 import {
@@ -737,6 +744,15 @@ export interface TurfWarTuning {
   readonly DECLARE_WAR_HEAT: number;
   readonly TRUCE_COST_VALUE_MULTIPLE: number;
   readonly TRUCE_COST_MIN: number;
+  readonly CAPTURE_UNITS_BY_KIND: Readonly<
+    Record<TurfWarKind, Readonly<Partial<Record<WeaponTierId, number>>>>
+  >;
+  readonly CAPTURE_AGGRESSION_SCALE: number;
+  readonly TOPPLE_SPOILS_BASE: number;
+  readonly TOPPLE_REACH_WEIGHT: number;
+  readonly TOPPLE_AGGRESSION_WEIGHT: number;
+  readonly BATTLE_WIN_REP: number;
+  readonly WIN_REP_CAP_PER_WAR: number;
 }
 
 /** First-session onboarding budget (design/01 §6; GDD §9 — data for Prompt 24). */
@@ -1088,6 +1104,13 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     DECLARE_WAR_HEAT,
     TRUCE_COST_VALUE_MULTIPLE,
     TRUCE_COST_MIN,
+    CAPTURE_UNITS_BY_KIND,
+    CAPTURE_AGGRESSION_SCALE,
+    TOPPLE_SPOILS_BASE,
+    TOPPLE_REACH_WEIGHT,
+    TOPPLE_AGGRESSION_WEIGHT,
+    BATTLE_WIN_REP,
+    WIN_REP_CAP_PER_WAR,
   },
   onboarding: {
     SESSION_TARGET_MIN_MINUTES,

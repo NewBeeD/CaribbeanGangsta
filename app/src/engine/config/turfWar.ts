@@ -180,6 +180,55 @@ export const CASUALTY_LOYALTY_HIT = 12;
  * cleared when the war is won or bought off). */
 export const TRIBUTE_PCT = 0.2;
 
+// --- Rewards (design/15 Workstream A — winning has to PAY) ----------------------
+
+/**
+ * Weapon units CAPTURED from the rival on a WON battle, by war kind — the
+ * counter-play fiction holds: a `hot` (Violent Bull) war drops real firepower, a
+ * `raid` (Ghost) war drops pistols, `cold`/`undercut` a thin mixed bag (their
+ * strength was never guns). Deterministic — no roll; scaled by the rival's
+ * aggression (`CAPTURE_AGGRESSION_SCALE`) and floored at 0. Partially refunds
+ * the armory the battle consumed, so firepower stops being a pure sunk cost.
+ */
+export const CAPTURE_UNITS_BY_KIND: Readonly<
+  Record<TurfWarKind, Readonly<Partial<Record<WeaponTierId, number>>>>
+> = {
+  hot: { rifles: 3, automatic: 1 },
+  raid: { pistols: 4 },
+  cold: { pistols: 2 },
+  undercut: { pistols: 1, rifles: 1 },
+};
+
+/**
+ * How hard the rival's `aggression` (0–1) scales the capture table: units are
+ * `base × (1 + (aggression − 0.5) × SCALE)`, rounded, floored at 0 — an
+ * aggressive rival fields more guns to take; a timid one travels light. At `1`
+ * the haul swings ±50% around the table value.
+ */
+export const CAPTURE_AGGRESSION_SCALE = 1;
+
+/**
+ * War spoils on a TOPPLE — breaking a rival for good seizes a cut of their
+ * operation as DIRTY cash (their money is never clean; it lands in the contested
+ * country's stash and feeds the wash/laundering pipeline). Scaled by the rival's
+ * traits so the scariest rivals are the richest prizes:
+ * `BASE × (1 + reach × REACH_WEIGHT + aggression × AGGRESSION_WEIGHT)` — a
+ * $150k–$500k band, so a declared war roughly recoups `DECLARE_WAR_COST`.
+ * Not farmable: rivals are finite per run and topple is permanent.
+ */
+export const TOPPLE_SPOILS_BASE = 150_000;
+export const TOPPLE_REACH_WEIGHT = 1.0;
+export const TOPPLE_AGGRESSION_WEIGHT = 0.75;
+
+/** Street-reputation GAIN on a WON battle — the mirror of `BATTLE_LOSS_REP`
+ * (you looked strong; rep raises the borrow cap, keeps the lifeline open, and
+ * discounts corruption asks). */
+export const BATTLE_WIN_REP = 3;
+
+/** Most street rep a single war can pay across its won battles (tracked by
+ * `TurfWar.repEarned`) — belt-and-braces against grinding one long war. */
+export const WIN_REP_CAP_PER_WAR = 9;
+
 // --- Player offense (declare war) ----------------------------------------------
 
 /** Up-front cost, $, to DECLARE war on a rival over a country you hold — arming

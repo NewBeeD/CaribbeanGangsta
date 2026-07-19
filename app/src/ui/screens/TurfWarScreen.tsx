@@ -16,6 +16,7 @@ import { Button, Card, HeatDots, Panel, SceneText, Stat } from '@/ui/components'
 import {
   armoryRows,
   battlePreview,
+  captureNote,
   declareCost,
   declareTargets,
   fighterRows,
@@ -64,11 +65,20 @@ export function TurfWarScreen() {
               ? 'They overran the ground. You lost the country and the stash there is gone.'
               : 'You lost the fight. The rival is taxing that operation now — regroup and hit back.'}
         </SceneText>
-        {result.winChance !== undefined && (
-          <div style={{ marginTop: 12 }}>
-            <Stat label="Win chance this fight" value={pct(result.winChance)} big />
-          </div>
+        {result.captured && captureNote(result.captured) !== '' && (
+          <SceneText>{`You took their guns — ${captureNote(result.captured)}. They're in your armory.`}</SceneText>
         )}
+        <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
+          {result.winChance !== undefined && (
+            <Stat label="Win chance this fight" value={pct(result.winChance)} big />
+          )}
+          {result.spoils !== undefined && (
+            <Stat label="Spoils seized" value={`${money(result.spoils)} dirty`} tone="gold" />
+          )}
+          {result.repGained !== undefined && result.repGained > 0 && (
+            <Stat label="Street rep" value={`+${result.repGained}`} />
+          )}
+        </div>
         <div style={{ marginTop: 16 }}>
           <Button
             variant="primary"
@@ -186,6 +196,16 @@ export function TurfWarScreen() {
             <Stat label="At stake" value={money(w.stake)} />
             <Stat label="Battles lost" value={String(w.lossCount)} />
           </div>
+          <p className="cg-label" style={{ marginTop: 8 }}>
+            A win pays:{' '}
+            {[
+              w.winCaptureNote ? `their guns (${w.winCaptureNote})` : null,
+              w.winRep > 0 ? `+${w.winRep} street rep` : null,
+              w.spoilsOnTopple !== null ? `topple seizes ${money(w.spoilsOnTopple)} dirty` : null,
+            ]
+              .filter((s): s is string => s !== null)
+              .join(' · ') || 'the war ends'}
+          </p>
           {w.tributeActive && (
             <p className="cg-label" style={{ marginTop: 8, color: 'var(--cg-danger, #c0392b)' }}>
               Paying tribute — the rival is skimming this operation until you win it back.

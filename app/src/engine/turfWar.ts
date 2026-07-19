@@ -25,7 +25,7 @@
 import { createRng, type Rng } from './rng';
 import { addHeat } from './heat';
 import { spendArmory, type Armory } from './arms';
-import type { WeaponTierId } from './config/arms';
+import { getWeaponTier, type WeaponTierId } from './config/arms';
 import { COUNTRY_IDS, getCountry, REGION_DISTANCE } from './config/countries';
 import { hasPoliticalProtection, hasCustomsProtection } from './corruption';
 import type { TurfWarTuning } from './config';
@@ -280,6 +280,7 @@ export function openTurfWar(
     pressure: 0,
     lossCount: 0,
     tributeActive: false,
+    repEarned: 0,
   };
 
   let next: GameState = { ...state, turfWars: [...state.turfWars, war] };
@@ -328,6 +329,98 @@ export function declareWar(
   return { state: withHeat, war: opened.war };
 }
 
+// --- Rewards (design/15 Workstream A — winning has to PAY) ----------------------
+
+const dollars = (n: number): string => `$${Math.round(n).toLocaleString('en-US')}`;
+
+/**
+ * The weapon units a WON battle captures from the rival — deterministic, no
+ * roll: the war kind's `CAPTURE_UNITS_BY_KIND` table scaled by the rival's
+ * aggression (an aggressive rival fields more guns), rounded, floored at 0.
+ * The single source for both the resolve path and the UI preview (shown =
+ * applied). Pure.
+ */
+export function battleCapture(
+  state: GameState,
+  war: TurfWar,
+  tuning: TurfWarTuning = state.config.turfWar,
+): Readonly<Partial<Record<WeaponTierId, number>>> {
+  const aggression = findRival(state, war.rivalId)?.aggression ?? 0.5;
+  const scale = 1 + (aggression - 0.5) * tuning.CAPTURE_AGGRESSION_SCALE;
+  const table = tuning.CAPTURE_UNITS_BY_KIND[war.kind];
+  const capture: Partial<Record<WeaponTierId, number>> = {};
+  for (const [tier, base] of Object.entries(table) as [WeaponTierId, number][]) {
+    const units = Math.max(0, Math.round(base * scale));
+    if (units > 0) capture[tier] = units;
+  }
+  return capture;
+}
+
+/**
+ * The DIRTY cash a topple seizes from the broken rival's operation — scaled by
+ * their traits so the scariest rivals are the richest prizes ($150k–$500k band,
+ * roughly recouping `DECLARE_WAR_COST`). Lands in the contested country's stash
+ * (their money is never clean — it feeds the wash pipeline). Not farmable:
+ * rivals are finite per run and topple is permanent. Pure.
+ */
+export function toppleSpoils(
+  state: GameState,
+  rivalId: string,
+  tuning: TurfWarTuning = state.config.turfWar,
+): number {
+  const rival = findRival(state, rivalId);
+  const reach = rival?.reach ?? 0.5;
+  const aggression = rival?.aggression ?? 0.5;
+  return Math.round(
+    tuning.TOPPLE_SPOILS_BASE *
+      (1 + reach * tuning.TOPPLE_REACH_WEIGHT + aggression * tuning.TOPPLE_AGGRESSION_WEIGHT),
+  );
+}
+
+/** Street rep the NEXT won battle in this war would pay — `BATTLE_WIN_REP`
+ * clamped by what the war has already paid (`WIN_REP_CAP_PER_WAR`). Pure. */
+export function winRepAvailable(
+  state: GameState,
+  war: TurfWar,
+  tuning: TurfWarTuning = state.config.turfWar,
+): number {
+  return clamp(tuning.WIN_REP_CAP_PER_WAR - war.repEarned, 0, tuning.BATTLE_WIN_REP);
+}
+
+/** Add captured units to the armory (immutably; missing tiers default to 0). */
+function addToArmory(
+  armory: Armory,
+  capture: Readonly<Partial<Record<WeaponTierId, number>>>,
+): Armory {
+  const next = { ...armory };
+  for (const [tier, units] of Object.entries(capture) as [WeaponTierId, number][]) {
+    next[tier] = (next[tier] ?? 0) + units;
+  }
+  return next;
+}
+
+/** Deposit dirty cash into the country's (first) stash — located, like street
+ * proceeds. A war only exists over a held country, so a stash is there. */
+function depositDirty(state: GameState, countryId: string, amount: number): GameState {
+  const target = state.stashes.find((s) => s.countryId === countryId) ?? state.stashes[0];
+  if (!target || amount <= 0) return state;
+  return {
+    ...state,
+    stashes: state.stashes.map((s) =>
+      s.id === target.id ? { ...s, dirtyCash: s.dirtyCash + amount } : s,
+    ),
+  };
+}
+
+/** "2 rifles and 1 military-grade" — the haul, named for the outcome scene. */
+function describeCapture(capture: Readonly<Partial<Record<WeaponTierId, number>>>): string {
+  const parts = (Object.entries(capture) as [WeaponTierId, number][]).map(
+    ([tier, units]) => `${units} ${getWeaponTier(tier).name.toLowerCase()}`,
+  );
+  if (parts.length <= 1) return parts[0] ?? '';
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+}
+
 // --- Resolving a battle --------------------------------------------------------
 
 export interface BattleResult {
@@ -342,6 +435,12 @@ export interface BattleResult {
   readonly toppled?: boolean;
   /** A loss past the terminal rung pushed the player out of the country. */
   readonly seizedCountry?: boolean;
+  /** Weapon units captured from the rival on a win (design/15 A1). */
+  readonly captured?: Readonly<Partial<Record<WeaponTierId, number>>>;
+  /** Dirty spoils a topple seized into the contested country's stash (A2). */
+  readonly spoils?: number;
+  /** Street rep this win paid, after the per-war cap (A3). */
+  readonly repGained?: number;
 }
 
 /** The independent per-battle RNG stream — deterministic per run, per war, per
@@ -408,10 +507,25 @@ export function resolveBattle(
   const rivalName = rival?.name ?? 'The rival';
 
   if (won) {
+    // Rewards (design/15 A) — captured arms + capped street rep on EVERY won
+    // battle, applied before the telegraph so the summary names what landed.
+    const captured = battleCapture(state, war, cfg);
+    next = { ...next, armory: addToArmory(next.armory, captured) };
+    const repGained = winRepAvailable(state, war, cfg);
+    if (repGained > 0) {
+      next = {
+        ...next,
+        reputation: { ...next.reputation, street: next.reputation.street + repGained },
+      };
+    }
+    const haul = describeCapture(captured);
+    const haulNote = haul ? ` You took their guns — ${haul}.` : '';
+
     const pressure = Math.max(0, war.pressure - cfg.BATTLE_WIN_PRESSURE_DROP);
     if (pressure <= cfg.WAR_RESOLVED_PRESSURE) {
       next = removeWar(next, warId);
       let toppled = false;
+      let spoils: number | undefined;
       if (war.initiatedBy === 'player') {
         toppled = true;
         next = {
@@ -420,19 +534,40 @@ export function resolveBattle(
             r.id === war.rivalId ? { ...r, toppled: true, tension: 0 } : r,
           ),
         };
+        // Topple spoils — a cut of the broken rival's operation, seized DIRTY
+        // into the contested country's stash (their money is never clean).
+        spoils = toppleSpoils(state, war.rivalId, cfg);
+        next = depositDirty(next, war.countryId, spoils);
       }
       next = queue(
         next,
         'turf-war-won',
         toppled
-          ? `You broke ${rivalName} for good. ${place} is yours, and they're finished.`
-          : `You pushed ${rivalName} out of ${place}. The war's over.`,
+          ? `You broke ${rivalName} for good. ${place} is yours, and their operation pays: ${dollars(spoils ?? 0)} dirty, seized on the ground.${haulNote}`
+          : `You pushed ${rivalName} out of ${place}. The war's over.${haulNote}`,
       );
-      return { state: next, won: true, winChance, warEnded: true, toppled };
+      return {
+        state: next,
+        won: true,
+        winChance,
+        warEnded: true,
+        toppled,
+        captured,
+        repGained,
+        ...(spoils !== undefined ? { spoils } : {}),
+      };
     }
-    next = updateWar(next, warId, { pressure, tributeActive: false });
-    next = queue(next, 'turf-war-battle', `You won the block in ${place}. ${rivalName} falls back — for now.`);
-    return { state: next, won: true, winChance };
+    next = updateWar(next, warId, {
+      pressure,
+      tributeActive: false,
+      repEarned: war.repEarned + repGained,
+    });
+    next = queue(
+      next,
+      'turf-war-battle',
+      `You won the block in ${place}. ${rivalName} falls back — for now.${haulNote}`,
+    );
+    return { state: next, won: true, winChance, captured, repGained };
   }
 
   // Loss.

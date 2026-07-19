@@ -7,6 +7,7 @@
 
 import {
   activeWars,
+  battleCapture,
   battleStrength,
   contestableRivals,
   countryStake,
@@ -14,9 +15,11 @@ import {
   findRival,
   heldCountries,
   rivalTension,
+  toppleSpoils,
   truceCost,
   appeaseCost,
   warForCountry,
+  winRepAvailable,
   type BattleCommitment,
   type BattleBreakdown,
   type GameState,
@@ -58,6 +61,26 @@ export interface WarRow {
   readonly isHome: boolean;
   readonly truceCost: number;
   readonly tributeCost: number;
+  /** What a won battle captures, named ("3 rifles and 1 automatic") — the exact
+   * deterministic haul `resolveBattle` applies ('' if the kind drops nothing). */
+  readonly winCaptureNote: string;
+  /** Street rep the next won battle pays (0 once the per-war cap is reached). */
+  readonly winRep: number;
+  /** Dirty spoils a topple would seize — only on a player-declared war (a
+   * defensive win ends the war without breaking the rival). */
+  readonly spoilsOnTopple: number | null;
+}
+
+/** Name a capture record for display, tier by tier ("3 rifles and 1 automatic"). */
+export function captureNote(
+  capture: Readonly<Partial<Record<WeaponTierId, number>>>,
+): string {
+  const byId = new Map(WEAPON_TIERS.map((t) => [t.id, t.name.toLowerCase()]));
+  const parts = (Object.entries(capture) as [WeaponTierId, number][])
+    .filter(([, units]) => units > 0)
+    .map(([tier, units]) => `${units} ${byId.get(tier) ?? tier}`);
+  if (parts.length <= 1) return parts[0] ?? '';
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
 function warRow(state: GameState, war: TurfWar): WarRow {
@@ -78,6 +101,10 @@ function warRow(state: GameState, war: TurfWar): WarRow {
     isHome: war.countryId === state.world.startingCountry.id,
     truceCost: truceCost(state, war.countryId),
     tributeCost: appeaseCost(state, war.countryId),
+    winCaptureNote: captureNote(battleCapture(state, war)),
+    winRep: winRepAvailable(state, war),
+    spoilsOnTopple:
+      war.initiatedBy === 'player' ? toppleSpoils(state, war.rivalId) : null,
   };
 }
 

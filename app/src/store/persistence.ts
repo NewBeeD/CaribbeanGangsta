@@ -571,6 +571,23 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
     };
     return { ...env, schemaVersion: 24, state: { ...legacy, config } };
   },
+  // 24 → 25: turf-war rewards (design/15 Workstream A — winning has to pay). `TurfWar`
+  // gains `repEarned`, the street rep a war has already paid on won battles; any
+  // in-flight war is seeded at 0 (it has paid nothing yet). The saved config gains the
+  // reward knobs from the default turfWar group FIRST (any saved turfWar tuning wins on
+  // top). Nothing the player earned changes: no cash, holdings, or RNG movement —
+  // rewards only ever ADD, and only inside a player-resolved battle.
+  24: (env) => {
+    const legacy = env.state as GameState;
+    const config: GameConfig = {
+      ...legacy.config,
+      turfWar: { ...DEFAULT_GAME_CONFIG.turfWar, ...legacy.config.turfWar },
+    };
+    const turfWars = legacy.turfWars.map((w) =>
+      (w as { repEarned?: number }).repEarned !== undefined ? w : { ...w, repEarned: 0 },
+    );
+    return { ...env, schemaVersion: 25, state: { ...legacy, config, turfWars } };
+  },
 };
 
 /**

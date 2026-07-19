@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   COUNTRIES,
+  SCHEMA_VERSION,
   addStash,
+  battleCapture,
   battleStrength,
   createInitialState,
   declareWar,
@@ -12,14 +14,18 @@ import {
   settleOffline,
   spawnCrew,
   sueForTruce,
+  toppleSpoils,
   truceCost,
   tunedConfig,
   turfWarStep,
   warForCountry,
+  winRepAvailable,
   type BattleCommitment,
   type GameState,
   type Rng,
+  type WeaponTierId,
 } from '@/engine';
+import { migrateEnvelope } from '@/store';
 
 // A fixed-draw stub of the RNG — resolveBattle only ever calls `next()`. A draw
 // BELOW the shown win chance wins; at/above it loses (shown = rolled).
@@ -287,6 +293,129 @@ describe('turfWarStep', () => {
     const { state: settled } = settleOffline(s, 72);
     expect(settled.turfWars.length).toBe(s.turfWars.length);
     expect(settled.turfWars[0]!.pressure).toBe(pressureBefore);
+  });
+});
+
+// --- Rewards (design/15 Workstream A — Prompt 57) -------------------------------
+
+describe('turf-war rewards', () => {
+  const commit: BattleCommitment = { crewIds: [], arms: {} };
+
+  it('a won battle captures rival arms per the kind table × aggression, named in the summary', () => {
+    const { state, rivalId, countryId } = warReady();
+    const s = openTurfWar(state, countryId, rivalId, 'rival').state;
+    const war = s.turfWars[0]!;
+    const expected = battleCapture(s, war);
+    expect(Object.keys(expected).length).toBeGreaterThan(0); // defaults never drop nothing
+
+    const r = resolveBattle(s, war.id, commit, fixedRng(0));
+    expect(r.won).toBe(true);
+    expect(r.captured).toEqual(expected);
+    for (const [tier, units] of Object.entries(expected) as [WeaponTierId, number][]) {
+      expect(r.state.armory[tier]).toBe((s.armory[tier] ?? 0) + units);
+    }
+    const summary = r.state.pendingChoices.at(-1)!.summary;
+    expect(summary).toContain('took their guns');
+  });
+
+  it('a topple seizes dirty spoils into the contested country stash, telegraph naming the number', () => {
+    const { state, rivalId, countryId } = warReady();
+    let s = declareWar(state, countryId, rivalId).state;
+    s = { ...s, turfWars: s.turfWars.map((w) => ({ ...w, pressure: 1 })) };
+    const spoils = toppleSpoils(s, rivalId);
+    const dirtyBefore = s.stashes
+      .filter((st) => st.countryId === countryId)
+      .reduce((sum, st) => sum + st.dirtyCash, 0);
+
+    const r = resolveBattle(s, s.turfWars[0]!.id, commit, fixedRng(0));
+    expect(r.toppled).toBe(true);
+    expect(r.spoils).toBe(spoils);
+    const dirtyAfter = r.state.stashes
+      .filter((st) => st.countryId === countryId)
+      .reduce((sum, st) => sum + st.dirtyCash, 0);
+    expect(dirtyAfter).toBe(dirtyBefore + spoils);
+    // The band the config targets: roughly recoups DECLARE_WAR_COST.
+    expect(spoils).toBeGreaterThanOrEqual(150_000);
+    expect(spoils).toBeLessThanOrEqual(500_000);
+    const summary = r.state.pendingChoices.at(-1)!.summary;
+    expect(summary).toContain(`$${spoils.toLocaleString('en-US')}`);
+  });
+
+  it('won battles pay street rep, clamped per war at WIN_REP_CAP_PER_WAR', () => {
+    const { state, rivalId, countryId } = warReady();
+    const cfg = state.config.turfWar;
+    let s = openTurfWar(state, countryId, rivalId, 'rival').state;
+    s = { ...s, turfWars: s.turfWars.map((w) => ({ ...w, pressure: 60 })) };
+
+    // First win: full BATTLE_WIN_REP, tracked on the war.
+    const first = resolveBattle(s, s.turfWars[0]!.id, commit, fixedRng(0));
+    expect(first.repGained).toBe(cfg.BATTLE_WIN_REP);
+    expect(first.state.reputation.street).toBe(s.reputation.street + cfg.BATTLE_WIN_REP);
+    expect(first.state.turfWars[0]!.repEarned).toBe(cfg.BATTLE_WIN_REP);
+
+    // A war that has already paid the cap pays nothing more.
+    const capped = { ...s, turfWars: s.turfWars.map((w) => ({ ...w, repEarned: cfg.WIN_REP_CAP_PER_WAR })) };
+    expect(winRepAvailable(capped, capped.turfWars[0]!)).toBe(0);
+    const r = resolveBattle(capped, capped.turfWars[0]!.id, commit, fixedRng(0));
+    expect(r.repGained).toBe(0);
+    expect(r.state.reputation.street).toBe(capped.reputation.street);
+  });
+
+  it('a loss pays nothing — no capture, no spoils, no rep', () => {
+    const { state, rivalId, countryId } = warReady();
+    const s = openTurfWar(state, countryId, rivalId, 'rival').state;
+    const r = resolveBattle(s, s.turfWars[0]!.id, commit, fixedRng(1));
+    expect(r.won).toBe(false);
+    expect(r.captured).toBeUndefined();
+    expect(r.spoils).toBeUndefined();
+    expect(r.repGained).toBeUndefined();
+    expect(r.state.armory).toEqual(s.armory);
+  });
+});
+
+// --- Migration (v24 → v25: repEarned + reward knobs) ----------------------------
+
+describe('v24 → v25 migration', () => {
+  it('seeds repEarned on in-flight wars and lands the reward knobs; nothing seized', () => {
+    const { state, rivalId, countryId } = warReady('mig-57');
+    const current = openTurfWar(state, countryId, rivalId, 'rival').state;
+    // A real v24 save: wars without repEarned, config without the reward knobs.
+    const legacyTurfWar = { ...current.config.turfWar } as Record<string, unknown>;
+    delete legacyTurfWar.CAPTURE_UNITS_BY_KIND;
+    delete legacyTurfWar.TOPPLE_SPOILS_BASE;
+    delete legacyTurfWar.BATTLE_WIN_REP;
+    delete legacyTurfWar.WIN_REP_CAP_PER_WAR;
+    const legacy = {
+      ...current,
+      config: { ...current.config, turfWar: legacyTurfWar },
+      turfWars: current.turfWars.map((w) => {
+        const { repEarned: _repEarned, ...rest } = w;
+        return rest;
+      }),
+    } as unknown as GameState;
+
+    const migrated = migrateEnvelope({
+      slot: 's',
+      schemaVersion: 24,
+      savedAt: 0,
+      seed: current.seed,
+      runStatus: current.runStatus,
+      day: current.clock.day,
+      state: legacy,
+    });
+
+    expect(migrated).not.toBeNull();
+    const m = migrated as GameState;
+    expect(m.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(m.turfWars[0]!.repEarned).toBe(0);
+    expect(m.config.turfWar.CAPTURE_UNITS_BY_KIND).toBeDefined();
+    expect(m.config.turfWar.TOPPLE_SPOILS_BASE).toBeGreaterThan(0);
+    expect(m.config.turfWar.WIN_REP_CAP_PER_WAR).toBeGreaterThan(0);
+    // Nothing the player holds moved.
+    expect(m.cleanCash).toBe(current.cleanCash);
+    expect(m.stashes).toEqual(current.stashes);
+    expect(m.armory).toEqual(current.armory);
+    expect(m.rngState).toEqual(current.rngState);
   });
 });
 

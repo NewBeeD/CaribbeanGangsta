@@ -213,8 +213,16 @@ import type {
  *     default so the new knob lands (any saved transport tuning wins on top) — no player
  *     cash, holdings, or RNG movement; in-flight shipments are untouched (the gate
  *     applies only to LAUNCHING a new leg).
+ * v25: turf-war rewards (design/15 Workstream A — winning has to PAY). `TurfWar` gains
+ *     `repEarned`, the street rep a war has already paid on won battles (clamped at
+ *     `config.turfWar.WIN_REP_CAP_PER_WAR`). Won battles now capture rival arms
+ *     (`CAPTURE_UNITS_BY_KIND` × aggression, deterministic) and a topple seizes dirty
+ *     spoils into the contested country's stash (`TOPPLE_SPOILS_BASE` + trait weights).
+ *     Migration seeds `repEarned: 0` on any in-flight war and merges the turfWar config
+ *     group from the default — no player cash, holdings, or RNG movement; rewards apply
+ *     only inside `resolveBattle` (a player action — offline stays frozen).
  */
-export const SCHEMA_VERSION = 24 as const;
+export const SCHEMA_VERSION = 25 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -604,6 +612,9 @@ export interface TurfWar {
   /** Whether the rival currently skims tribute from the country's income (set
    * after a lost battle, cleared on a win or a bought truce). */
   readonly tributeActive: boolean;
+  /** Street rep this war has already paid out on won battles — clamps the total
+   * at `WIN_REP_CAP_PER_WAR` (design/15 A3; v25). */
+  readonly repEarned: number;
 }
 
 /**
