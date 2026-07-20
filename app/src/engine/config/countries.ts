@@ -36,7 +36,10 @@ export type ProductId =
   | 'weed'
   | 'exotic'
   | 'hash'
+  | 'shrooms'
   | 'synthetics'
+  | 'lsd'
+  | 'ketamine'
   | 'cocaine'
   | 'crack'
   | 'meth'
@@ -147,10 +150,35 @@ export const PRODUCT_PRICE_BANDS: readonly ProductPriceBand[] = [
     heatPerUnit: 0.15,
   },
   {
+    // Island-grown psychedelics (v28) — the tourist islands' other cash crop.
+    // A second starter product beside weed: cheap at the source, modest stretch.
+    id: 'shrooms',
+    name: 'Shrooms',
+    price: { min: 400, max: 1000 },
+    heatPerUnit: 0.1,
+  },
+  {
     id: 'synthetics',
     name: 'Synthetics',
     price: { min: 2000, max: 5000 },
     heatPerUnit: 0.4,
+  },
+  {
+    // Lab sheets out of North America (v28) — high value per unit, quiet to
+    // move (paper doesn't smell), and the party capitals of Europe pay up.
+    id: 'lsd',
+    name: 'LSD',
+    price: { min: 2000, max: 4500 },
+    heatPerUnit: 0.3,
+  },
+  {
+    // The Asia dissociative (v28) — sourced half a world away like hash and
+    // heroin, mid-tier risk, and the club markets on both sides of the
+    // Atlantic buy it by the drum.
+    id: 'ketamine',
+    name: 'Ketamine',
+    price: { min: 1100, max: 2400 },
+    heatPerUnit: 0.45,
   },
   {
     // The anchor of the retune (design/12 Item 3): Colombia w/ plug ~$1.2–1.8k,
@@ -255,6 +283,7 @@ const CARIBBEAN_TRADED: readonly ProductId[] = [
   'weed',
   'exotic',
   'hash',
+  'shrooms',
   'synthetics',
   'cocaine',
   'crack',
@@ -403,7 +432,7 @@ export const COUNTRIES: readonly CountryConfig[] = [
     startingCash: { min: 7000, max: 11000 },
     heatBaseline: 10,
     portProtectionBaseline: 0.45,
-    traded: ['weed', 'hash', 'synthetics', 'cocaine', 'heroin', 'pills'],
+    traded: ['weed', 'hash', 'synthetics', 'lsd', 'ketamine', 'cocaine', 'heroin', 'pills'],
     costBias: { min: 1.0, max: 1.25 },
     demandBias: { min: 1.25, max: 1.5 },
     productBias: { hash: 0.9 },
@@ -424,10 +453,10 @@ export const COUNTRIES: readonly CountryConfig[] = [
     startingCash: { min: 4000, max: 7000 },
     heatBaseline: 15,
     portProtectionBaseline: 0.2,
-    traded: ['hash', 'heroin', 'arms'],
+    traded: ['hash', 'heroin', 'ketamine', 'arms'],
     costBias: { min: 0.65, max: 0.85 },
     demandBias: { min: 0.65, max: 0.85 },
-    plugFor: ['heroin', 'hash'],
+    plugFor: ['heroin', 'hash', 'ketamine'],
     plugCost: 180_000,
     plugPriceFactor: 0.55,
     openingHooks: [
@@ -449,7 +478,7 @@ export const COUNTRIES: readonly CountryConfig[] = [
     traded: CARIBBEAN_TRADED,
     costBias: { min: 0.75, max: 1.0 },
     demandBias: { min: 0.8, max: 1.05 },
-    productBias: { weed: 0.7, exotic: 0.75 }, // the source of the green
+    productBias: { weed: 0.7, exotic: 0.75, shrooms: 0.8 }, // the source of the green
     plugFor: ['weed', 'exotic'],
     plugCost: 90_000,
     plugPriceFactor: 0.6,
@@ -576,10 +605,10 @@ export const COUNTRIES: readonly CountryConfig[] = [
     startingCash: { min: 8000, max: 12000 },
     heatBaseline: 12,
     portProtectionBaseline: 0.45,
-    traded: ['weed', 'hash', 'synthetics', 'cocaine', 'heroin', 'pills'],
+    traded: ['weed', 'hash', 'synthetics', 'lsd', 'ketamine', 'cocaine', 'heroin', 'pills'],
     costBias: { min: 1.05, max: 1.3 },
     demandBias: { min: 1.35, max: 1.65 },
-    productBias: { cocaine: 1.2 }, // the deepest coke demand in the game
+    productBias: { cocaine: 1.2, ketamine: 1.1 }, // the deepest coke demand in the game; K rules the clubs
     openingHooks: [
       'The City runs on it — nowhere on earth pays for cocaine like the Square Mile.',
       'The Met is patient and the cameras are everywhere. Wide margins, watchful eyes.',

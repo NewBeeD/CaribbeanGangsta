@@ -235,8 +235,16 @@ import type {
  *     (keyed on `beatsFired`), so a save can no longer accumulate duplicates; migration
  *     drops the duplicates older saves already queued, keeping only the newest one — a
  *     pure notification prune, never player cash, holdings, or RNG movement.
+ * v28: the expanded drug roster (user request) — `shrooms` (island-grown psychedelics,
+ *     a second starter crop), `lsd` (North-American lab sheets), and `ketamine` (the
+ *     Asia dissociative, plug-gated at the Golden Crescent) join the product table.
+ *     Migration backfills deterministically from the save's own seed, mirroring v8:
+ *     every inventory gains the new keys at 0, every market gains a seeded book for
+ *     the new products (existing books untouched), the world price board gains the
+ *     new source prices, and the saved config's products table gains the new rows
+ *     (saved tuning of existing products wins). No cash, holdings, or RNG movement.
  */
-export const SCHEMA_VERSION = 27 as const;
+export const SCHEMA_VERSION = 28 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 

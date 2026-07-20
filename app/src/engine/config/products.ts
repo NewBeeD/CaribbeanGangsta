@@ -84,10 +84,34 @@ const PRODUCT_META: Readonly<
     distanceElasticity: 6,
     bustHeatMultiplier: 3,
   },
+  shrooms: {
+    // The islands' other starter crop — cheap, low-heat, modest stretch: a
+    // second rung beside weed, not a second margin engine.
+    tierRisk: 0.1,
+    sourceRegion: 'caribbean',
+    distanceElasticity: 2.2,
+    bustHeatMultiplier: 3,
+  },
   synthetics: {
     tierRisk: 0.4,
     sourceRegion: 'europe',
     distanceElasticity: 5,
+    bustHeatMultiplier: 3,
+  },
+  lsd: {
+    // Lab sheets out of North America — quiet per unit, and the stretch to the
+    // European party capitals is the play.
+    tierRisk: 0.3,
+    sourceRegion: 'north-america',
+    distanceElasticity: 3.5,
+    bustHeatMultiplier: 3,
+  },
+  ketamine: {
+    // Sourced half a world away like hash/heroin — the distance from Asia to
+    // the Atlantic club markets is the margin.
+    tierRisk: 0.35,
+    sourceRegion: 'asia',
+    distanceElasticity: 5.5,
     bustHeatMultiplier: 3,
   },
   cocaine: {

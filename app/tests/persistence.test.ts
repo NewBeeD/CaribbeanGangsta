@@ -504,6 +504,70 @@ describe('migrateEnvelope — schema version + migration hook', () => {
     expect(m.beatsFired).toEqual(['heat.tier.dea', 'heat.tier.cia']);
     expect(m.rngState).toEqual(state.rngState);
   });
+
+  it('migrates a v27 save by backfilling the expanded drug roster (v28)', () => {
+    // A pre-v28 save knows nothing of shrooms/LSD/ketamine: strip them from every
+    // per-product structure the way an old build would have written it.
+    const NEW_IDS = ['shrooms', 'lsd', 'ketamine'] as const;
+    const strip = (rec: Record<string, unknown>) => {
+      const out = { ...rec };
+      for (const id of NEW_IDS) delete out[id];
+      return out;
+    };
+    const legacy = {
+      ...state,
+      config: {
+        ...state.config,
+        products: {
+          PRODUCTS: state.config.products.PRODUCTS.filter(
+            (p) => !(NEW_IDS as readonly string[]).includes(p.id),
+          ),
+        },
+      },
+      world: {
+        ...state.world,
+        priceBoards: state.world.priceBoards.filter(
+          (b) => !(NEW_IDS as readonly string[]).includes(b.product),
+        ),
+      },
+      markets: Object.fromEntries(
+        Object.entries(state.markets).map(([c, book]) => [c, strip(book)]),
+      ),
+      inventory: { ...strip(state.inventory), weed: 7 },
+      stashes: state.stashes.map((s) => ({ ...s, inventory: strip(s.inventory) })),
+    } as unknown as GameState;
+
+    const migrated = migrateEnvelope({ ...envelope, schemaVersion: 27, state: legacy });
+    expect(migrated).not.toBeNull();
+    const m = migrated!;
+
+    for (const id of NEW_IDS) {
+      // Every inventory gains the new keys at 0 — nothing is granted.
+      expect(m.inventory[id]).toBe(0);
+      for (const s of m.stashes) expect(s.inventory[id]).toBe(0);
+      // The config table and the world board gain the new rows, in band…
+      const cfg = m.config.products.PRODUCTS.find((p) => p.id === id)!;
+      const board = m.world.priceBoards.find((b) => b.product === id)!;
+      expect(board.price).toBeGreaterThanOrEqual(cfg.price.min);
+      expect(board.price).toBeLessThanOrEqual(cfg.price.max);
+      // …and every market carries a freshly seeded book for them.
+      for (const c of Object.keys(m.markets)) {
+        expect(m.markets[c]![id]!.stock).toBeGreaterThanOrEqual(0);
+        expect(m.markets[c]![id]!.factor).toBe(1);
+      }
+    }
+    // Holdings, the books/boards the save already carried, and the RNG stream
+    // survive untouched.
+    expect(m.inventory.weed).toBe(7);
+    expect(m.markets['san-cristo']!.weed).toEqual(state.markets['san-cristo']!.weed);
+    expect(m.world.priceBoards.find((b) => b.product === 'weed')).toEqual(
+      state.world.priceBoards.find((b) => b.product === 'weed'),
+    );
+    expect(m.cleanCash).toBe(state.cleanCash);
+    expect(m.rngState).toEqual(state.rngState);
+    // Deterministic: migrating the same save twice yields the same state.
+    expect(migrateEnvelope({ ...envelope, schemaVersion: 27, state: legacy })).toEqual(m);
+  });
 });
 
 describe('CloudSaveStore — conforming stub', () => {

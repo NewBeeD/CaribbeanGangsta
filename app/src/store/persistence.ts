@@ -623,6 +623,54 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
     );
     return { ...env, schemaVersion: 27, state: { ...legacy, pendingChoices } };
   },
+  // 27 → 28: the expanded drug roster (user request) — shrooms, LSD, and ketamine
+  // join the product table. Deterministic backfill from the save's own seed,
+  // mirroring v8: every inventory gains the new keys at 0; every market gains a
+  // seeded book for the new products (existing country×product books untouched);
+  // the world price board gains the new source prices; and the saved config's
+  // products table gains the new rows (saved tuning of existing products wins).
+  // Nothing the player earned changes: no cash, holdings, or RNG movement.
+  27: (env) => {
+    const legacy = env.state as GameState;
+    const PRODUCTS = DEFAULT_GAME_CONFIG.products.PRODUCTS.map(
+      (p) => legacy.config.products.PRODUCTS.find((q) => q.id === p.id) ?? p,
+    );
+    const config: GameConfig = { ...legacy.config, products: { PRODUCTS } };
+    const fill = (inv: Inventory): Inventory => ({ ...emptyInventory(), ...inv });
+    // Fresh seeded books cover the products (and any countries) this save never
+    // knew; the save's own entries are merged ON TOP, so live drift/stock for
+    // every book it already carried is preserved untouched.
+    const fresh = createInitialMarkets(
+      createRng(`${legacy.seed}::migrate-v28-stock`),
+      config.markets,
+    );
+    const markets: Record<string, Markets[string]> = {};
+    for (const c of COUNTRY_IDS) markets[c] = { ...fresh[c]!, ...legacy.markets[c] };
+    const priceRng = createRng(`${legacy.seed}::migrate-v28-prices`);
+    const volatility = config.world.VOLATILITY_RANGE;
+    const priceBoards = [
+      ...legacy.world.priceBoards,
+      ...PRODUCTS.filter(
+        (p) => !legacy.world.priceBoards.some((b) => b.product === p.id),
+      ).map((p) => ({
+        product: p.id,
+        price: priceRng.float(p.price.min, p.price.max),
+        volatility: priceRng.float(volatility.min, volatility.max),
+      })),
+    ];
+    return {
+      ...env,
+      schemaVersion: 28,
+      state: {
+        ...legacy,
+        config,
+        world: { ...legacy.world, priceBoards },
+        markets,
+        inventory: fill(legacy.inventory),
+        stashes: legacy.stashes.map((s) => ({ ...s, inventory: fill(s.inventory) })),
+      },
+    };
+  },
 };
 
 /**
