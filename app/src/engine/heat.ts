@@ -7,9 +7,11 @@
  * Design contract:
  *  - Heat is a **tension meter, not a currency** (design/01 §1): a scalar with
  *    decay, clamped to [0, 100]. Never a wallet.
- *  - Every escalation is **telegraphed before it lands** (design/07 §5): crossing
- *    a tier boundary fires a return-hook / session-end beat — "a task force just
- *    opened a file on you" — exactly once per crossing. No surprise CIA.
+ *  - Every escalation is **telegraphed before it lands** (design/07 §5): the
+ *    FIRST crossing into a tier fires a return-hook / session-end beat — "a task
+ *    force just opened a file on you" — exactly once per run. Once the file is
+ *    open the agency has your name; re-crossings escalate silently. No surprise
+ *    CIA, and no nagging DEA either.
  *  - **Offline is safe** (GDD §6): decay, escalation, and raids are all
  *    active-only tick steps, so absence neither raises heat nor triggers a raid.
  *  - This module decides **whether/where** a raid triggers; the seizure itself
@@ -172,11 +174,13 @@ export function checkTierEscalation(state: GameState): TierEscalation {
 }
 
 /**
- * Apply tier escalation as a tick step: on a crossing UP, telegraph it — queue a
- * return-hook `PendingChoice` and fire the tier's narrative beat once — and
- * advance `leTierAck` so the SAME crossing never fires twice. On a drop back DOWN
- * to a lower tier, silently re-arm `leTierAck` so a future re-crossing telegraphs
- * again ("exactly once per crossing"). Active-only (registered in clock.ts).
+ * Apply tier escalation as a tick step: on the FIRST crossing UP into a tier,
+ * telegraph it — queue a return-hook `PendingChoice` and fire the tier's
+ * narrative beat — and advance `leTierAck`. Once a tier's file is open (its
+ * beat is in `beatsFired`) the agency already has your name, so a re-crossing
+ * after heat cooled advances the acknowledgement silently: no repeat "opened a
+ * file" notification, ever, within a run. On a drop back DOWN to a lower tier,
+ * `leTierAck` re-arms quietly. Active-only (registered in clock.ts).
  */
 export function applyHeatEscalation(state: GameState): GameState {
   const tiers = state.config.heat.HEAT_TIERS;
@@ -186,19 +190,20 @@ export function applyHeatEscalation(state: GameState): GameState {
 
   if (curIdx > ackIdx) {
     const tier = tiers[curIdx]!;
+    if (state.beatsFired.includes(tier.beatKey)) {
+      // The file's already open — they know your name. Escalate quietly.
+      return { ...state, leTierAck: newTier };
+    }
     const telegraph: PendingChoice = {
       id: `heat-escalation-${tier.id}-${state.clock.hours}`,
       kind: 'heat-escalation',
       summary: `A ${tier.name} task force just opened a file on you.`,
       createdAtHours: state.clock.hours,
     };
-    const beatsFired = state.beatsFired.includes(tier.beatKey)
-      ? state.beatsFired
-      : [...state.beatsFired, tier.beatKey];
     return {
       ...state,
       leTierAck: newTier,
-      beatsFired,
+      beatsFired: [...state.beatsFired, tier.beatKey],
       pendingChoices: [...state.pendingChoices, telegraph],
     };
   }

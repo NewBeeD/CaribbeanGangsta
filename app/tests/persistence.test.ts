@@ -461,6 +461,49 @@ describe('migrateEnvelope — schema version + migration hook', () => {
       );
     }
   });
+
+  it('migrates a v26 save by pruning duplicate heat-escalation telegraphs (v27)', () => {
+    // A real pre-v27 pile: every re-crossing queued another "opened a file" hook.
+    const hook = (id: string, hours: number) => ({
+      id,
+      kind: 'heat-escalation',
+      summary: 'A DEA task force just opened a file on you.',
+      createdAtHours: hours,
+    });
+    const other = {
+      id: 'return-hook-1',
+      kind: 'return-hook',
+      summary: 'Your lieutenant needs a decision.',
+      createdAtHours: 12,
+    };
+    const legacy = {
+      ...state,
+      beatsFired: ['heat.tier.dea', 'heat.tier.cia'],
+      pendingChoices: [
+        hook('heat-escalation-dea-10', 10),
+        other,
+        hook('heat-escalation-cia-20', 20),
+        hook('heat-escalation-dea-30', 30),
+        hook('heat-escalation-dea-40', 40),
+      ],
+    } as unknown as GameState;
+
+    const migrated = migrateEnvelope({ ...envelope, schemaVersion: 26, state: legacy });
+    expect(migrated).not.toBeNull();
+    const m = migrated!;
+
+    // Only the NEWEST escalation telegraph survives; every other kind is untouched.
+    const escalations = m.pendingChoices.filter((c) => c.kind === 'heat-escalation');
+    expect(escalations).toHaveLength(1);
+    expect(escalations[0]!.id).toBe('heat-escalation-dea-40');
+    expect(m.pendingChoices.find((c) => c.id === 'return-hook-1')).toBeDefined();
+    expect(m.pendingChoices).toHaveLength(2);
+    // A pure notification prune: cash, holdings, beats, and the RNG stream survive.
+    expect(m.cleanCash).toBe(state.cleanCash);
+    expect(m.stashes).toEqual(state.stashes);
+    expect(m.beatsFired).toEqual(['heat.tier.dea', 'heat.tier.cia']);
+    expect(m.rngState).toEqual(state.rngState);
+  });
 });
 
 describe('CloudSaveStore — conforming stub', () => {

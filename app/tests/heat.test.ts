@@ -128,14 +128,34 @@ describe('tier escalation — telegraphed exactly once per crossing (design/07 �
     expect(hook?.summary).toMatch(/task force/i);
   });
 
-  it('re-arms on the way down so a re-crossing telegraphs again', () => {
-    const hot = applyHeatEscalation(atHeat(createInitialState('rearm'), 65)); // ack cia
+  it('re-arms on the way down, but a re-crossing into a filed tier is silent', () => {
+    const base = atHeat(createInitialState('rearm'), 10); // ack local
+    const hot = applyHeatEscalation({ ...base, heat: 65 }); // first CIA crossing — telegraphs
     // Cool back to Local — the acknowledgement drops, silently.
     const cooled = applyHeatEscalation({ ...hot, heat: 5 });
     expect(cooled.leTierAck).toBe('local');
     expect(cooled.pendingChoices.length).toBe(hot.pendingChoices.length); // no new hook
-    // Climbing back into DEA telegraphs afresh.
+    // Climbing back up still reads as a crossing…
     expect(checkTierEscalation({ ...cooled, heat: 40 }).crossed).toBe(true);
+    // …but the DEA file was NEVER opened this run (we jumped straight to CIA),
+    // so this first DEA crossing telegraphs; the CIA one would not.
+    const backToDea = applyHeatEscalation({ ...cooled, heat: 40 });
+    expect(backToDea.leTierAck).toBe('dea');
+    expect(backToDea.pendingChoices.length).toBe(cooled.pendingChoices.length + 1);
+    // Re-crossing into CIA — whose file is already open — escalates silently.
+    const backToCia = applyHeatEscalation({ ...backToDea, heat: 65 });
+    expect(backToCia.leTierAck).toBe('cia');
+    expect(backToCia.pendingChoices.length).toBe(backToDea.pendingChoices.length);
+    expect(backToCia.beatsFired.filter((b) => b === 'heat.tier.cia')).toHaveLength(1);
+  });
+
+  it('an already-filed tier never re-notifies — the DEA only needs your name once', () => {
+    const low = atHeat(createInitialState('refile'), 10); // ack local
+    const filed = applyHeatEscalation({ ...low, heat: 45 }); // first DEA crossing — telegraphs
+    const cooled = applyHeatEscalation({ ...filed, heat: 5 });
+    const rehot = applyHeatEscalation({ ...cooled, heat: 45 });
+    expect(rehot.leTierAck).toBe('dea');
+    expect(rehot.pendingChoices.length).toBe(filed.pendingChoices.length); // no repeat hook
   });
 
   it('the opening baseline never self-telegraphs on the first tick', () => {

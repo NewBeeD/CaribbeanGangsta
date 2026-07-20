@@ -230,8 +230,13 @@ import type {
  *     war over claimed turf suspends the drip; losing the last stash there lapses the
  *     claim. Migration seeds `turfClaims: []` and merges the turfWar config group from
  *     the default — no player cash, holdings, or RNG movement (offline stays frozen).
+ * v27: heat-escalation telegraph cleanup (user request — the feed was a wall of "opened
+ *     a file" alerts). `applyHeatEscalation` now fires each tier's telegraph once per RUN
+ *     (keyed on `beatsFired`), so a save can no longer accumulate duplicates; migration
+ *     drops the duplicates older saves already queued, keeping only the newest one — a
+ *     pure notification prune, never player cash, holdings, or RNG movement.
  */
-export const SCHEMA_VERSION = 26 as const;
+export const SCHEMA_VERSION = 27 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 

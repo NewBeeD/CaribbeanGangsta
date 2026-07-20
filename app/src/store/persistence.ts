@@ -606,6 +606,23 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
       state: { ...legacy, config, turfClaims: legacy.turfClaims ?? [] },
     };
   },
+  // 26 → 27: heat-escalation telegraph cleanup (user request — the feed was a wall
+  // of "opened a file" alerts). Pre-v27 `applyHeatEscalation` re-queued a telegraph
+  // on EVERY re-crossing into a tier, so long runs accumulated dozens of identical
+  // choices; the engine now fires each tier's telegraph once per run (keyed on
+  // `beatsFired`, whose keys these saves already carry). Drop the queued duplicates,
+  // keeping only the single newest telegraph — a pure notification prune. Nothing
+  // the player holds changes: no cash, holdings, config, or RNG movement.
+  26: (env) => {
+    const legacy = env.state as GameState;
+    const escalations = legacy.pendingChoices.filter((c) => c.kind === 'heat-escalation');
+    if (escalations.length <= 1) return { ...env, schemaVersion: 27, state: legacy };
+    const newest = escalations.reduce((a, b) => (b.createdAtHours >= a.createdAtHours ? b : a));
+    const pendingChoices = legacy.pendingChoices.filter(
+      (c) => c.kind !== 'heat-escalation' || c.id === newest.id,
+    );
+    return { ...env, schemaVersion: 27, state: { ...legacy, pendingChoices } };
+  },
 };
 
 /**

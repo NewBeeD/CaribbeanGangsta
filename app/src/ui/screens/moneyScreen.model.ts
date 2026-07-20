@@ -245,8 +245,8 @@ export function pendingDecisions(state: GameState): readonly PendingDecision[] {
     }));
 }
 
-/** The Money feed shows at most this many notifications (design/13 A5). */
-export const PENDING_FEED_LIMIT = 5;
+/** The Money feed shows at most this many notifications (design/13 A5; tightened from 5 — the feed was eating the screen). */
+export const PENDING_FEED_LIMIT = 2;
 
 /**
  * The "Waiting on you" notification feed, capped (design/13 A5 — user addition 3):

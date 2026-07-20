@@ -203,19 +203,19 @@ describe('MoneyScreen — the notification feed is capped with Clear all (design
     }));
   }
 
-  it('with 12 pending choices, shows only the 5 newest plus "+7 older"', () => {
+  it('with 12 pending choices, shows only the 2 newest plus "+10 older"', () => {
     const state: GameState = { ...createInitialState('money-cap'), pendingChoices: hooks(12) };
     useGameStore.setState({ state });
 
     const view = mount(<MoneyScreen />);
     const rendered = [...view.container.querySelectorAll('[data-testid="pending-decision"]')];
-    expect(rendered).toHaveLength(5);
-    // The NEWEST five (7..11), newest first — the older seven sit behind the count.
+    expect(rendered).toHaveLength(2);
+    // The NEWEST two (10..11), newest first — the older ten sit behind the count.
     expect(rendered[0]!.textContent).toContain('Hook number 11.');
-    expect(rendered[4]!.textContent).toContain('Hook number 7.');
-    expect(view.container.textContent).not.toContain('Hook number 6.');
+    expect(rendered[1]!.textContent).toContain('Hook number 10.');
+    expect(view.container.textContent).not.toContain('Hook number 9.');
     expect(view.container.querySelector('[data-testid="pending-older"]')!.textContent).toContain(
-      '+7 older',
+      '+10 older',
     );
     view.unmount();
   });

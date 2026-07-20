@@ -5,6 +5,10 @@ import { fileURLToPath, URL } from 'node:url';
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  server: {
+    // ngrok free-tier URLs change on every restart, so allow the whole domain.
+    allowedHosts: ['.ngrok-free.app'],
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
