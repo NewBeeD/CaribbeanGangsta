@@ -10,6 +10,7 @@ import {
   expansionCooldownRemaining,
   expansionOnCooldown,
   footholdCost,
+  heatOf,
   isCountryConsolidated,
   maxVulnerability,
   netWorth,
@@ -20,6 +21,7 @@ import {
   type GameState,
   type Stash,
 } from '@/engine';
+import { homeHeat, withHomeHeat } from './heatTestUtils';
 
 /** A run with cash on hand so expansion is affordable. */
 function funded(seed: string, cash = 10_000_000): GameState {
@@ -89,17 +91,19 @@ describe('territory cost — reach & region scaled (Ideas2 item 5)', () => {
 
 describe('opening a route — takeover heat, exposure, telegraph', () => {
   it('stamps openedAtHours, spikes heat once, and queues an exposed hook', () => {
-    const base = { ...funded('open'), heat: 10, clock: { hours: 100, day: 5, week: 1 } };
+    const base = { ...withHomeHeat(funded('open'), 10), clock: { hours: 100, day: 5, week: 1 } };
     const target = others(base)[0]!;
     const res = addStash(base, 'floor', { countryId: target.id });
 
     expect(res.stash?.openedAtHours).toBe(100);
-    expect(res.state.heat).toBe(10 + base.config.territory.TERRITORY_TAKEOVER_HEAT);
+    // The takeover spike lands IN the opened country; home keeps its own meter.
+    expect(heatOf(res.state, target.id)).toBe(base.config.territory.TERRITORY_TAKEOVER_HEAT);
+    expect(homeHeat(res.state)).toBe(10);
     expect(res.state.pendingChoices.some((p) => p.kind === 'territory-exposed')).toBe(true);
   });
 
   it('a second stash of a type already held rejects — one stash per spot (Prompt 49)', () => {
-    const base = { ...funded('reinforce-open'), heat: 10 };
+    const base = withHomeHeat(funded('reinforce-open'), 10);
     const home = base.world.startingCountry.id;
     // Home already holds its floor stash; building another floor there rejects,
     // stamps nothing, spikes no heat, and never mutates (you upgrade instead).
@@ -285,7 +289,10 @@ describe('expansion cooldown — opens are paced, reinforcing is not', () => {
   it('blocks a second open until the cooldown clears, then allows it', () => {
     // Enough lieutenants + cash so ONLY the cooldown can bite; same-region so no
     // capital floor and home region is cheap.
-    const base: GameState = { ...funded('cooldown'), crew: [...funded('cooldown').crew, ...lts(3)], heat: 0 };
+    const base: GameState = withHomeHeat(
+      { ...funded('cooldown'), crew: [...funded('cooldown').crew, ...lts(3)] },
+      0,
+    );
     const home = homeCountry(base);
     const sameRegion = others(base).filter((c) => c.region === home.region);
     const first = addStash(base, 'floor', { countryId: sameRegion[0]!.id }).state;
@@ -320,12 +327,12 @@ describe('heat ceiling — too hot to open new turf', () => {
     const ceiling = createInitialState('heat').config.territory.TERRITORY_MAX_HEAT_TO_EXPAND;
     const target = (s: GameState) => others(s)[0]!.id; // same-region, first open (no crew/cooldown)
 
-    const hot: GameState = { ...funded('too-hot'), heat: ceiling };
+    const hot: GameState = withHomeHeat(funded('too-hot'), ceiling);
     const blocked = addStash(hot, 'floor', { countryId: target(hot) });
     expect(blocked.rejected).toBe('too-hot');
     expect(blocked.state).toBe(hot);
 
-    const cool: GameState = { ...funded('cool'), heat: ceiling - 1 };
+    const cool: GameState = withHomeHeat(funded('cool'), ceiling - 1);
     expect(addStash(cool, 'floor', { countryId: target(cool) }).stash).not.toBeNull();
   });
 });

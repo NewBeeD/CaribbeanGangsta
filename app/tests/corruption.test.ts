@@ -23,6 +23,7 @@ import {
   payBribe,
   walk,
   hire,
+  reassignCustomsPort,
   dismissOfficial,
   chargeRetainers,
   computeRaiseAsk,
@@ -33,15 +34,17 @@ import {
   officialWireHeatPerHour,
   judgeCanDismiss,
   settleOffline,
+  effectiveHeat,
   type GameState,
 } from '@/engine';
 import { migrateEnvelope } from '@/store';
+import { totalHeat, withHomeHeat } from './heatTestUtils';
 
 const HEAT_MAX = 100;
 
 /** A funded run at zero heat (clean baseline for exact-formula assertions). */
 function fundedCalm(seed: string, cleanCash = 1_000_000): GameState {
-  return { ...createInitialState(seed), cleanCash, heat: 0 };
+  return { ...withHomeHeat(createInitialState(seed), 0), cleanCash };
 }
 
 /** Advance exactly one in-game week (168h) — one weekly payroll boundary. */
@@ -61,7 +64,7 @@ describe('quoteBribe — the documented formula, shown == charged (design/09 B.1
     const expected = Math.round(
       PORT_BRIBE_BASE_FRACTION *
         value *
-        (1 + state.heat / HEAT_MAX) *
+        (1 + effectiveHeat(state, portId) / HEAT_MAX) *
         (1 + rivalPressure(state)) *
         portGreed(portId) *
         repDiscount(state) *
@@ -76,7 +79,7 @@ describe('quoteBribe — the documented formula, shown == charged (design/09 B.1
   it('a hotter empire pays more (heat raises the ask)', () => {
     const calm = fundedCalm('heat-calm');
     const portId = calm.world.startingCountry.id;
-    const hot = { ...calm, heat: 80 };
+    const hot = withHomeHeat(calm, 80);
     expect(quoteBribe(hot, portId, 50_000).ask).toBeGreaterThan(
       quoteBribe(calm, portId, 50_000).ask,
     );
@@ -188,6 +191,34 @@ describe('paid port lowers container seizure to the floor (design/09 A.3)', () =
       getStashType('container').seizurePct,
     );
   });
+
+  it('reassignCustomsPort moves the standing floor; one-off bribes survive the move', () => {
+    let state = fundedCalm('reassign');
+    state = addStash(state, 'container').state;
+    const homePort = state.world.startingCountry.id;
+
+    const hired = hire(state, 'customs-chief', { portId: homePort });
+    // A one-off bribe at another port must survive the reassignment untouched.
+    const bribed = payBribe(hired.state, 'miami', 100_000).state;
+
+    const moved = reassignCustomsPort(bribed, hired.official!.id, 'jamaica');
+    const standing = moved.corruption.paidPorts.filter((p) => p.paidUntilHours === undefined);
+    expect(standing.map((p) => p.portId)).toEqual(['jamaica']);
+    expect(
+      moved.corruption.paidPorts.some(
+        (p) => p.portId === 'miami' && p.paidUntilHours !== undefined,
+      ),
+    ).toBe(true);
+
+    // Remembered as a routine order, never a grievance (no flip pressure).
+    const tie = moved.corruption.officials.find((o) => o.officialId === 'customs-chief')!;
+    expect(tie.memoryLog.every((m) => m.delta >= 0)).toBe(true);
+  });
+
+  it('reassignCustomsPort is a no-op for officials without the standing-port benefit', () => {
+    const cop = hire(fundedCalm('reassign-cop'), 'beat-cop');
+    expect(reassignCustomsPort(cop.state, cop.official!.id, 'miami')).toBe(cop.state);
+  });
 });
 
 // --- Standing payroll: weekly retainers (design/09 B.2) ----------------------
@@ -242,7 +273,7 @@ describe('raise-asks scale with business level & heat (design/09 B.2 v1.1)', () 
   it('computeRaiseAsk follows current × (1+Δbusiness) × (1+heat) × greed × (1+rival), capped (design/13 F)', () => {
     let state = fundedCalm('raise', 200_000);
     state = hire(state, 'detective').state;
-    state = { ...state, heat: 50, reputation: { ...state.reputation, business: 80 } };
+    state = { ...withHomeHeat(state, 50), reputation: { ...state.reputation, business: 80 } };
     const tie = state.corruption.officials[0]!;
 
     const raw = Math.round(
@@ -267,7 +298,7 @@ describe('raise-asks scale with business level & heat (design/09 B.2 v1.1)', () 
   it('requestRaise sets a pending ask once it clears the margin; refusing == underpayment', () => {
     let state = fundedCalm('ask', 200_000);
     state = hire(state, 'detective').state;
-    state = { ...state, heat: 60, reputation: { ...state.reputation, business: 70 } };
+    state = { ...withHomeHeat(state, 60), reputation: { ...state.reputation, business: 70 } };
     const tie = state.corruption.officials[0]!;
 
     const asked = requestRaise(state, tie.id);
@@ -285,7 +316,7 @@ describe('raise-asks scale with business level & heat (design/09 B.2 v1.1)', () 
   it('accepting a raise lifts the retainer', () => {
     let state = fundedCalm('accept', 200_000);
     state = hire(state, 'detective').state;
-    state = { ...state, heat: 60, reputation: { ...state.reputation, business: 70 } };
+    state = { ...withHomeHeat(state, 60), reputation: { ...state.reputation, business: 70 } };
     const tie = state.corruption.officials[0]!;
     const asked = requestRaise(state, tie.id);
     const newRetainer = asked.official!.pendingRaise!.newRetainer;
@@ -312,14 +343,14 @@ describe('official flips are telegraphed with an intervention window (design/09 
     state = hire(state, 'politician').state; // comfortHeat 45
 
     // Heat crosses their comfort threshold → a telegraphed warning (no charge yet).
-    state = { ...state, heat: 80 };
+    state = withHomeHeat(state, 80);
     state = corruptionStep(state, 1);
     expect(officialFlipTarget(state, state.corruption.officials[0]!)).toBe('warning');
     expect(state.corruption.officials[0]!.activeArc?.stage).toBe('warning');
     expect(state.pendingChoices.some((c) => c.kind === 'official-flip')).toBe(true);
 
     // Intervention: cool the heat → the arc walks back down to none.
-    state = { ...state, heat: 5 };
+    state = withHomeHeat(state, 5);
     state = corruptionStep(state, 1);
     expect(state.corruption.officials[0]!.activeArc).toBeUndefined();
   });
@@ -349,7 +380,7 @@ describe('official flips are telegraphed with an intervention window (design/09 
     expect(tie.isWire).toBe(true);
     expect(officialWireHeatPerHour(state)).toBeGreaterThan(0);
     // A flipped official feeds the heat/LE wire — heat is well above the calm baseline.
-    expect(state.heat).toBeGreaterThan(createInitialState('flip').heat);
+    expect(totalHeat(state)).toBeGreaterThan(totalHeat(createInitialState('flip')));
   });
 });
 
@@ -375,7 +406,7 @@ describe('retainers never charge offline (offline-safe, GDD §6)', () => {
     const { state: after } = settleOffline(before, 1_000); // a long absence
 
     expect(after.cleanCash).toBeGreaterThanOrEqual(before.cleanCash); // never charged
-    expect(after.heat).toBeLessThanOrEqual(before.heat); // no wire/heat offline
+    expect(totalHeat(after)).toBeLessThanOrEqual(totalHeat(before)); // no wire/heat offline
     const b = before.corruption.officials[0]!;
     const a = after.corruption.officials[0]!;
     expect(a.loyalty).toBe(b.loyalty);

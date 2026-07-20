@@ -52,6 +52,7 @@ import {
   payBribe as payBribeEngine,
   haggle as haggleEngine,
   hire as hireEngine,
+  reassignCustomsPort as reassignCustomsPortEngine,
   dismissOfficial as dismissOfficialEngine,
   respondToRaise as respondToRaiseEngine,
   type HaggleResult,
@@ -341,6 +342,8 @@ export interface GameStore {
   hagglePortBribe(portId: string, shipmentValue: number): HaggleResult | null;
   /** Put an official on the payroll (customs chief needs the `portId` it covers). */
   hireOfficial(officialId: OfficialId, portId?: string): HireResult | null;
+  /** Move the customs chief's standing paid port to a different port country. */
+  reassignCustomsPort(officialId: string, portId: string): void;
   /** Cut an official loose — the clean break (drops any standing paid port). */
   fireOfficial(officialId: string): void;
   /** Accept (raise their retainer) or refuse (an underpayment) a pending raise-ask. */
@@ -429,7 +432,7 @@ export interface GameStore {
    * a refresh. The UI authors no decay/heat math; it names the lever only.
    */
   /** Toggle "lie low" — heat cools faster, laundering income slows (design/07 §5). */
-  setLieLow(enabled: boolean): void;
+  setLieLow(countryId: string, enabled: boolean): void;
   /**
    * Debt actions (Prompt 21) — borrowing at interest, the come-up hook & the
    * lifeline out of the spiral (design/10). Each wraps the pure `debt.ts` engine,
@@ -856,6 +859,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     return result;
   },
 
+  reassignCustomsPort(officialId, portId) {
+    withState(get, set, (state) => reassignCustomsPortEngine(state, officialId, portId));
+    void get().persist(AUTOSAVE_SLOT).catch(() => {});
+  },
+
   fireOfficial(officialId) {
     withState(get, set, (state) => dismissOfficialEngine(state, officialId));
     void get().persist(AUTOSAVE_SLOT).catch(() => {});
@@ -1041,8 +1049,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     void get().persist(AUTOSAVE_SLOT).catch(() => {});
   },
 
-  setLieLow(enabled) {
-    withState(get, set, (state) => setLieLow(state, enabled));
+  setLieLow(countryId, enabled) {
+    withState(get, set, (state) => setLieLow(state, countryId, enabled));
     void get().persist(AUTOSAVE_SLOT).catch(() => {});
   },
 

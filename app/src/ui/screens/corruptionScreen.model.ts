@@ -24,6 +24,8 @@ import {
   boardFor,
   getMarketPrice,
   getStashType,
+  hottestHeat,
+  isMajorPort,
   isTraded,
   quoteBribe,
   type GameState,
@@ -184,9 +186,28 @@ export function hireOptions(state: GameState): readonly HireOption[] {
   }));
 }
 
-/** The country a customs chief's standing port defaults to (a container's port, else home). */
-export function defaultPortCountryId(state: GameState): string {
-  return portStashes(state)[0]?.countryId ?? state.world.startingCountry.id;
+/** A port country a customs chief could sit at — one pick per hire (design/09 B.2). */
+export interface PortChoice {
+  readonly countryId: string;
+  readonly name: string;
+  /** A MAJOR gateway (Miami/Rotterdam class) — where the standing floor buys the most. */
+  readonly isMajorPort: boolean;
+}
+
+/**
+ * The ports a customs chief can cover: every country holding a container stash
+ * (the only ports where the standing seizure floor has a visible effect), falling
+ * back to home when none exists yet. First entry is the default pick — the same
+ * first-container-else-home the hire used to attach to silently.
+ */
+export function customsPortChoices(state: GameState): readonly PortChoice[] {
+  const ids = [...new Set(portStashes(state).map((s) => s.countryId))];
+  const countryIds = ids.length > 0 ? ids : [state.world.startingCountry.id];
+  return countryIds.map((id) => ({
+    countryId: id,
+    name: countryName(id),
+    isMajorPort: isMajorPort(id),
+  }));
 }
 
 /** A pending raise-ask surfaced as prose + its number (design/09 B.2 v1.1). */
@@ -210,13 +231,17 @@ export interface PayrollRow {
   /** Heat is above their comfort threshold — cooling it walks the arc back. */
   readonly nervous: boolean;
   readonly pendingRaise: RaiseAskView | null;
+  /** This official's benefit is the standing port — the reassign action applies. */
+  readonly coversPort: boolean;
+  /** The port their standing floor currently covers (null unless `coversPort`). */
+  readonly standingPort: { readonly countryId: string; readonly name: string } | null;
 }
 
 /** The status prose for an official — flip sign, nerves, or steady (no numbers). */
 function statusLine(state: GameState, o: OfficialTie): string {
   if (o.isWire) return 'Flipped — a wire now, feeding the other side everything.';
   if (o.activeArc) return o.activeArc.sign;
-  if (state.heat > o.comfortHeat) {
+  if (hottestHeat(state) > o.comfortHeat) {
     return 'Getting nervous — the heat’s above what they’re comfortable with.';
   }
   return 'On the payroll and steady.';
@@ -225,6 +250,10 @@ function statusLine(state: GameState, o: OfficialTie): string {
 export function payrollRows(state: GameState): readonly PayrollRow[] {
   return state.corruption.officials.map((o) => {
     const cfg = OFFICIALS.find((c) => c.id === o.officialId);
+    const coversPort = cfg?.benefit === 'port-seizure-floor';
+    const standing = coversPort
+      ? state.corruption.paidPorts.find((p) => p.paidUntilHours === undefined)
+      : undefined;
     return {
       id: o.id,
       officialId: o.officialId,
@@ -234,9 +263,13 @@ export function payrollRows(state: GameState): readonly PayrollRow[] {
       statusLine: statusLine(state, o),
       isWire: o.isWire === true,
       arcSign: o.activeArc?.sign ?? null,
-      nervous: !o.isWire && state.heat > o.comfortHeat,
+      nervous: !o.isWire && hottestHeat(state) > o.comfortHeat,
       pendingRaise: o.pendingRaise
         ? { newRetainer: o.pendingRaise.newRetainer, reason: o.pendingRaise.reason }
+        : null,
+      coversPort,
+      standingPort: standing
+        ? { countryId: standing.portId, name: countryName(standing.portId) }
         : null,
     };
   });

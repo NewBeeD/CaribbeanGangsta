@@ -16,9 +16,10 @@ import {
   beatCopRelief,
   heatStatus,
   heatWarnings,
-  lieLowLever,
+  lieLowIncomePenaltyPct,
   raidTipoff,
 } from '@/ui/screens/heatScreen.model';
+import { withHomeHeat } from './heatTestUtils';
 
 // react-dom/test-utils `act` requires this flag to be set.
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -49,9 +50,13 @@ function mount(ui: JSX.Element) {
   };
 }
 
-/** A run pinned to a given heat level (and clean cash for the bribe lever). */
+/** A run pinned to a given HOME heat level (and clean cash for the bribe lever). */
 function runAtHeat(seed: string, heat: number, clean = 0): GameState {
-  return { ...createInitialState(seed), heat, cleanCash: clean, leTierAck: tierForHeat(heat) };
+  return {
+    ...withHomeHeat(createInitialState(seed), heat),
+    cleanCash: clean,
+    leTierAck: tierForHeat(heat),
+  };
 }
 
 beforeEach(() => {
@@ -105,7 +110,7 @@ describe('heatScreen.model — tension made estimable (Prompt 19)', () => {
   });
 
   it('lie-low lever reports the income it trades away', () => {
-    expect(lieLowLever(runAtHeat('heat-ll', 30)).incomePenaltyPct).toBe(50);
+    expect(lieLowIncomePenaltyPct()).toBe(50);
   });
 
   it('raid tip-off only fires with a bought cop and real risk', () => {
@@ -128,16 +133,18 @@ describe('HeatScreen — the reduce-heat levers (Prompt 19)', () => {
     view.unmount();
   });
 
-  it('lying low toggles state and slows income; toggling back resumes', () => {
-    useGameStore.setState({ state: runAtHeat('heat-lielow', 40) });
+  it('lying low toggles per-country state; toggling back resumes', () => {
+    const state = runAtHeat('heat-lielow', 40);
+    const home = state.world.startingCountry.id;
+    useGameStore.setState({ state });
     const view = mount(<HeatScreen />);
 
-    const lieLow = view.container.querySelector('[data-testid="lie-low"]')!;
+    const lieLow = view.container.querySelector(`[data-testid="lie-low-${home}"]`)!;
     view.click(lieLow);
-    expect(useGameStore.getState().state!.lyingLow).toBe(true);
+    expect(useGameStore.getState().state!.lyingLowCountries).toContain(home);
 
-    view.click(view.container.querySelector('[data-testid="lie-low"]')!);
-    expect(useGameStore.getState().state!.lyingLow).toBe(false);
+    view.click(view.container.querySelector(`[data-testid="lie-low-${home}"]`)!);
+    expect(useGameStore.getState().state!.lyingLowCountries).not.toContain(home);
     view.unmount();
   });
 
@@ -181,22 +188,22 @@ describe('HeatScreen — "why your heat is rising" itemization (design/13 B5; Pr
 
   it('itemizes each active source and totals the applied per-hour sum (shown = applied)', () => {
     const base = runAtHeat('heat-src-ui', 20);
-    const threshold = base.config.heat.CONCENTRATION_UNITS_THRESHOLD;
-    const home = base.stashes[0]!;
-    const fat: GameState = {
+    const big: GameState = {
       ...base,
-      investigationUntilHours: base.clock.hours + 48,
-      stashes: [
-        { ...home, inventory: { ...home.inventory, cocaine: threshold + 100 } },
-        ...base.stashes.slice(1),
+      investigations: { [base.world.startingCountry.id]: base.clock.hours + 48 },
+      // Enough footprint to clear the ambient allowance — the empire-size hum.
+      fronts: [
+        { id: 'front-cash-front', type: 'cash-front', level: 1 },
+        { id: 'front-crypto', type: 'crypto', level: 1 },
+        { id: 'front-real-estate', type: 'real-estate', level: 1 },
       ],
     };
-    useGameStore.setState({ state: fat });
+    useGameStore.setState({ state: big });
     const view = mount(<HeatScreen />);
 
     const rows = [...view.container.querySelectorAll('[data-testid="heat-source-row"]')];
     const labels = rows.map((r) => r.textContent ?? '');
-    expect(labels.some((l) => l.includes('Fat stash'))).toBe(true);
+    expect(labels.some((l) => l.includes('Empire footprint'))).toBe(true);
     expect(labels.some((l) => l.includes('Open investigation'))).toBe(true);
     // The total line carries the engine's own summed rate — the tick applies it.
     expect(

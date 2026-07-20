@@ -21,7 +21,7 @@
 
 import type { Rng } from './rng';
 import { restoreRng } from './rng';
-import { addHeat } from './heat';
+import { addHeat, homeCountryId, isLyingLow } from './heat';
 import { frontLieutenantBonus } from './crew';
 import {
   OFFLINE_REDUCED_RATE,
@@ -71,9 +71,13 @@ export function cleanCashRate(state: GameState): number {
   return state.fronts.reduce((sum, f) => sum + frontRate(state, f), 0);
 }
 
-/** Rate after the lying-low income slowdown (design/07 §5): lower heat, lower income. */
+/** Rate after the lying-low income slowdown (design/07 §5): lower heat, lower
+ * income. Fronts carry no country, so they anchor to HOME — lying low there is
+ * what slows them (per-country lie low, v30). */
 function effectiveRate(state: GameState): number {
-  const mult = state.lyingLow ? state.config.heat.LIE_LOW_INCOME_MULTIPLIER : 1;
+  const mult = isLyingLow(state, homeCountryId(state))
+    ? state.config.heat.LIE_LOW_INCOME_MULTIPLIER
+    : 1;
   return cleanCashRate(state) * mult;
 }
 
@@ -118,7 +122,8 @@ export function accrue(state: GameState, dtHours: number): GameState {
     next = bankCleanPeaks({ ...state, cleanCash: state.cleanCash + earned });
   }
   const heat = frontHeatPerHour(state) * dtHours;
-  return heat > 0 ? addHeat(next, heat, 'front.passive') : next;
+  // Fronts carry no country — their footprint hums in the HOME country.
+  return heat > 0 ? addHeat(next, heat, 'front.passive', homeCountryId(state)) : next;
 }
 
 // --- Offline settlement (the return payoff) ----------------------------------
@@ -298,7 +303,9 @@ function assertOfflineGuardrails(before: GameState, after: GameState): void {
   if (totalDirty(after) < totalDirty(before)) {
     throw new Error('settleOffline(): dirty cash decreased while offline (guardrail)');
   }
-  if (after.heat > before.heat) {
+  const totalHeatOf = (s: GameState) =>
+    Object.values(s.countryHeat).reduce((sum, h) => sum + h, 0) + s.notoriety;
+  if (totalHeatOf(after) > totalHeatOf(before)) {
     throw new Error('settleOffline(): heat rose while offline (guardrail)');
   }
   if (owed(after) > owed(before)) {
@@ -366,7 +373,12 @@ export function buyFront(state: GameState, type: FrontType): FrontResult {
   // A conspicuous purchase — the real-estate class (and owned vessels, when they
   // land) — is a flashy one-time heat bump (design/13 B5.4): loud money.
   if (state.config.heat.CONSPICUOUS_FRONT_TYPES.includes(type)) {
-    next = addHeat(next, state.config.heat.CONSPICUOUS_PURCHASE_HEAT, 'conspicuous.purchase');
+    next = addHeat(
+      next,
+      state.config.heat.CONSPICUOUS_PURCHASE_HEAT,
+      'conspicuous.purchase',
+      homeCountryId(state),
+    );
   }
   return { state: next, front };
 }

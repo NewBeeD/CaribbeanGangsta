@@ -26,6 +26,7 @@
 
 import { judgeCanDismiss } from './corruption';
 import { isDebtMarked, lifelineOffer } from './debt';
+import { hottestHeat } from './heat';
 import { isCountryConsolidated } from './territory';
 import { PRESTIGE_UNLOCKS } from './config/prestige';
 import {
@@ -169,12 +170,12 @@ export function evaluateSpiral(state: GameState): SpiralStatus {
   const wiped = capital <= state.config.stashes.WIPE_CAPITAL_THRESHOLD;
   const cantPay = wiped && obligations(state) > capital;
   const protectionCollapsed =
-    cantPay && (wireCount(state) > 0 || state.heat >= P.SPIRAL_HEAT_UNMANAGED);
+    cantPay && (wireCount(state) > 0 || hottestHeat(state) >= P.SPIRAL_HEAT_UNMANAGED);
   const hunted =
     protectionCollapsed &&
     (isDebtMarked(state) ||
       maxRivalTension(state) >= P.SPIRAL_RIVAL_HUNTED ||
-      state.heat >= P.SPIRAL_HEAT_HUNTED);
+      hottestHeat(state) >= P.SPIRAL_HEAT_HUNTED);
 
   const exits: SpiralExit[] = [
     {
@@ -189,7 +190,7 @@ export function evaluateSpiral(state: GameState): SpiralStatus {
     },
     {
       kind: 'go-to-ground',
-      available: state.crew.length > 0 || state.heat > 0 || state.stashes.length > 0,
+      available: state.crew.length > 0 || hottestHeat(state) > 0 || state.stashes.length > 0,
       detail: 'Shed crew, abandon territory, cut heat — rebuild small.',
     },
   ];

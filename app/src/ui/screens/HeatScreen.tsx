@@ -1,12 +1,14 @@
 /**
  * The Heat / Threats screen — the tension system made legible (Prompt 19; design/07
- * §5, design/04 §1, GDD §4.5). It makes tension **estimable**: the current LE tier,
- * a decaying `HeatDots` gauge, and — the core promise — **telegraphed** warnings
- * that a crossing looms or a task force has opened a file, always BEFORE the tier
- * actually escalates. Payroll raid tip-offs surface with lead time to move product.
- * Cooling it is in-fiction: lie low (slower income), and keep a beat cop on the
- * payroll (the standing "cools local heat faster" benefit — the one-tap
- * "bribe a cop" lever was removed, Ideas2 item 2; the pointer routes to Corruption).
+ * §5, design/04 §1, GDD §4.5), reworked for the PER-COUNTRY heat map (heat
+ * redesign "B"; v30). It makes tension **estimable**: the hottest country's tier
+ * as the headline, global notoriety, a row per country the empire touches — each
+ * with its OWN meter and lie-low lever — and the core promise, **telegraphed**
+ * warnings that a crossing looms or a task force has opened a file, always BEFORE
+ * the tier actually escalates. Payroll raid tip-offs surface with lead time.
+ * Cooling it is in-fiction: lie low country by country (slower income when home
+ * goes quiet), and keep a beat cop on the payroll (the standing "cools heat
+ * faster" benefit; the pointer routes to Corruption).
  *
  * The design contract (design/07 §5, GDD §5.4): no surprise LE — every escalation
  * is warned before it lands. Heat is a meter, not a currency (design/01 §1): the
@@ -20,10 +22,11 @@ import { Button, Card, HeatDots, Panel, SceneText } from '@/ui/components';
 import { navigate } from '@/ui/shell/useHash';
 import {
   beatCopRelief,
+  countryHeatRows,
   heatSourceRows,
   heatStatus,
   heatWarnings,
-  lieLowLever,
+  lieLowIncomePenaltyPct,
   raidTipoff,
   totalPassiveHeatPerHour,
 } from './heatScreen.model';
@@ -37,12 +40,14 @@ export function HeatScreen() {
   const status = heatStatus(state);
   const warnings = heatWarnings(state);
   const tipoff = raidTipoff(state);
-  const lieLow = lieLowLever(state);
+  const countries = countryHeatRows(state);
   const copRelief = beatCopRelief(state);
   const sources = heatSourceRows(state);
   const passivePerHour = totalPassiveHeatPerHour(state);
+  const incomePenaltyPct = lieLowIncomePenaltyPct();
 
-  const setLieLow = (enabled: boolean) => useGameStore.getState().setLieLow(enabled);
+  const setLieLow = (countryId: string, enabled: boolean) =>
+    useGameStore.getState().setLieLow(countryId, enabled);
 
   return (
     <div>
@@ -57,11 +62,11 @@ export function HeatScreen() {
       >
         <span className="cg-kicker">Heat</span>
         <span className="cg-label" aria-live="polite">
-          {status.lyingLow ? 'Lying low · cooling faster' : 'Attention decays as you lie low'}
+          {status.lyingLow ? 'Lying low · cooling faster' : 'Heat is local — lie low where it burns'}
         </span>
       </header>
 
-      {/* The gauge + current tier — the wireframe's top status (design/07 §5). */}
+      {/* The headline gauge — the hottest country's tier (design/07 §5). */}
       <Card heading="Current attention">
         <div
           style={{
@@ -77,9 +82,13 @@ export function HeatScreen() {
           </span>
           <HeatDots value={status.filled} max={status.total} tier={status.tierName} />
         </div>
-        <p className="cg-label" style={{ marginTop: 10 }}>
-          Heat cools on its own the longer you lie low. Cross a threshold and the next
-          agency takes over.
+        <p className="cg-label" style={{ marginTop: 10 }} data-testid="heat-hottest">
+          Hottest in {status.hottestCountryName}. Heat is per country now — what you do
+          somewhere draws eyes there, and lying low cools that place alone.
+        </p>
+        <p className="cg-label" data-testid="heat-notoriety">
+          Notoriety {Math.round(status.notoriety)}/100 — your name carries everywhere and
+          fades far slower than local heat.
         </p>
       </Card>
 
@@ -96,13 +105,64 @@ export function HeatScreen() {
         </Card>
       ) : null}
 
+      {/* The map made legible: every country the empire touches, hottest first,
+          each with its own meter and lie-low lever (per-country heat, v30). */}
+      <Card heading="Attention by country">
+        <div style={{ display: 'grid', gap: 8 }}>
+          {countries.map((row) => (
+            <Panel key={row.countryId} heading={`${row.name}${row.isHome ? ' · home' : ''}`}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <span className="cg-label" data-testid="country-heat-tier">
+                  {row.tierName}
+                </span>
+                <HeatDots value={row.filled} max={row.total} tier={row.tierName} />
+              </div>
+              {row.patternLine ? (
+                <p className="cg-label" style={{ marginTop: 8 }}>
+                  {row.patternLine}
+                </p>
+              ) : null}
+              {row.investigationLine ? (
+                <p className="cg-label" style={{ marginTop: 8 }}>
+                  {row.investigationLine}
+                </p>
+              ) : null}
+              <Button
+                variant={row.lyingLow ? 'primary' : 'secondary'}
+                fullWidth
+                onClick={() => setLieLow(row.countryId, !row.lyingLow)}
+                data-testid={`lie-low-${row.countryId}`}
+                aria-pressed={row.lyingLow}
+              >
+                {row.lyingLow ? `Lying low in ${row.name} ✓ — resume ops` : `Lie low in ${row.name}`}
+                <small>
+                  {row.isHome
+                    ? row.lyingLow
+                      ? `income −${incomePenaltyPct}%`
+                      : `cools faster · income −${incomePenaltyPct}%`
+                    : 'cools this country faster'}
+                </small>
+              </Button>
+            </Panel>
+          ))}
+        </div>
+      </Card>
+
       {/* Why is my heat rising — every active source itemized, shown = applied
           (design/13 B5; Prompt 44). Quiet operations show the quiet line. */}
       <Card heading="Why your heat is rising">
         {sources.length === 0 ? (
           <p className="cg-label" data-testid="heat-sources-quiet">
-            Nothing is drawing attention right now. Busts, big shipments, fat
-            stashes, reused routes, and a growing empire all raise it.
+            Nothing is drawing attention right now. Busts, big shipments, reused
+            routes, and a growing empire all raise it.
           </p>
         ) : (
           <ul style={{ display: 'grid', gap: 6, margin: 0, padding: 0, listStyle: 'none' }}>
@@ -120,7 +180,7 @@ export function HeatScreen() {
         )}
         {passivePerHour > 0 ? (
           <p className="cg-label" style={{ marginTop: 10 }} data-testid="heat-sources-total">
-            Passive total: +{passivePerHour.toFixed(2)} heat per played hour.
+            Passive total: +{passivePerHour.toFixed(2)} notoriety per played hour.
           </p>
         ) : null}
       </Card>
@@ -143,47 +203,28 @@ export function HeatScreen() {
         </Card>
       ) : null}
 
-      {/* The reduce-heat levers — in-fiction, never a "buy heat" store. */}
+      {/* The standing cop relief — in-fiction, never a "buy heat" store. */}
       <Card heading="Cool it down">
-        <div style={{ display: 'grid', gap: 8 }}>
-          <Panel heading="Lie low">
-            <p className="cg-label" style={{ marginBottom: 10 }}>
-              Heat sheds faster while you stay quiet — income drops {lieLow.incomePenaltyPct}%
-              until you come back up.
-            </p>
+        <Panel heading="Cop on the payroll">
+          <p className="cg-label" style={{ marginBottom: 10 }}>
+            {copRelief.text}
+          </p>
+          {copRelief.onPayroll ? (
+            <SceneText tone="win" who="Your cop:">
+              Heat cools faster while I'm on the take.
+            </SceneText>
+          ) : (
             <Button
-              variant={lieLow.active ? 'primary' : 'secondary'}
+              variant="secondary"
               fullWidth
-              onClick={() => setLieLow(!lieLow.active)}
-              data-testid="lie-low"
-              aria-pressed={lieLow.active}
+              onClick={() => navigate('corruption')}
+              data-testid="payroll-cop"
             >
-              {lieLow.active ? 'Lying low ✓ — resume normal ops' : 'Lie low'}
-              <small>{lieLow.active ? `income −${lieLow.incomePenaltyPct}%` : `slower income`}</small>
+              Put a cop on the payroll
+              <small>cools heat faster</small>
             </Button>
-          </Panel>
-
-          <Panel heading="Cop on the payroll">
-            <p className="cg-label" style={{ marginBottom: 10 }}>
-              {copRelief.text}
-            </p>
-            {copRelief.onPayroll ? (
-              <SceneText tone="win" who="Your cop:">
-                Local heat cools faster while I'm on the take.
-              </SceneText>
-            ) : (
-              <Button
-                variant="secondary"
-                fullWidth
-                onClick={() => navigate('corruption')}
-                data-testid="payroll-cop"
-              >
-                Put a cop on the payroll
-                <small>cools local heat faster</small>
-              </Button>
-            )}
-          </Panel>
-        </div>
+          )}
+        </Panel>
       </Card>
     </div>
   );

@@ -213,7 +213,8 @@ export function convert(state: GameState, intent: ConvertIntent): ConvertResult 
     const localPrice = getMarketPrice(next, recipe.to, stash.countryId).price;
     next = bookStreetStock(next, produced, localPrice);
   }
-  next = addHeat(next, recipe.heatPerBatch * batches, `convert.${recipe.id}`);
+  // The cook runs where the stash sits — that country takes the batch heat.
+  next = addHeat(next, recipe.heatPerBatch * batches, `convert.${recipe.id}`, stash.countryId);
 
   return {
     state: next,

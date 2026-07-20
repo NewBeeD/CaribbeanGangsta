@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  heatOf, homeCountryId,
   CREW_ARCHETYPES,
   LIEUTENANT_FRONT_BONUS,
   PRODUCTION_MAX_LEVEL,
@@ -104,8 +105,10 @@ describe('productionStep — ACTIVE-only yield into the home stash, capped', () 
 
     // Rates come from config (retunes stay in config/production.ts); integer units.
     expect(out.stashes[0]!.inventory.weed).toBe(Math.floor(cfg.unitsPerHourPerLevel * 20));
-    // Heat tracks output — a running grow smells (heatPerHour × 20h).
-    expect(out.heat).toBeCloseTo(bought.heat + cfg.heatPerHour * 20);
+    // Heat tracks output — a running grow smells (heatPerHour × 20h, HOME-country noise).
+    expect(heatOf(out, homeCountryId(out))).toBeCloseTo(
+      heatOf(bought, homeCountryId(bought)) + cfg.heatPerHour * 20,
+    );
   });
 
   it('never exceeds effectiveCapacity — overflow is simply not produced', () => {
@@ -186,7 +189,7 @@ describe('integer inventory (design/13 A1) — whole units only, remainder carri
     const out = productionStep(full, 3, 'active');
     expect(stashUnits(out.stashes[0]!)).toBe(cap); // never past the cap
     expect(out.productionOps[0]!.pendingYield).toBeCloseTo(0.9); // the carry survives
-    expect(out.heat).toBeCloseTo(full.heat); // an idled lab is cold
+    expect(heatOf(out, homeCountryId(full))).toBeCloseTo(heatOf(full, homeCountryId(full))); // an idled lab is cold
   });
 });
 
@@ -273,7 +276,9 @@ describe('pause (design/13 C) — a cold lab yields nothing and emits no heat', 
 
     const out = productionStep(paused, 50, 'active');
     expect(stashUnits(out.stashes[0]!)).toBe(0); // no yield
-    expect(out.heat).toBe(paused.heat); // no heat — the lab is cold
+    // No heat — the lab is cold (no local movement, no notoriety).
+    expect(out.countryHeat).toEqual(paused.countryHeat);
+    expect(out.notoriety).toBe(paused.notoriety);
   });
 
   it('unpausing resumes at the same accumulator — the carried remainder is not lost', () => {

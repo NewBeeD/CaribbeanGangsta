@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { homeHeat, totalHeat, withHomeHeat } from './heatTestUtils';
 import {
   createInitialState,
   tick,
@@ -104,10 +105,10 @@ describe('chaos — bounded, estimable effects (GDD §5.4)', () => {
   });
 
   it('a heat surge stays clamped to the 0–100 meter', () => {
-    const hot = { ...createInitialState('surge'), heat: 98 };
+    const hot = withHomeHeat(createInitialState('surge'), 98);
     const after = applyChaos(hot, firedEvent('taskforce-surge'));
-    expect(after.heat).toBeLessThanOrEqual(100);
-    expect(after.heat).toBeGreaterThan(hot.heat);
+    expect(homeHeat(after)).toBeLessThanOrEqual(100);
+    expect(homeHeat(after)).toBeGreaterThan(homeHeat(hot));
   });
 
   it('a windfall adds a bounded, known amount of clean cash', () => {
@@ -171,10 +172,11 @@ describe('chaos — rolling & firing', () => {
 
 describe('chaos — offline is frozen/safe (GDD §6)', () => {
   it('settleOffline never triggers a chaos event (no chaos scene, no heat rise)', () => {
-    const base = { ...createInitialState('offline-chaos'), heat: 40 };
+    const base = withHomeHeat(createInitialState('offline-chaos'), 40);
     const { state: settled } = settleOffline(base, 5_000);
     expect(settled.pendingChoices.some((c) => c.kind === 'chaos')).toBe(false);
-    expect(settled.heat).toBeLessThanOrEqual(base.heat);
+    expect(totalHeat(settled)).toBeLessThanOrEqual(totalHeat(base));
     expect(settled.flags[ALT_ROUTE_FLAG]).toBeUndefined();
   });
 });
+

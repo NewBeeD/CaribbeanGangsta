@@ -19,7 +19,7 @@ import { navigate } from '@/ui/shell/useHash';
 import {
   HAGGLE_DISCOUNT_PCT,
   HAGGLE_REFUSE_PCT,
-  defaultPortCountryId,
+  customsPortChoices,
   flipWarnings,
   hireOptions,
   payrollPerWeek,
@@ -27,6 +27,7 @@ import {
   portRows,
   type HireOption,
   type PayrollRow,
+  type PortChoice,
   type PortRow,
 } from './corruptionScreen.model';
 
@@ -166,8 +167,18 @@ function PortCard({ row }: { readonly row: PortRow }) {
 }
 
 /** One official on the payroll: status prose + raise/flip interventions. */
-function PayrollCard({ row }: { readonly row: PayrollRow }) {
+function PayrollCard({
+  row,
+  portChoices,
+}: {
+  readonly row: PayrollRow;
+  readonly portChoices: readonly PortChoice[];
+}) {
   const store = useGameStore.getState();
+  // The other ports a customs chief could move his standing floor to.
+  const moveChoices = row.coversPort
+    ? portChoices.filter((p) => p.countryId !== row.standingPort?.countryId)
+    : [];
 
   return (
     <Panel
@@ -182,6 +193,33 @@ function PayrollCard({ row }: { readonly row: PayrollRow }) {
       <p className="cg-label" style={{ marginBottom: 8 }}>
         {row.benefitSummary}
       </p>
+
+      {/* The customs chief's port, with the move action (the standing floor
+          covers exactly one port — reassigning drops the old one). */}
+      {row.coversPort ? (
+        <div style={{ marginBottom: 8 }}>
+          <p className="cg-label" style={{ marginBottom: 6 }} data-testid="covered-port">
+            {row.standingPort
+              ? `Covers the ${row.standingPort.name} port.`
+              : 'Not covering a port yet.'}
+          </p>
+          {moveChoices.length > 0 ? (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {moveChoices.map((p) => (
+                <Button
+                  key={p.countryId}
+                  variant="ghost"
+                  onClick={() => store.reassignCustomsPort(row.id, p.countryId)}
+                  data-testid={`reassign-port-${p.countryId}`}
+                >
+                  Move to {p.name}
+                  <small>{p.isMajorPort ? 'major gateway' : 'minor port'}</small>
+                </Button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Standing, and any flip telegraph, as prose — never a loyalty bar. */}
       {row.isWire || row.arcSign ? (
@@ -238,6 +276,85 @@ function PayrollCard({ row }: { readonly row: PayrollRow }) {
   );
 }
 
+/** One hireable official: cost + benefit, and the port picker for a customs chief. */
+function HireCard({
+  option,
+  portChoices,
+}: {
+  readonly option: HireOption;
+  readonly portChoices: readonly PortChoice[];
+}) {
+  // The chief's port, picked BEFORE hiring (it's where his standing floor sits).
+  const [portId, setPortId] = useState(portChoices[0]?.countryId ?? null);
+  const chosen = portChoices.find((p) => p.countryId === portId) ?? portChoices[0];
+
+  const doHire = () =>
+    useGameStore
+      .getState()
+      .hireOfficial(option.officialId, option.needsPort ? chosen?.countryId : undefined);
+
+  return (
+    <Panel
+      heading={
+        <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+          <span>{option.name}</span>
+          <span className="cg-label">{money(option.retainerPerWeek)}/wk</span>
+        </span>
+      }
+    >
+      <p className="cg-label" style={{ marginBottom: 8 }}>
+        {option.benefitSummary}
+      </p>
+
+      {/* The customs chief sits at ONE port — an explicit pick, never a silent
+          attach. Choices are the container-stash ports (else home). */}
+      {option.needsPort ? (
+        <div style={{ marginBottom: 8 }}>
+          <p className="cg-label" style={{ marginBottom: 6 }}>
+            His port — the standing seizure floor covers only this one:
+          </p>
+          <div
+            style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}
+            role="radiogroup"
+            aria-label="Port to cover"
+          >
+            {portChoices.map((p) => (
+              <Button
+                key={p.countryId}
+                variant={chosen?.countryId === p.countryId ? 'secondary' : 'ghost'}
+                aria-pressed={chosen?.countryId === p.countryId}
+                onClick={() => setPortId(p.countryId)}
+                data-testid={`hire-port-${p.countryId}`}
+              >
+                {p.name}
+                <small>{p.isMajorPort ? 'major gateway' : 'minor port'}</small>
+              </Button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <Button
+        variant="secondary"
+        fullWidth
+        disabled={!option.affordable}
+        onClick={doHire}
+        data-testid="hire-official"
+        data-official={option.officialId}
+      >
+        Put on payroll
+        <small>
+          {option.affordable
+            ? `${money(option.retainerPerWeek)} first week${
+                option.needsPort && chosen ? ` · covers ${chosen.name}` : ''
+              }`
+            : `${money(option.retainerPerWeek)} · short`}
+        </small>
+      </Button>
+    </Panel>
+  );
+}
+
 export function CorruptionScreen() {
   const state = useGameState();
 
@@ -249,12 +366,7 @@ export function CorruptionScreen() {
   const hireable = hireOptions(state);
   const warnings = flipWarnings(state);
   const weekly = payrollPerWeek(state);
-  const portCountry = defaultPortCountryId(state);
-
-  const hire = (officialId: HireOption['officialId'], needsPort: boolean) =>
-    useGameStore
-      .getState()
-      .hireOfficial(officialId, needsPort ? portCountry : undefined);
+  const portChoices = customsPortChoices(state);
 
   return (
     <div>
@@ -310,7 +422,7 @@ export function CorruptionScreen() {
         <Card heading="On the payroll">
           <div style={{ display: 'grid', gap: 8 }}>
             {roster.map((row) => (
-              <PayrollCard key={row.id} row={row} />
+              <PayrollCard key={row.id} row={row} portChoices={portChoices} />
             ))}
           </div>
         </Card>
@@ -322,33 +434,7 @@ export function CorruptionScreen() {
         ) : (
           <div style={{ display: 'grid', gap: 8 }}>
             {hireable.map((o) => (
-              <Panel
-                key={o.officialId}
-                heading={
-                  <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                    <span>{o.name}</span>
-                    <span className="cg-label">{money(o.retainerPerWeek)}/wk</span>
-                  </span>
-                }
-              >
-                <p className="cg-label" style={{ marginBottom: 8 }}>
-                  {o.benefitSummary}
-                </p>
-                <Button
-                  variant="secondary"
-                  fullWidth
-                  disabled={!o.affordable}
-                  onClick={() => hire(o.officialId, o.needsPort)}
-                  data-testid="hire-official"
-                >
-                  Put on payroll
-                  <small>
-                    {o.affordable
-                      ? `${money(o.retainerPerWeek)} first week`
-                      : `${money(o.retainerPerWeek)} · short`}
-                  </small>
-                </Button>
-              </Panel>
+              <HireCard key={o.officialId} option={o} portChoices={portChoices} />
             ))}
           </div>
         )}

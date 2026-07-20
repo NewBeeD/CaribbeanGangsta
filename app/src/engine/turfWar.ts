@@ -289,7 +289,7 @@ export function openTurfWar(
   };
 
   let next: GameState = { ...state, turfWars: [...state.turfWars, war] };
-  next = addHeat(next, state.config.turfWar.IGNITION_HEAT, 'turf-war.open');
+  next = addHeat(next, state.config.turfWar.IGNITION_HEAT, 'turf-war.open', countryId);
   const place = getCountry(countryId).name;
   const summary =
     initiatedBy === 'player'
@@ -330,7 +330,12 @@ export function declareWar(
   if (!opened.war) return { state, rejected: opened.rejected };
 
   const charged: GameState = { ...opened.state, cleanCash: opened.state.cleanCash - cost };
-  const withHeat = addHeat(charged, state.config.turfWar.DECLARE_WAR_HEAT, 'turf-war.declare');
+  const withHeat = addHeat(
+    charged,
+    state.config.turfWar.DECLARE_WAR_HEAT,
+    'turf-war.declare',
+    countryId,
+  );
   return { state: withHeat, war: opened.war };
 }
 
@@ -676,7 +681,7 @@ export function resolveBattle(
   // Loss.
   const pressure = Math.min(100, war.pressure + cfg.BATTLE_LOSS_PRESSURE_GAIN);
   const lossCount = war.lossCount + 1;
-  next = addHeat(next, cfg.BATTLE_LOSS_HEAT, 'turf-war.loss');
+  next = addHeat(next, cfg.BATTLE_LOSS_HEAT, 'turf-war.loss', war.countryId);
   next = {
     ...next,
     reputation: {

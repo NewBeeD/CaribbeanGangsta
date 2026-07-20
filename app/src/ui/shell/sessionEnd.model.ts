@@ -17,6 +17,7 @@ import {
   cleanCashRate,
   frontUpgradeCost,
   getFrontType,
+  hottestHeat,
   plugQuotes,
   totalDirtyCash,
   type FrontType,
@@ -39,7 +40,7 @@ function resolvingThread(state: GameState): string {
   if (state.crew.some((c) => c.activeArc !== undefined)) {
     return 'Someone close is drifting — that plays out whether you watch or not.';
   }
-  if (state.lyingLow && state.heat > 0) {
+  if (state.lyingLowCountries.length > 0 && hottestHeat(state) > 0) {
     return 'You’re lying low; the heat is bleeding off hour by hour.';
   }
   if (state.fronts.length > 0) {

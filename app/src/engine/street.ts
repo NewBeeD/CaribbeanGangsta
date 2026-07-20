@@ -16,7 +16,7 @@
  * freezes while the player is away (GDD §6): absence never earns, never heats.
  */
 
-import { addHeat } from './heat';
+import { addHeat, homeCountryId } from './heat';
 import { emptyStreetStock, type GameState, type StreetStock } from './state';
 import type { TickMode } from './clock';
 
@@ -90,5 +90,6 @@ export function streetStep(state: GameState, dtHours: number, mode: TickMode): G
   let next: GameState = { ...state, streetStock: nextStreet };
   next = depositToHome(next, sold * bookedUnitPrice);
   const heat = sold * state.config.street.STREET_HEAT_PER_UNIT;
-  return heat > 0 ? addHeat(next, heat, 'street.sale') : next;
+  // Corners work the HOME turf — the drip lands there, and so does the noise.
+  return heat > 0 ? addHeat(next, heat, 'street.sale', homeCountryId(state)) : next;
 }

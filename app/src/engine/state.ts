@@ -243,8 +243,23 @@ import type {
  *     the new products (existing books untouched), the world price board gains the
  *     new source prices, and the saved config's products table gains the new rows
  *     (saved tuning of existing products wins). No cash, holdings, or RNG movement.
+ * v29: raid-scene cap (user request — a hot run's feed was a wall of near-identical
+ *     "they raided…" lines). `raidStep` now keeps at most `RAID_SCENE_LIMIT` (3) raid
+ *     scenes queued, dropping the oldest; migration applies the same cap to the pile
+ *     older saves already queued — a pure notification prune (raid scenes are never
+ *     consequential), never player cash, holdings, or RNG movement.
+ * v30: the PER-COUNTRY heat map (heat redesign "B", user-chosen): the single global
+ *     `heat` meter becomes `countryHeat` (countryId → 0–100, fed by where the action
+ *     happens) plus slow-cooling global `notoriety` (fed a share of every gain; lifts
+ *     every country's EFFECTIVE heat by `NOTORIETY_HEAT_WEIGHT`). `lyingLow` becomes
+ *     per-country `lyingLowCountries`; `investigationUntilHours` becomes per-country
+ *     `investigations`. Raids strike the hottest stash country ∝ its rate; the
+ *     interdiction quote gains disclosed origin/destination heat terms. Migration is
+ *     behavior-preserving: the old meter's value is copied to every presence country,
+ *     notoriety starts 0, a global lie-low/investigation maps onto every presence
+ *     country — never player cash, holdings, or RNG movement.
  */
-export const SCHEMA_VERSION = 28 as const;
+export const SCHEMA_VERSION = 30 as const;
 
 export type RunStatus = 'active' | 'dead' | 'prison' | 'retired';
 
@@ -836,7 +851,20 @@ export interface GameState {
    */
   readonly plugs: readonly string[];
   readonly reputation: Reputation;
-  readonly heat: number;
+  /**
+   * The PER-COUNTRY heat map (heat redesign "B"; v30): countryId → local heat on
+   * the 0–100 meter, fed by what you do THERE (`heat.addHeat`), decayed per
+   * country over ACTIVE hours. Absent key = stone cold. The number tiers, raids,
+   * and interdiction odds read is `effectiveHeat` — local + weighted notoriety.
+   */
+  readonly countryHeat: Readonly<Record<string, number>>;
+  /**
+   * Global notoriety (heat redesign "B"; v30): your NAME, 0–100. Fed a
+   * `NOTORIETY_SHARE` slice of every heat gain anywhere plus the empire-size
+   * hum; cools far slower than local heat (`NOTORIETY_DECAY_RATE_PER_HOUR`).
+   * Carries between countries: it lifts every country's effective heat.
+   */
+  readonly notoriety: number;
   /**
    * Repeated-pattern counters (design/13 B5.3; Prompt 44): `port:<countryId>` →
    * how recently/often that origin port has been run. Bumped on every shipment
@@ -846,20 +874,24 @@ export interface GameState {
    */
   readonly recentUse: Readonly<Record<string, number>>;
   /**
-   * The investigation window (design/13 B5.5; Prompt 44): present after a MAJOR
-   * bust until this in-game hour. While open, heat decays slower and raid chance
-   * runs a config'd multiplier — both disclosed when the window opens and on the
-   * Heat screen. The clock only advances online, so the window burns ACTIVE
-   * hours only (absent = no investigation).
+   * PER-COUNTRY investigation windows (design/13 B5.5; Prompt 44; per-country
+   * since v30): countryId → the in-game hour the window closes. While open, THAT
+   * country's heat decays slower and its raid chance runs a config'd multiplier —
+   * both disclosed when the window opens and on the Heat screen. The clock only
+   * advances online, so windows burn ACTIVE hours only (absent key = none).
    */
-  readonly investigationUntilHours?: number;
+  readonly investigations: Readonly<Record<string, number>>;
   /**
    * The marked-debt collector clock (design/13 B3; Prompt 44). Present only
    * while `DEBT_MARKED_FLAG` is up; cleared instantly when the loan is repaid.
    */
   readonly enforcement?: MarkedEnforcement;
-  /** "Lie low" mode: heat decays faster, laundering income slows (Prompt 05/07). */
-  readonly lyingLow: boolean;
+  /**
+   * Countries currently "lying low" (per-country since v30): each cools its OWN
+   * heat faster; the HOME country lying low also slows laundering income
+   * (Prompt 05/07 — fronts anchor to home). Sorted for determinism.
+   */
+  readonly lyingLowCountries: readonly string[];
   /**
    * Highest LE tier already TELEGRAPHED to the player. Escalation fires only when
    * the live tier climbs above this, then advances it — so a crossing telegraphs
@@ -1193,9 +1225,11 @@ export function createInitialState(
     wash: emptyWash(),
     plugs: [],
     reputation: { street: 0, business: 0, political: 0 },
-    heat: country.heatBaseline,
+    countryHeat: country.heatBaseline > 0 ? { [country.id]: country.heatBaseline } : {},
+    notoriety: 0,
     recentUse: {},
-    lyingLow: false,
+    investigations: {},
+    lyingLowCountries: [],
     // Acknowledge the opening tier so the baseline never self-telegraphs on tick 1.
     leTierAck: tierForHeat(country.heatBaseline, config.heat.HEAT_TIERS),
     inventory: emptyInventory(),
@@ -1279,7 +1313,7 @@ export function applyIntent(state: GameState, intent: Intent): GameState {
     case 'ship':
       return ship(state, intent).state;
     case 'lieLow':
-      return setLieLow(state, intent.enabled);
+      return setLieLow(state, intent.countryId, intent.enabled);
     case 'buyArms':
     case 'sellArms':
       return resolveArmsDeal(state, intent).state;

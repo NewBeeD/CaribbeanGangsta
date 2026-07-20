@@ -53,9 +53,9 @@ function withStashes(state: GameState, stashes: Stash[]): GameState {
   return { ...state, stashes };
 }
 
-/** A CIA-tier raid event targeting a specific stash. */
+/** A CIA-tier raid event targeting a specific stash (mkStash country: 'x'). */
 function raidOn(targetStashId: string): RaidEvent {
-  return { targetStashId, tier: 'cia', heatAtRoll: 90 };
+  return { targetStashId, countryId: 'x', tier: 'cia', heatAtRoll: 90 };
 }
 
 describe('capacity — per-archetype (design/09 A.3)', () => {
@@ -354,7 +354,7 @@ describe('offline is safe — raids never resolve while away (GDD §6)', () => {
   it('settleOffline seizes nothing and touches no stash', () => {
     const hot: GameState = {
       ...createInitialState('offline'),
-      heat: 95,
+      countryHeat: { x: 95 },
       stashes: [mkStash('s1', 'floor', { weed: 40, cash: 50_000 })],
     };
     for (const hours of [1, 100, 10_000]) {
@@ -371,7 +371,7 @@ describe('a seized raid discloses its numbers in the scene (design/13 A6)', () =
     const base = createInitialState('raid-amounts');
     const stocked = (s: GameState): GameState => ({
       ...s,
-      heat: 95,
+      countryHeat: { [base.stashes[0]!.countryId]: 95 },
       stashes: [
         {
           ...base.stashes[0]!,
@@ -395,5 +395,51 @@ describe('a seized raid discloses its numbers in the scene (design/13 A6)', () =
     // Dirty cash never silently vanishes — the loss line names its numbers.
     expect(scene!.summary).toContain('$12,400 dirty');
     expect(scene!.summary).toContain('40 units seized');
+  });
+});
+
+describe('the feed keeps only the newest raid scenes (user request)', () => {
+  it('capRaidScenes drops the oldest raid scenes past the limit, other kinds untouched', async () => {
+    const { capRaidScenes, RAID_SCENE_LIMIT } = await import('@/engine');
+    const raid = (id: string, hours: number) =>
+      ({ id, kind: 'raid', summary: 'raided', createdAtHours: hours }) as const;
+    const other = { id: 'other-1', kind: 'return-hook', summary: 'hm', createdAtHours: 5 };
+
+    const queue = [raid('r1', 10), other, raid('r2', 20), raid('r3', 30), raid('r4', 40)];
+    const capped = capRaidScenes(queue);
+    expect(capped.filter((c) => c.kind === 'raid').map((c) => c.id)).toEqual(['r2', 'r3', 'r4']);
+    expect(capped.find((c) => c.id === 'other-1')).toBeDefined();
+
+    // At or under the limit, the queue passes through identically.
+    const small = queue.slice(0, RAID_SCENE_LIMIT + 1);
+    expect(capRaidScenes(small)).toBe(small);
+  });
+
+  it('raidStep never queues more raid scenes than the limit', async () => {
+    const { raidStep, RAID_SCENE_LIMIT } = await import('@/engine');
+    const base = createInitialState('raid-cap');
+    const stocked = (s: GameState): GameState => ({
+      ...s,
+      countryHeat: { [base.stashes[0]!.countryId]: 95 },
+      stashes: [
+        {
+          ...base.stashes[0]!,
+          dirtyCash: 10_000,
+          inventory: { ...base.stashes[0]!.inventory, weed: 40 },
+        },
+      ],
+    });
+
+    let s = stocked(base);
+    const seen = new Set<string>(); // every raid scene ever queued (ids are hour-stamped)
+    for (let i = 0; i < 5_000 && seen.size < RAID_SCENE_LIMIT + 2; i++) {
+      s = raidStep({ ...s, clock: { ...s.clock, hours: s.clock.hours + 24 } }, 24);
+      const raids = s.pendingChoices.filter((c) => c.kind === 'raid');
+      expect(raids.length).toBeLessThanOrEqual(RAID_SCENE_LIMIT);
+      for (const r of raids) seen.add(r.id);
+      s = stocked(s); // re-stock so every roll has real stakes
+    }
+    // The loop actually produced more raids than the cap, so the cap did work.
+    expect(seen.size).toBeGreaterThan(RAID_SCENE_LIMIT);
   });
 });

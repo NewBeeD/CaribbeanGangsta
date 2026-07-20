@@ -14,6 +14,7 @@ import {
   type GameState,
   type Stash,
 } from '@/engine';
+import { withHomeHeat } from './heatTestUtils';
 import { LocalSaveStore, useGameStore, type SaveStore } from '@/store';
 import { DealScreen, DealOutcome } from '@/ui/screens/DealScreen';
 
@@ -59,10 +60,9 @@ function mount(ui: JSX.Element) {
 
 /** A run holding weed in the home stash — so the screen opens in sell mode. */
 function stateWithWeed(seed: string, weed = 20, heat = 40): GameState {
-  const base = createInitialState(seed);
+  const base = withHomeHeat(createInitialState(seed), heat);
   return {
     ...base,
-    heat,
     stashes: base.stashes.map((s, i) =>
       i === 0 ? { ...s, inventory: { ...s.inventory, weed } } : s,
     ),

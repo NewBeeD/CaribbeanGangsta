@@ -155,6 +155,13 @@ export const DISTANCE_RISK_WEIGHT = 0.15;
 export const CARGO_HEAT_WEIGHT = 0.25;
 export const DEST_RISK_WEIGHT = 0.2;
 export const PORT_PROTECTION_WEIGHT = 0.15;
+/** Weight of the ORIGIN country's effective heat (0..1 of the meter) on the
+ * odds — a hot launch port draws eyes (heat redesign "B": per-country heat
+ * finally feeds the interdiction quote; disclosed as its own term). */
+export const ORIGIN_HEAT_ODDS_WEIGHT = 0.1;
+/** Weight of the DESTINATION country's effective heat on the odds — landing
+ * where they're already watching you is the riskier half. */
+export const DEST_HEAT_ODDS_WEIGHT = 0.15;
 /** Flat odds relief when the origin or destination port is paid (design/09 A.3). */
 export const PAID_PORT_RELIEF = 0.1;
 /** Cargo heat (`heatPerUnit × qty`) at which the cargo term saturates its weight. */

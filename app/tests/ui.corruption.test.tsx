@@ -18,6 +18,7 @@ import { LocalSaveStore, useGameStore, type SaveStore } from '@/store';
 import { CorruptionScreen } from '@/ui/screens/CorruptionScreen';
 import {
   HAGGLE_REFUSE_PCT,
+  customsPortChoices,
   payrollRows,
   portRows,
 } from '@/ui/screens/corruptionScreen.model';
@@ -64,6 +65,13 @@ function withPort(seed: string, clean: number, staged: number): GameState {
   };
 }
 
+/** Clone the home container into a second port country (skips the territory gates). */
+function withSecondPort(state: GameState, countryId: string): GameState {
+  const container = state.stashes.find((s) => s.type === 'container')!;
+  const second = { ...container, id: `stash-${countryId}-container`, countryId };
+  return { ...state, stashes: [...state.stashes, second] };
+}
+
 beforeEach(() => {
   useGameStore.setState({ state: null, lastOfflineReport: null, saveStore: freshSaveStore() });
 });
@@ -106,6 +114,21 @@ describe('corruptionScreen.model — who to buy, made legible (Prompt 20)', () =
     expect(row.pendingRaise!.reason).toContain('risk');
   });
 
+  it('customs-chief port choices list every container port, falling back to home', () => {
+    const home = run('corr-choices', 0);
+    expect(customsPortChoices(home).map((p) => p.countryId)).toEqual([
+      home.world.startingCountry.id,
+    ]);
+
+    const twoPorts = withSecondPort(withPort('corr-choices-2', 1_000_000, 0), 'miami');
+    const choices = customsPortChoices(twoPorts);
+    expect(choices.map((p) => p.countryId)).toEqual([
+      twoPorts.world.startingCountry.id,
+      'miami',
+    ]);
+    expect(choices.find((p) => p.countryId === 'miami')!.isMajorPort).toBe(true);
+  });
+
   it('a flipped official reads as prose, never a loyalty number', () => {
     const hired = hire(run('corr-flip', 100_000), 'beat-cop');
     const flipped: OfficialTie = { ...hired.state.corruption.officials[0]!, isWire: true };
@@ -134,6 +157,47 @@ describe('CorruptionScreen — buying your way to safety (Prompt 20)', () => {
     const after = useGameStore.getState().state!;
     expect(after.corruption.officials.length).toBe(1);
     expect(after.cleanCash).toBeLessThan(before);
+    view.unmount();
+  });
+
+  it('hiring the customs chief attaches his standing port to the PICKED port', () => {
+    // Two container ports; the picker should let the chief sit at the second one.
+    const state = withSecondPort(withPort('corr-chief-port', 1_000_000, 10_000), 'miami');
+    useGameStore.setState({ state });
+    const view = mount(<CorruptionScreen />);
+
+    view.click(view.container.querySelector('[data-testid="hire-port-miami"]')!);
+    view.click(
+      view.container.querySelector(
+        '[data-testid="hire-official"][data-official="customs-chief"]',
+      )!,
+    );
+
+    const after = useGameStore.getState().state!;
+    expect(after.corruption.officials.some((o) => o.officialId === 'customs-chief')).toBe(true);
+    // Standing (no expiry) at the picked port — not the silent first-container default.
+    expect(
+      after.corruption.paidPorts.some(
+        (p) => p.portId === 'miami' && p.paidUntilHours === undefined,
+      ),
+    ).toBe(true);
+    view.unmount();
+  });
+
+  it('the payroll card shows the covered port and can move it to another port', () => {
+    const base = withSecondPort(withPort('corr-reassign', 1_000_000, 10_000), 'miami');
+    const hired = hire(base, 'customs-chief', { portId: base.world.startingCountry.id });
+    useGameStore.setState({ state: hired.state });
+    const view = mount(<CorruptionScreen />);
+
+    expect(
+      view.container.querySelector('[data-testid="covered-port"]')!.textContent,
+    ).toContain('Covers the');
+    view.click(view.container.querySelector('[data-testid="reassign-port-miami"]')!);
+
+    const after = useGameStore.getState().state!;
+    const standing = after.corruption.paidPorts.filter((p) => p.paidUntilHours === undefined);
+    expect(standing.map((p) => p.portId)).toEqual(['miami']);
     view.unmount();
   });
 

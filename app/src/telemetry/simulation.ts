@@ -31,7 +31,13 @@ import { stashUnits } from '@/engine/storage';
 import { buyFront } from '@/engine/laundering';
 import type { FrontType } from '@/engine/config/fronts';
 import type { GameConfig } from '@/engine/config';
-import { setLieLow } from '@/engine/heat';
+import {
+  effectiveHeat,
+  hottestCountry,
+  hottestHeat,
+  isLyingLow,
+  setLieLow,
+} from '@/engine/heat';
 import { HEAT_MAX } from '@/engine/config/heat';
 import { endRun, evaluateSpiral } from '@/engine/endgame';
 import type { RunEndCause } from '@/engine/endgame';
@@ -162,9 +168,16 @@ function policyStep(state: GameState): PolicyStep {
 
   // Heat management: duck under the worst of it (free, deterministic lever).
   // The 0.7/0.3 hysteresis band is POLICY (what this scripted dealer does), not
-  // game balance — sim-policy knobs stay local to the harness.
-  if (!next.lyingLow && next.heat > HEAT_MAX * 0.7) next = setLieLow(next, true);
-  else if (next.lyingLow && next.heat < HEAT_MAX * 0.3) next = setLieLow(next, false);
+  // game balance — sim-policy knobs stay local to the harness. Per-country heat:
+  // the policy lies low wherever it's hottest, and surfaces once that cools.
+  const hotC = hottestCountry(next);
+  if (!isLyingLow(next, hotC) && hottestHeat(next) > HEAT_MAX * 0.7) {
+    next = setLieLow(next, hotC, true);
+  } else {
+    for (const c of next.lyingLowCountries) {
+      if (effectiveHeat(next, c) < HEAT_MAX * 0.3) next = setLieLow(next, c, false);
+    }
+  }
 
   // Sell the holding once the local price is back at/above its base, a slab at
   // a time; below base, hold for the bounce.

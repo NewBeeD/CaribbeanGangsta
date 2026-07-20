@@ -399,19 +399,30 @@ export type {
   PlugRejectReason,
 } from './plugs';
 
-// Heat & law enforcement — Prompt 05.
+// Heat & law enforcement — Prompt 05; per-country heat map since v30.
 export {
   addHeat,
+  addNotoriety,
   decayHeat,
+  heatOf,
+  effectiveHeat,
+  presenceCountries,
+  hottestCountry,
+  hottestHeat,
+  homeCountryId,
   currentTier,
+  tierOf,
   tierForHeat,
   tierDots,
   checkTierEscalation,
   applyHeatEscalation,
   setLieLow,
+  isLyingLow,
   raidChance,
+  raidChanceIn,
   rollRaid,
   investigationActive,
+  investigationActiveIn,
 } from './heat';
 export type {
   LeTier,
@@ -434,8 +445,12 @@ export type { PassiveHeatTerm } from './heatSources';
 export {
   HEAT_MIN,
   HEAT_MAX,
+  HEAT_EPSILON,
   HEAT_TIERS,
   HEAT_DOTS_TOTAL,
+  NOTORIETY_SHARE,
+  NOTORIETY_DECAY_RATE_PER_HOUR,
+  NOTORIETY_HEAT_WEIGHT,
   HEAT_DECAY_RATE_PER_HOUR,
   LIE_LOW_DECAY_MULTIPLIER,
   LIE_LOW_INCOME_MULTIPLIER,
@@ -448,8 +463,6 @@ export {
   RAID_EMPIRE_FACTOR,
   SHIPMENT_LAUNCH_HEAT_FACTOR,
   SHIPMENT_LANDING_HEAT_FACTOR,
-  CONCENTRATION_UNITS_THRESHOLD,
-  CONCENTRATION_HEAT_PER_UNIT_HOUR,
   PATTERN_DECAY_PER_HOUR,
   PATTERN_HEAT_PER_USE,
   PATTERN_ODDS_PER_USE,
@@ -505,6 +518,8 @@ export {
   setStashGuard,
   resolveRaid,
   raidStep,
+  RAID_SCENE_LIMIT,
+  capRaidScenes,
   WIPED_CAPITAL_FLAG,
 } from './storage';
 export type {
@@ -769,6 +784,7 @@ export {
   payBribe,
   walk,
   hire,
+  reassignCustomsPort,
   dismissOfficial,
   hydrateLegacyOfficial,
   computeRaiseAsk,

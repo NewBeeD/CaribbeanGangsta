@@ -15,9 +15,11 @@ import {
   tick,
   unlockArmsBroker,
   WEAPON_TIERS,
+  heatOf,
   type GameState,
   type MarketEvent,
 } from '@/engine';
+import { totalHeat } from './heatTestUtils';
 
 /** A run with the arms broker paid and plenty of cash on hand. */
 function armed(seed = 'arms'): GameState {
@@ -61,7 +63,7 @@ describe('arms broker — the money gate (design/12 Item 1; Prompt 35)', () => {
     expect(r.cost).toBe(ARMS_BROKER_COST);
     expect(r.state.armsBroker).toBe(true);
     expect(r.state.cleanCash).toBe(10_000);
-    expect(r.state.heat).toBeGreaterThan(s.heat);
+    expect(totalHeat(r.state)).toBeGreaterThan(totalHeat(s));
     expect(r.state.flags[ARMS_UNLOCKED_FLAG]).toBe(true);
   });
 
@@ -82,7 +84,7 @@ describe('arms trade — buy / sell / stock', () => {
     expect(r.outcome).toBe('success');
     expect(r.state.armory.pistols).toBe(10);
     expect(getArmsPrice(r.state, 'pistols', country).stock).toBe(before.stock - 10);
-    expect(r.state.heat).toBe(s.heat); // transacting cleanly is COLD now (B1)
+    expect(r.state.countryHeat).toEqual(s.countryHeat); // transacting cleanly is COLD now (B1)
     expect(r.cashDelta).toBe(-before.price * 10);
   });
 
@@ -203,9 +205,11 @@ describe('arms tiers, geography & conflict pricing', () => {
     const calmSale = resolveArmsDeal(stock, { type: 'sellArms', tier: 'automatic', qty: 3, countryId: country });
     const warSale = resolveArmsDeal(spiked, { type: 'sellArms', tier: 'automatic', qty: 3, countryId: country });
     // Transacting cleanly is COLD (B1) — war-zone money included. Only a BUST heats.
-    if (calmSale.outcome === 'success') expect(calmSale.state.heat).toBe(stock.heat);
-    if (warSale.outcome === 'success') expect(warSale.state.heat).toBe(stock.heat);
-    if (calmSale.outcome === 'bust') expect(calmSale.state.heat).toBeGreaterThan(stock.heat);
+    if (calmSale.outcome === 'success') expect(calmSale.state.countryHeat).toEqual(stock.countryHeat);
+    if (warSale.outcome === 'success') expect(warSale.state.countryHeat).toEqual(stock.countryHeat);
+    if (calmSale.outcome === 'bust') {
+      expect(heatOf(calmSale.state, country)).toBeGreaterThan(heatOf(stock, country));
+    }
   });
 });
 

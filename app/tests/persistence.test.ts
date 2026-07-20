@@ -312,7 +312,7 @@ describe('migrateEnvelope — schema version + migration hook', () => {
       state: legacy as unknown as GameState,
     });
     expect(migrated).not.toBeNull();
-    expect(migrated?.lyingLow).toBe(false);
+    expect(migrated?.lyingLowCountries).toEqual([]);
     // Acknowledged tier derived from stored heat → never self-telegraphs on load.
     expect(migrated?.leTierAck).toBe('dea');
   });
@@ -567,6 +567,47 @@ describe('migrateEnvelope — schema version + migration hook', () => {
     expect(m.rngState).toEqual(state.rngState);
     // Deterministic: migrating the same save twice yields the same state.
     expect(migrateEnvelope({ ...envelope, schemaVersion: 27, state: legacy })).toEqual(m);
+  });
+
+  it('migrates a v28 save by capping queued raid scenes to the newest 3 (v29)', () => {
+    // A real pre-v29 pile: a hot run queued a raid scene for every seizure.
+    const raid = (id: string, hours: number) => ({
+      id,
+      kind: 'raid',
+      summary: 'They raided Home Stash and took what was there — 100 units seized.',
+      createdAtHours: hours,
+    });
+    const other = {
+      id: 'return-hook-1',
+      kind: 'return-hook',
+      summary: 'Your lieutenant needs a decision.',
+      createdAtHours: 12,
+    };
+    const legacy = {
+      ...state,
+      pendingChoices: [
+        raid('raid-s1-10', 10),
+        other,
+        raid('raid-s1-20', 20),
+        raid('raid-s2-30', 30),
+        raid('raid-s1-40', 40),
+        raid('raid-s1-50', 50),
+      ],
+    } as unknown as GameState;
+
+    const migrated = migrateEnvelope({ ...envelope, schemaVersion: 28, state: legacy });
+    expect(migrated).not.toBeNull();
+    const m = migrated!;
+
+    // Only the newest three raid scenes survive; every other kind is untouched.
+    const raids = m.pendingChoices.filter((c) => c.kind === 'raid');
+    expect(raids.map((c) => c.id)).toEqual(['raid-s2-30', 'raid-s1-40', 'raid-s1-50']);
+    expect(m.pendingChoices.find((c) => c.id === 'return-hook-1')).toBeDefined();
+    expect(m.pendingChoices).toHaveLength(4);
+    // A pure notification prune: cash, holdings, and the RNG stream survive.
+    expect(m.cleanCash).toBe(state.cleanCash);
+    expect(m.stashes).toEqual(state.stashes);
+    expect(m.rngState).toEqual(state.rngState);
   });
 });
 

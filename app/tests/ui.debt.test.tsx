@@ -12,6 +12,7 @@ import {
   type GameState,
   type PendingChoice,
 } from '@/engine';
+import { withHomeHeat } from './heatTestUtils';
 import { LocalSaveStore, useGameStore, type SaveStore } from '@/store';
 import { DebtScreen } from '@/ui/screens/DebtScreen';
 import {
@@ -51,12 +52,14 @@ function mount(ui: JSX.Element) {
 /** A run on ~day 2 with the street rep to draw a full line (mirrors debt.test.ts). */
 function borrower(seed: string, streetRep = 100): GameState {
   const base = createInitialState(seed);
-  return {
-    ...base,
-    clock: { ...base.clock, hours: 24, day: 2 },
-    heat: 0,
-    reputation: { ...base.reputation, street: streetRep },
-  };
+  return withHomeHeat(
+    {
+      ...base,
+      clock: { ...base.clock, hours: 24, day: 2 },
+      reputation: { ...base.reputation, street: streetRep },
+    },
+    0,
+  );
 }
 
 /** A wiped run: no clean cash, empty stashes, but rep enough to keep the door open. */

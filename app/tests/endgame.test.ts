@@ -33,7 +33,7 @@ const WIPE_THRESHOLD = 100;
 /** A wiped run: no operating capital (all clean + dirty cash gone). */
 function wiped(seed: string, over: Partial<GameState> = {}): GameState {
   const base = createInitialState(seed);
-  return { ...base, cleanCash: 0, stashes: [], heat: 0, ...over };
+  return { ...base, cleanCash: 0, stashes: [], countryHeat: {}, notoriety: 0, ...over };
 }
 
 /** A flipped official acting as a wire — collapses protection in the spiral. */
@@ -147,7 +147,14 @@ describe('evaluateSpiral exposes each rung; terminal only with no exit', () => {
     expect(withExit.terminal).toBe(false); // an exit remains → not terminal
 
     // Strip every exit → NOW it is terminal (hunted with no way out).
-    const noExit = evaluateSpiral({ ...s, fronts: [], crew: [], heat: 0, stashes: [] });
+    const noExit = evaluateSpiral({
+      ...s,
+      fronts: [],
+      crew: [],
+      countryHeat: {},
+      notoriety: 0,
+      stashes: [],
+    });
     expect(noExit.exits.every((e) => !e.available)).toBe(true);
     expect(noExit.terminal).toBe(true);
     expect(noExit.stage).toBe('terminal');
@@ -161,7 +168,6 @@ describe('the spiral never advances offline (design/01 §4a; GDD §6)', () => {
     const terminalish = withDebt(
       wiped('offline', {
         flags: { 'debt-marked': true },
-        heat: 0,
         corruption: {
           officials: [flippedOfficial()],
           payrollPerWeek: 0,

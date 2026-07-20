@@ -43,7 +43,8 @@ import { getVessel, type VesselId } from './config/vessels';
 import { ownedVesselForMode, vesselCargoCap } from './vessels';
 import { getMarketPrice } from './deals';
 import { effectiveCapacity } from './storage';
-import { addHeat } from './heat';
+import { addHeat, effectiveHeat, hottestCountry } from './heat';
+import { HEAT_MAX } from './config/heat';
 import {
   bumpRecentUse,
   maybeOpenInvestigation,
@@ -366,6 +367,25 @@ export function interdictionBreakdown(
       hint: 'A better-protected destination port helps automatically.',
     },
   ];
+  // Per-country heat feeds the odds (heat redesign "B"): a hot launch port and a
+  // hot landing each add a DISCLOSED term — effective heat (local + notoriety),
+  // the same number the Heat screen shows. Stone-cold corridors add no lines.
+  const originHeatN = effectiveHeat(state, fromCountry.id) / HEAT_MAX;
+  if (originHeatN > 0) {
+    terms.push({
+      label: `${fromCountry.name} origin heat`,
+      contribution: originHeatN * T.ORIGIN_HEAT_ODDS_WEIGHT,
+      hint: 'Cool this port off — or launch from a colder one.',
+    });
+  }
+  const destHeatN = effectiveHeat(state, toCountry.id) / HEAT_MAX;
+  if (destHeatN > 0) {
+    terms.push({
+      label: `${toCountry.name} destination heat`,
+      contribution: destHeatN * T.DEST_HEAT_ODDS_WEIGHT,
+      hint: 'Landing where they already watch you is the riskier half.',
+    });
+  }
   if (paid) {
     terms.push({
       label: 'Paid port relief',
@@ -873,7 +893,9 @@ export function ship(state: GameState, intent: ShipIntent): ShipResult {
   // disclosed lands now — big moves on hot corridors run hot even when they
   // succeed. Then the origin port's pattern counter bumps (B5.3), so the NEXT
   // run from here quotes the surcharge this one just previewed.
-  if (quote.launchHeat > 0) next = addHeat(next, quote.launchHeat, 'shipment.launch');
+  if (quote.launchHeat > 0) {
+    next = addHeat(next, quote.launchHeat, 'shipment.launch', from.countryId);
+  }
   next = bumpRecentUse(next, portUseKey(from.countryId));
 
   return { state: next, ok: true, quote, shipment };
@@ -942,7 +964,7 @@ function deliverShipment(state: GameState, shipment: Shipment): GameState {
     shipment.interdictionChance,
     next.config.heat.SHIPMENT_LANDING_HEAT_FACTOR,
   );
-  if (landing > 0) next = addHeat(next, landing, 'shipment.landed');
+  if (landing > 0) next = addHeat(next, landing, 'shipment.landed', to.countryId);
   const skimNote =
     shipment.skimUnits > 0 ? ` The count came up ${shipment.skimUnits} short.` : '';
   return queueScene(
@@ -966,9 +988,8 @@ function seizeShipment(state: GameState, shipment: Shipment): GameState {
   const product = getProduct(shipment.product, state.config.products.PRODUCTS);
   const modeName = getTransport(shipment.mode, state.config.transport.TRANSPORTS)
     .name.toLowerCase();
-  const destName = findCountry(
-    findStash(state, shipment.toStashId)?.countryId ?? '',
-  )?.name;
+  const destCountryId = findStash(state, shipment.toStashId)?.countryId;
+  const destName = findCountry(destCountryId ?? '')?.name;
   const solo = shipment.courierIds.length === 0;
   const spike =
     product.heatPerUnit *
@@ -980,9 +1001,11 @@ function seizeShipment(state: GameState, shipment: Shipment): GameState {
     shipments: state.shipments.filter((s) => s.id !== shipment.id),
   };
   next = freeCouriers(next, shipment);
-  next = addHeat(next, spike, 'shipment.seized');
-  // A MAJOR seizure opens the disclosed investigation window (design/13 B5.5).
-  next = maybeOpenInvestigation(next, spike);
+  // The spike lands where the load was headed — that's where they boarded it.
+  next = addHeat(next, spike, 'shipment.seized', destCountryId);
+  // A MAJOR seizure opens the disclosed investigation window (design/13 B5.5)
+  // in the destination country.
+  next = maybeOpenInvestigation(next, spike, destCountryId ?? hottestCountry(next));
   if (solo) {
     // YOU were driving (design/13 B4) — the launch quote said what this means.
     // The arrest presents as a consequential interrupt: post the disclosed

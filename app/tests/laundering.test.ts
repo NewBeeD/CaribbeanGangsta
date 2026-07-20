@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { withHomeHeat } from './heatTestUtils';
 import {
   createInitialState,
   rngFor,
@@ -89,12 +90,11 @@ describe('offline accrual — piecewise curve (design/01 §3a)', () => {
 describe('settleOffline — the ethical core: adds only, never seizes (GDD §6, §8)', () => {
   /** A rich run: fronts, dirty cash, active debt, some heat — everything to lose. */
   function richRun(seed: string): GameState {
-    const base = withFronts(createInitialState(seed), [cashFront(3)]);
+    const base = withHomeHeat(withFronts(createInitialState(seed), [cashFront(3)]), 80);
     const stash: Stash = { ...(base.stashes[0] as Stash), dirtyCash: 250_000 };
     return {
       ...base,
       stashes: [stash],
-      heat: 80,
       cleanCash: 10_000,
       debt: {
         lenderId: 'papa-cass',
@@ -115,7 +115,8 @@ describe('settleOffline — the ethical core: adds only, never seizes (GDD §6, 
 
       expect(after.cleanCash).toBeGreaterThanOrEqual(base.cleanCash); // adds only
       expect(after.stashes).toEqual(base.stashes); // nothing seized
-      expect(after.heat).toBe(base.heat); // no punishment for absence
+      expect(after.countryHeat).toEqual(base.countryHeat); // no punishment for absence
+      expect(after.notoriety).toBe(base.notoriety);
       expect(after.debt).toEqual(base.debt); // debt never advances offline
       expect(after.runStatus).toBe('active'); // never killed/imprisoned while away
       expect(after.clock).toEqual(base.clock); // world frozen

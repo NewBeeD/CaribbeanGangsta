@@ -43,7 +43,7 @@ import { HEAT_MAX } from './config/heat';
 import { marketEventMultiplier, type MarketState } from './deals';
 import { eventCoversCountry } from './marketEvents';
 import { hasCustomsProtection } from './corruption';
-import { addHeat } from './heat';
+import { addHeat, effectiveHeat } from './heat';
 import { maybeOpenInvestigation } from './heatSources';
 import { splitCharge, type GameState, type Stash } from './state';
 
@@ -315,7 +315,7 @@ export function armsBustProbability(
   const a = state.config.arms;
   const country = getCountry(countryId);
   const tierCfg = getWeaponTier(tier, a.WEAPON_TIERS);
-  const heatN = clamp(state.heat / HEAT_MAX, 0, 1);
+  const heatN = clamp(effectiveHeat(state, countryId) / HEAT_MAX, 0, 1);
   const qtyN = clamp(qty / a.ARMS_BUST_QTY_FULL_RISK, 0, 1);
   const relief = hasCustomsProtection(state) ? a.ARMS_CUSTOMS_SEIZURE_RELIEF : 0;
 
@@ -496,9 +496,10 @@ function resolveSellArms(state: GameState, intent: SellArmsIntent): ArmsDealResu
     // ONLY way stored cash is taken.
     let next = withArmory(rolled, tier, (state.armory[tier] ?? 0) - qty);
     const spike = tierCfg.heatPerUnit * qty * a.ARMS_BUST_HEAT_MULT;
-    next = addHeat(next, spike, 'arms.bust');
-    // A MAJOR arms bust opens the disclosed investigation window (design/13 B5.5).
-    next = maybeOpenInvestigation(next, spike);
+    next = addHeat(next, spike, 'arms.bust', countryId);
+    // A MAJOR arms bust opens the disclosed investigation window (design/13 B5.5)
+    // in the country the table was busted in.
+    next = maybeOpenInvestigation(next, spike, countryId);
     return {
       state: next,
       outcome: 'bust',

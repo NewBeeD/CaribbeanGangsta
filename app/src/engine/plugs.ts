@@ -124,7 +124,8 @@ export function buyPlug(state: GameState, countryId: string): PlugResult {
     cleanCash: state.cleanCash - cost,
     plugs: [...state.plugs, countryId],
   };
-  next = addHeat(next, state.config.plugs.PLUG_MEETING_HEAT, 'plug.meeting');
+  // The meeting happens on the plug's turf — that country takes the noise.
+  next = addHeat(next, state.config.plugs.PLUG_MEETING_HEAT, 'plug.meeting', countryId);
 
   return { state: next, ok: true, cost, sceneKey: 'plug.connected' };
 }

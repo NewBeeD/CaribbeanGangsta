@@ -6,6 +6,7 @@ import {
   convert,
   convertBinding,
   createInitialState,
+  heatOf,
   getMarketPrice,
   getRecipe,
   maxBatches,
@@ -75,7 +76,10 @@ describe('convert — deterministic transformation, never a roll', () => {
     expect(result.state.streetStock.units).toBe(recipe.toQty);
     expect(result.state.streetStock.bookedUnitPrice).toBeCloseTo(localCrack);
     expect(after.dirtyCash).toBe(10_000 - recipe.costPerBatch);
-    expect(result.state.heat).toBeGreaterThan(state.heat);
+    // The cook's heat lands where the stash sits (per-country heat, v30).
+    expect(heatOf(result.state, home(state).countryId)).toBeGreaterThan(
+      heatOf(state, home(state).countryId),
+    );
   });
 
   it('a cook needs a crew — no crew, no corners (design/12 Item 5b)', () => {

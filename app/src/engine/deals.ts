@@ -45,7 +45,7 @@ import { getProduct } from './config/products';
 import { HEAT_MAX } from './config/heat';
 import { DEFAULT_GAME_CONFIG, type MarketsTuning } from './config';
 import { basePriceAt } from './world';
-import { addHeat } from './heat';
+import { addHeat, effectiveHeat } from './heat';
 import { maybeOpenInvestigation } from './heatSources';
 import { effectiveCapacity } from './storage';
 import {
@@ -352,7 +352,7 @@ export function computeBustProbability(
   const d = state.config.deals;
   const cfg = getProduct(product, state.config.products.PRODUCTS);
   const country = getCountry(countryId);
-  const heatN = clamp(state.heat / HEAT_MAX, 0, 1);
+  const heatN = clamp(effectiveHeat(state, countryId) / HEAT_MAX, 0, 1);
   const qtyN = clamp(qty / d.BUST_QTY_FULL_RISK, 0, 1);
 
   const raw =
@@ -575,9 +575,10 @@ function resolveSell(state: GameState, intent: SellIntent): DealResult {
     };
     let next = withStash(rolled, bustedStash);
     const spike = cfg.heatPerUnit * qty * cfg.bustHeatMultiplier;
-    next = addHeat(next, spike, 'deal.bust');
-    // A MAJOR bust opens the disclosed investigation window (design/13 B5.5).
-    next = maybeOpenInvestigation(next, spike);
+    next = addHeat(next, spike, 'deal.bust', countryId);
+    // A MAJOR bust opens the disclosed investigation window (design/13 B5.5)
+    // in the country the table was busted in.
+    next = maybeOpenInvestigation(next, spike, countryId);
     next = bankPeaks(next);
     return {
       state: next,

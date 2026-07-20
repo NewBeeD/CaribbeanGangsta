@@ -46,7 +46,8 @@ function frontRunner(seed: string, streetRep = 100, config?: GameConfig): GameSt
   return {
     ...base,
     clock: { ...base.clock, hours: 24, day: 2 },
-    heat: 0,
+    countryHeat: {},
+    notoriety: 0,
     reputation: { ...base.reputation, street: streetRep },
     stashes: [{ ...home, countryId: 'jamaica' }],
     plugs: ['jamaica'],
@@ -135,7 +136,8 @@ describe('terms are disclosed before confirm and committed verbatim (guarantee #
     // No cash moves, and a clean handover adds ZERO heat (design/13 B1).
     expect(next.cleanCash).toBe(s.cleanCash);
     expect(next.stashes[0]!.dirtyCash).toBe(home.dirtyCash);
-    expect(next.heat).toBe(s.heat);
+    expect(next.countryHeat).toEqual(s.countryHeat);
+    expect(next.notoriety).toBe(s.notoriety);
   });
 
   it('a taken front can never INFLATE net worth — the owed balance is a real liability', () => {

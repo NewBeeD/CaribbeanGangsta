@@ -12,6 +12,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { withHomeHeat } from './heatTestUtils';
 import {
   createInitialState,
   tunedConfig,
@@ -58,8 +59,7 @@ describe('one price per market (design/12 Item 3)', () => {
     const base = createInitialState('wash');
     const home = base.stashes[0]!;
     const state: GameState = {
-      ...base,
-      heat: 0,
+      ...withHomeHeat(base, 0),
       stashes: [{ ...home, dirtyCash: 1_000_000 }, ...base.stashes.slice(1)],
     };
     const price = getMarketPrice(state, 'weed', homeId(state)).price;
@@ -176,7 +176,7 @@ describe('finite stock (design/12 Item 10)', () => {
 
     // Selling returns SELL_RESTOCK_FRACTION of the units to the street.
     const afterBuy = getMarketPrice(bought.state, 'weed', 'miami').stock;
-    const withHeatZero: GameState = { ...bought.state, heat: 0 };
+    const withHeatZero: GameState = { ...bought.state, countryHeat: {}, notoriety: 0 };
     const sold = resolveDeal(withHeatZero, {
       type: 'sell',
       product: 'weed',

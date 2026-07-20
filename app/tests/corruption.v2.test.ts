@@ -11,6 +11,7 @@ import {
   computeRaiseAsk,
   createInitialState,
   declineFavor,
+  effectiveHeat,
   emptyInventory,
   favorOfficialFor,
   favorQuote,
@@ -34,12 +35,13 @@ import {
   type ShipIntent,
   type Stash,
 } from '@/engine';
+import { withHomeHeat } from './heatTestUtils';
 
 const HEAT_MAX = 100;
 
 /** A funded run at zero heat (clean baseline for exact-formula assertions). */
 function fundedCalm(seed: string, cleanCash = 10_000_000): GameState {
-  return { ...createInitialState(seed), cleanCash, heat: 0 };
+  return { ...withHomeHeat(createInitialState(seed), 0), cleanCash };
 }
 
 /** Overwrite the home stash's inventory, immutably. */
@@ -71,7 +73,7 @@ describe('raise sanity — caps, ceiling & cooldown (design/13 F)', () => {
     // Extreme inputs — a billionaire-scale, maximally-hot empire (the round-4 case).
     let state = fundedCalm('raise-extreme', 1_000_000_000);
     state = hire(state, 'detective').state;
-    state = { ...state, heat: 100, reputation: { ...state.reputation, business: 100 } };
+    state = { ...withHomeHeat(state, 100), reputation: { ...state.reputation, business: 100 } };
     const tie = state.corruption.officials[0]!;
     const cap = tie.retainerPerWeek * state.config.corruption.RAISE_MAX_MULTIPLE;
     const ceiling = getOfficial('detective').raiseCeiling;
@@ -84,7 +86,7 @@ describe('raise sanity — caps, ceiling & cooldown (design/13 F)', () => {
   it('the absolute per-archetype ceiling binds when the multiplicative cap would exceed it', () => {
     let state = fundedCalm('raise-ceiling', 1_000_000_000);
     state = hire(state, 'detective').state;
-    state = { ...state, heat: 100, reputation: { ...state.reputation, business: 100 } };
+    state = { ...withHomeHeat(state, 100), reputation: { ...state.reputation, business: 100 } };
     // A retainer already above ceiling / RAISE_MAX_MULTIPLE — the ×1.5 cap would
     // clear the ceiling, so the absolute ceiling is what actually bounds the ask.
     const ceiling = getOfficial('detective').raiseCeiling;
@@ -96,7 +98,7 @@ describe('raise sanity — caps, ceiling & cooldown (design/13 F)', () => {
   it('an official will not ask again inside RAISE_MIN_WEEKS_BETWEEN weeks', () => {
     let state = fundedCalm('raise-cooldown', 100_000_000);
     state = hire(state, 'detective').state;
-    state = { ...state, heat: 80, reputation: { ...state.reputation, business: 90 } };
+    state = { ...withHomeHeat(state, 80), reputation: { ...state.reputation, business: 90 } };
 
     // First ask lands and sets the cooldown clock.
     const first = requestRaise(state, state.corruption.officials[0]!.id);
@@ -143,7 +145,7 @@ describe('ports everywhere, priced by weight (design/13 F)', () => {
     const baseFormula =
       PORT_BRIBE_BASE_FRACTION *
       value *
-      (1 + state.heat / HEAT_MAX) *
+      (1 + effectiveHeat(state, 'miami') / HEAT_MAX) *
       (1 + rivalPressure(state)) *
       portGreed('miami') *
       repDiscount(state) *

@@ -1,10 +1,11 @@
 /**
  * The Heat / Threats screen's view-model (Prompt 19; design/07 §5, design/04 §1,
- * GDD §4.5). PURE read selectors that turn `GameState` into the tension surface:
- * the current LE tier + decaying heat gauge, the **telegraphed** warnings that a
- * crossing looms (or a task force has opened a file), the payroll raid tip-offs
- * that buy lead time, and the levers to cool it (lie low / a beat cop on the
- * payroll — the one-tap "bribe a cop" lever was removed, Ideas2 item 2).
+ * GDD §4.5), reworked for the PER-COUNTRY heat map (heat redesign "B"; v30). PURE
+ * read selectors that turn `GameState` into the tension surface: the hottest
+ * country's tier + gauge as the headline, global notoriety, a per-country row
+ * for every place the empire touches (each with its OWN lie-low lever), the
+ * **telegraphed** warnings that a crossing looms (or a task force has opened a
+ * file), and the payroll raid tip-offs that buy lead time.
  *
  * The design contract (design/07 §5, GDD §5.4): tension is **estimable** and every
  * escalation is **telegraphed BEFORE it lands** — no surprise LE. Heat is a meter,
@@ -15,6 +16,7 @@
  */
 
 import {
+  HEAT_DOTS_TOTAL,
   HEAT_MAX,
   HEAT_TIERS,
   LIE_LOW_INCOME_MULTIPLIER,
@@ -23,12 +25,20 @@ import {
   RAID_TIPOFF_MIN_CHANCE,
   TIER_TELEGRAPH_MARGIN,
   currentTier,
+  effectiveHeat,
   hasRaidTipoff,
-  investigationActive,
+  heatOf,
+  homeCountryId,
+  hottestCountry,
+  hottestHeat,
+  investigationActiveIn,
+  isLyingLow,
   passiveHeatTerms,
+  presenceCountries,
   raidChance,
   recentUseOf,
   portUseKey,
+  tierOf,
   tierDots,
   findCountry,
   type GameState,
@@ -36,21 +46,31 @@ import {
   type Stash,
 } from '@/engine';
 
-/** The heat gauge + current tier — the wireframe's top status (design/07 §5). */
+/** The headline gauge — the HOTTEST country's tier + heat (design/07 §5). */
 export interface HeatStatus {
   readonly tier: LeTier;
   readonly tierName: string;
-  /** Filled dots of `total` — the `HeatDots` gauge that "decays as you lie low". */
+  /** Filled dots of `total` — the `HeatDots` gauge, ∝ the hottest country. */
   readonly filled: number;
   readonly total: number;
-  /** Raw heat on the 0–100 meter (for aria/estimation, not a spendable balance). */
+  /** The hottest country's effective heat on the 0–100 meter. */
   readonly heat: number;
+  /** Where that peak sits (display name). */
+  readonly hottestCountryName: string;
+  /** Global notoriety, 0–100 — the name that precedes you everywhere. */
+  readonly notoriety: number;
+  /** True when ANY country is lying low. */
   readonly lyingLow: boolean;
 }
 
 /** The human name for an LE tier id. */
 function tierName(id: LeTier): string {
   return HEAT_TIERS.find((t) => t.id === id)?.name ?? id;
+}
+
+/** A country's display name, falling back to the raw id (never throws). */
+function countryLabel(countryId: string): string {
+  return findCountry(countryId)?.name ?? countryId;
 }
 
 export function heatStatus(state: GameState): HeatStatus {
@@ -61,16 +81,80 @@ export function heatStatus(state: GameState): HeatStatus {
     tierName: tierName(tier),
     filled: dots.filled,
     total: dots.total,
-    heat: state.heat,
-    lyingLow: state.lyingLow,
+    heat: hottestHeat(state),
+    hottestCountryName: countryLabel(hottestCountry(state)),
+    notoriety: state.notoriety,
+    lyingLow: state.lyingLowCountries.length > 0,
   };
 }
 
+// --- Per-country rows (the map made legible) ----------------------------------
+
+/** One country's heat row: its meter, tier, and its OWN lie-low lever. */
+export interface CountryHeatRow {
+  readonly countryId: string;
+  readonly name: string;
+  /** Effective heat (local + weighted notoriety) — the number the engine reads. */
+  readonly heat: number;
+  /** The local component alone (what cools when you lie low HERE). */
+  readonly localHeat: number;
+  readonly tier: LeTier;
+  readonly tierName: string;
+  readonly filled: number;
+  readonly total: number;
+  readonly lyingLow: boolean;
+  /** True for the home country — lying low here also slows front income. */
+  readonly isHome: boolean;
+  /** Watched-port pattern line, if this origin has been run recently. */
+  readonly patternLine: string | null;
+  /** Open-investigation line with hours left, if a file is open HERE. */
+  readonly investigationLine: string | null;
+}
+
 /**
- * A telegraphed threat warning (design/07 §5). `looming` fires while heat is still
- * IN the lower tier but within `TIER_TELEGRAPH_MARGIN` of the next boundary — the
- * crossing is warned BEFORE it lands. `opened` surfaces a queued `heat-escalation`
- * choice — a task force has opened a file (the crossing's own telegraph).
+ * Every country the empire touches, hottest first (ties by name) — each with the
+ * numbers the engine itself reads (shown = applied) and its own lie-low lever.
+ */
+export function countryHeatRows(state: GameState): readonly CountryHeatRow[] {
+  const cfg = state.config.heat;
+  const home = homeCountryId(state);
+  const rows = presenceCountries(state).map((countryId): CountryHeatRow => {
+    const heat = effectiveHeat(state, countryId);
+    const tier = tierOf(state, countryId);
+    const uses = recentUseOf(state, portUseKey(countryId));
+    const odds = Math.round(uses * cfg.PATTERN_ODDS_PER_USE * 100);
+    const investLeft = investigationActiveIn(state, countryId)
+      ? Math.max(0, Math.ceil((state.investigations[countryId] ?? 0) - state.clock.hours))
+      : 0;
+    return {
+      countryId,
+      name: countryLabel(countryId),
+      heat,
+      localHeat: heatOf(state, countryId),
+      tier,
+      tierName: tierName(tier),
+      filled: Math.min(HEAT_DOTS_TOTAL, Math.round((heat / HEAT_MAX) * HEAT_DOTS_TOTAL)),
+      total: HEAT_DOTS_TOTAL,
+      lyingLow: isLyingLow(state, countryId),
+      isHome: countryId === home,
+      patternLine:
+        uses > 0
+          ? `Watched port — run recently (next launch: +${odds}% odds, +${Math.round(uses * cfg.PATTERN_HEAT_PER_USE)} heat)`
+          : null,
+      investigationLine:
+        investLeft > 0
+          ? `Open investigation — cools slower, raids ×${cfg.INVESTIGATION_RAID_MULTIPLIER} for ${investLeft} more played hours`
+          : null,
+    };
+  });
+  return [...rows].sort((a, b) => b.heat - a.heat || a.name.localeCompare(b.name));
+}
+
+/**
+ * A telegraphed threat warning (design/07 §5). `looming` fires while the hottest
+ * country is still IN the lower tier but within `TIER_TELEGRAPH_MARGIN` of the
+ * next boundary — the crossing is warned BEFORE it lands. `opened` surfaces a
+ * queued `heat-escalation` choice — a task force has opened a file.
  */
 export interface HeatWarning {
   readonly id: string;
@@ -82,13 +166,14 @@ export function heatWarnings(state: GameState): readonly HeatWarning[] {
   const warnings: HeatWarning[] = [];
 
   // Looming: approaching the next tier boundary — warned before the crossing.
+  const peak = hottestHeat(state);
   const idx = HEAT_TIERS.findIndex((t) => t.id === currentTier(state));
   const next = HEAT_TIERS[idx + 1];
-  if (next && state.heat < next.max && next.min - state.heat <= TIER_TELEGRAPH_MARGIN) {
+  if (next && peak < next.max && next.min - peak <= TIER_TELEGRAPH_MARGIN) {
     warnings.push({
       id: `looming-${next.id}`,
       kind: 'looming',
-      text: `⚠ Heat's climbing. Cross into ${next.name} range and it gets personal.`,
+      text: `⚠ ${countryLabel(hottestCountry(state))} is heating up. Cross into ${next.name} range and it gets personal.`,
     });
   }
 
@@ -135,18 +220,9 @@ export function raidTipoff(state: GameState): RaidTipoff | null {
   };
 }
 
-/** The "lie low" lever's state — active flag + the income it trades away. */
-export interface LieLowLever {
-  readonly active: boolean;
-  /** The income cut while lying low, as a percent (e.g. 50 for ×0.5). */
-  readonly incomePenaltyPct: number;
-}
-
-export function lieLowLever(state: GameState): LieLowLever {
-  return {
-    active: state.lyingLow,
-    incomePenaltyPct: Math.round((1 - LIE_LOW_INCOME_MULTIPLIER) * 100),
-  };
+/** The lie-low income cut shown on the levers, as a percent (e.g. 50 for ×0.5). */
+export function lieLowIncomePenaltyPct(): number {
+  return Math.round((1 - LIE_LOW_INCOME_MULTIPLIER) * 100);
 }
 
 /**
@@ -168,34 +244,34 @@ export function beatCopRelief(state: GameState): BeatCopRelief {
   return {
     onPayroll,
     text: onPayroll
-      ? 'Your beat cop is on the payroll — heat cools faster and they tip you off on raids.'
-      : 'Put a cop on the payroll to cool local heat faster.',
+      ? 'Your beat cop is on the payroll — heat cools faster everywhere and they tip you off on raids.'
+      : 'Put a cop on the payroll to cool heat faster.',
   };
 }
 
-/** Peso-style fraction of the gauge that's filled — for the caption "decays…". */
+/** Fraction of the gauge that's filled — the hottest country's share. */
 export function heatFraction(state: GameState): number {
-  return Math.max(0, Math.min(1, state.heat / HEAT_MAX));
+  return Math.max(0, Math.min(1, hottestHeat(state) / HEAT_MAX));
 }
 
-// --- "Why is my heat rising" — the six-source itemization (design/13 B5) -------
+// --- "Why is my heat rising" — the source itemization (design/13 B5) -----------
 
 /** One line of the Heat screen's source list. `perHour` present on the passive
  * (continuously-accruing) sources; status sources carry prose only. */
 export interface HeatSourceRow {
   readonly id: string;
   readonly label: string;
-  /** Heat/hour for passive terms; absent for status rows (patterns, files). */
+  /** Notoriety/hour for passive terms; absent for status rows (patterns, files). */
   readonly perHour?: number;
 }
 
 /**
  * Every heat source ACTIVE right now, itemized (design/13 B5 — shown = applied):
  *
- *  - the engine's own `passiveHeatTerms` verbatim (storage concentration +
- *    empire size — exactly the list the `heat-sources` tick step sums, so the
- *    shown per-hour numbers ARE the applied ones);
- *  - an open investigation window (slower decay + raised raid odds, hours left);
+ *  - the engine's own `passiveHeatTerms` verbatim (the empire-size hum, feeding
+ *    NOTORIETY since v30 — exactly the list the `heat-sources` tick step sums,
+ *    so the shown per-hour numbers ARE the applied ones);
+ *  - every open investigation window, named per country;
  *  - any warm repeated-pattern counter (the port being watched, and what the
  *    next run from it costs on the quote).
  *
@@ -210,29 +286,32 @@ export function heatSourceRows(state: GameState): readonly HeatSourceRow[] {
     perHour: t.perHour,
   }));
 
-  if (investigationActive(state)) {
-    const left = Math.max(0, Math.ceil((state.investigationUntilHours ?? 0) - state.clock.hours));
+  for (const countryId of Object.keys(state.investigations).sort()) {
+    if (!investigationActiveIn(state, countryId)) continue;
+    const left = Math.max(
+      0,
+      Math.ceil((state.investigations[countryId] ?? 0) - state.clock.hours),
+    );
     rows.push({
-      id: 'investigation',
-      label: `Open investigation — heat cools slower and raids run ×${cfg.INVESTIGATION_RAID_MULTIPLIER} for ${left} more played hours`,
+      id: `investigation:${countryId}`,
+      label: `Open investigation in ${countryLabel(countryId)} — heat there cools slower and raids run ×${cfg.INVESTIGATION_RAID_MULTIPLIER} for ${left} more played hours`,
     });
   }
 
   for (const countryId of [...new Set(state.stashes.map((s) => s.countryId))]) {
     const uses = recentUseOf(state, portUseKey(countryId));
     if (uses <= 0) continue;
-    const name = findCountry(countryId)?.name ?? countryId;
     const odds = Math.round(uses * cfg.PATTERN_ODDS_PER_USE * 100);
     rows.push({
       id: `pattern:${countryId}`,
-      label: `Watched port — ${name} has been run recently (next launch: +${odds}% odds, +${Math.round(uses * cfg.PATTERN_HEAT_PER_USE)} heat)`,
+      label: `Watched port — ${countryLabel(countryId)} has been run recently (next launch: +${odds}% odds, +${Math.round(uses * cfg.PATTERN_HEAT_PER_USE)} heat)`,
     });
   }
 
   return rows;
 }
 
-/** Total passive heat/hour — the sum the tick step applies (shown = applied). */
+/** Total passive notoriety/hour — the sum the tick step applies (shown = applied). */
 export function totalPassiveHeatPerHour(state: GameState): number {
   return passiveHeatTerms(state).reduce((sum, t) => sum + t.perHour, 0);
 }

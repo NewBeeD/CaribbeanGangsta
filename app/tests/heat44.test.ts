@@ -28,7 +28,10 @@ import {
   endRun,
   enforcementStep,
   getChaosEvent,
+  heatOf,
   heatSourcesStep,
+  homeCountryId,
+  hottestCountry,
   investigationActive,
   launchHeat,
   maybeOpenInvestigation,
@@ -110,7 +113,8 @@ describe('B1 — no transaction heat: clean buys and sells add zero heat', () =>
     const state = seedHome(createInitialState('b1-buy'), { cash: 500_000 });
     const r = resolveDeal(state, { type: 'buy', product: 'weed', qty: 5 });
     expect(r.outcome).toBe('success');
-    expect(r.state.heat).toBe(state.heat);
+    expect(r.state.countryHeat).toEqual(state.countryHeat);
+    expect(r.state.notoriety).toBe(state.notoriety);
   });
 
   it('a clean drug sale leaves the meter exactly where it was', () => {
@@ -125,7 +129,8 @@ describe('B1 — no transaction heat: clean buys and sells add zero heat', () =>
       const r = resolveDeal(trial, { type: 'sell', product: 'weed', qty: 5 });
       rngState = r.state.rngState;
       if (r.outcome === 'success') {
-        expect(r.state.heat).toBe(state.heat);
+        expect(r.state.countryHeat).toEqual(state.countryHeat);
+        expect(r.state.notoriety).toBe(state.notoriety);
         return;
       }
     }
@@ -156,31 +161,26 @@ describe('B5.1 — shipment heat scales with cargo class × qty × corridor risk
     expect(quote.launchHeat).toBeGreaterThan(0);
     const launched = ship(state, intent);
     expect(launched.ok).toBe(true);
-    expect(launched.state.heat).toBeCloseTo(state.heat + quote.launchHeat, 6);
+    // The launch heat lands on the ORIGIN country (per-country heat, v30).
+    const origin = home(state).countryId;
+    expect(heatOf(launched.state, origin)).toBeCloseTo(
+      heatOf(state, origin) + quote.launchHeat,
+      6,
+    );
   });
 });
 
-// --- B5.2 + B5.6 · storage concentration & empire size (the passive terms) ------
+// --- B5.2 (retired) + B5.6 · storage is cold; empires draw eyes ------------------
 
-describe('B5.2/B5.6 — passive terms: fat stashes hum, empires draw eyes', () => {
-  it('a stash over the threshold accrues; a spread empire does not', () => {
+describe('B5.2/B5.6 — passive terms: storage is cold, empires draw eyes', () => {
+  it('a fat stash never hums — holding product adds zero passive heat', () => {
     const base = createInitialState('b5-conc');
-    const threshold = base.config.heat.CONCENTRATION_UNITS_THRESHOLD;
-
-    const fat = seedHome(base, { inventory: { cocaine: threshold + 100 } });
-    const fatTerm = passiveHeatTerms(fat).find((t) => t.id.startsWith('concentration:'));
-    expect(fatTerm).toBeDefined();
-    expect(fatTerm!.perHour).toBeCloseTo(
-      100 * base.config.heat.CONCENTRATION_HEAT_PER_UNIT_HOUR,
-      6,
-    );
-
-    // The same units spread thin: no stash over the line, no concentration hum.
-    let spread = seedHome(base, { inventory: { cocaine: threshold - 1 } });
-    spread = withStashIn(spread, 'miami', { inventory: { cocaine: 101 } });
+    const fat = seedHome(base, { inventory: { cocaine: 10_000 } });
     expect(
-      passiveHeatTerms(spread).some((t) => t.id.startsWith('concentration:')),
+      passiveHeatTerms(fat).some((t) => t.id.startsWith('concentration:')),
     ).toBe(false);
+    // The meter reads the footprint, not the shelves: same terms as empty-handed.
+    expect(passiveHeatPerHour(fat)).toBe(passiveHeatPerHour(base));
   });
 
   it('empire growth raises the passive term', () => {
@@ -198,10 +198,15 @@ describe('B5.2/B5.6 — passive terms: fat stashes hum, empires draw eyes', () =
 
   it('the tick step applies exactly the itemized sum (shown = applied)', () => {
     const base = createInitialState('b5-sum');
-    const threshold = base.config.heat.CONCENTRATION_UNITS_THRESHOLD;
-    const state = seedHome(base, { inventory: { cocaine: threshold + 60 } });
+    const state: GameState = {
+      ...seedHome(base, { inventory: { cocaine: 500 } }),
+      crew: [spawnCrew('deon'), spawnCrew('marco'), spawnCrew('yolanda')],
+    };
+    expect(passiveHeatPerHour(state)).toBeGreaterThan(0);
     const stepped = heatSourcesStep(state, 1);
-    expect(stepped.heat).toBeCloseTo(state.heat + passiveHeatPerHour(state), 6);
+    // The empire hum feeds NOTORIETY since v30 (footprint = your name).
+    expect(stepped.notoriety).toBeCloseTo(state.notoriety + passiveHeatPerHour(state), 6);
+    expect(stepped.countryHeat).toEqual(state.countryHeat);
   });
 });
 
@@ -272,7 +277,8 @@ describe('B5.4 — flashy one-time bumps: survived raid, rival clash, conspicuou
       cash: 0,
       inventory: { cocaine: 100 },
     });
-    const state: GameState = { ...base, heat: 60 };
+    const homeC = homeCountryId(base);
+    const state: GameState = { ...base, countryHeat: { [homeC]: 60 } };
     let rngState = state.rngState;
     for (let i = 0; i < 2_000; i++) {
       const trial: GameState = { ...state, rngState };
@@ -281,8 +287,8 @@ describe('B5.4 — flashy one-time bumps: survived raid, rival clash, conspicuou
       const scene = resolved.pendingChoices.at(-1);
       if (scene?.kind !== 'raid') continue; // no raid this trial
       if (scene.summary.includes('came up empty')) {
-        expect(resolved.heat).toBeCloseTo(
-          trial.heat + state.config.heat.RAID_SURVIVED_HEAT,
+        expect(heatOf(resolved, homeC)).toBeCloseTo(
+          heatOf(trial, homeC) + state.config.heat.RAID_SURVIVED_HEAT,
           6,
         );
         return;
@@ -294,23 +300,27 @@ describe('B5.4 — flashy one-time bumps: survived raid, rival clash, conspicuou
   it('a rival clash bumps heat once alongside the tension', () => {
     const state = createInitialState('b5-rival');
     const clashed = applyChaos(state, getChaosEvent('rival-move'));
-    expect(clashed.heat).toBeCloseTo(
-      state.heat + state.config.heat.RIVAL_CLASH_HEAT,
+    // The clash carries no country — it lands on the hottest (fallback rule).
+    const target = hottestCountry(state);
+    expect(heatOf(clashed, target)).toBeCloseTo(
+      heatOf(state, target) + state.config.heat.RIVAL_CLASH_HEAT,
       6,
     );
   });
 
   it('a conspicuous purchase (real-estate class) bumps once; a quiet front does not', () => {
     const state: GameState = { ...createInitialState('b5-buyf'), cleanCash: 10_000_000 };
+    const homeC = homeCountryId(state);
     const loud = buyFront(state, 'real-estate');
     expect(loud.front).toBeTruthy();
-    expect(loud.state.heat).toBeCloseTo(
-      state.heat + state.config.heat.CONSPICUOUS_PURCHASE_HEAT,
+    // Fronts carry no country — the flashy purchase lands on HOME.
+    expect(heatOf(loud.state, homeC)).toBeCloseTo(
+      heatOf(state, homeC) + state.config.heat.CONSPICUOUS_PURCHASE_HEAT,
       6,
     );
     const quiet = buyFront(state, 'cash-front');
     expect(quiet.front).toBeTruthy();
-    expect(quiet.state.heat).toBe(state.heat);
+    expect(quiet.state.countryHeat).toEqual(state.countryHeat);
   });
 });
 
@@ -320,13 +330,14 @@ describe('B5.5 — a MAJOR bust opens a disclosed investigation window', () => {
   it('opens at the threshold, is disclosed, and expires on schedule', () => {
     const state = createInitialState('b5-invest');
     const cfg = state.config.heat;
+    const homeC = homeCountryId(state);
 
-    const minor = maybeOpenInvestigation(state, cfg.INVESTIGATION_SPIKE_THRESHOLD - 1);
+    const minor = maybeOpenInvestigation(state, cfg.INVESTIGATION_SPIKE_THRESHOLD - 1, homeC);
     expect(minor).toBe(state); // small busts never open a file
 
-    const opened = maybeOpenInvestigation(state, cfg.INVESTIGATION_SPIKE_THRESHOLD);
+    const opened = maybeOpenInvestigation(state, cfg.INVESTIGATION_SPIKE_THRESHOLD, homeC);
     expect(investigationActive(opened)).toBe(true);
-    expect(opened.investigationUntilHours).toBe(state.clock.hours + cfg.INVESTIGATION_HOURS);
+    expect(opened.investigations[homeC]).toBe(state.clock.hours + cfg.INVESTIGATION_HOURS);
     expect(opened.pendingChoices.at(-1)?.kind).toBe('investigation');
 
     // The window burns ACTIVE hours and closes on schedule.
@@ -337,15 +348,25 @@ describe('B5.5 — a MAJOR bust opens a disclosed investigation window', () => {
     expect(investigationActive(later)).toBe(false);
   });
 
+  it('the window is PER-COUNTRY — a file in one place leaves another cold', () => {
+    const state = createInitialState('b5-invest-local');
+    const cfg = state.config.heat;
+    const opened = maybeOpenInvestigation(state, cfg.INVESTIGATION_SPIKE_THRESHOLD, 'mx');
+    expect(opened.investigations['mx']).toBeDefined();
+    expect(opened.investigations[homeCountryId(state)]).toBeUndefined();
+  });
+
   it('slows heat decay and raises raid chance while open — then both recover', () => {
-    const base: GameState = { ...createInitialState('b5-invest2'), heat: 50 };
+    const seedBase = createInitialState('b5-invest2');
+    const homeC = homeCountryId(seedBase);
+    const base: GameState = { ...seedBase, countryHeat: { [homeC]: 50 } };
     const open: GameState = {
       ...base,
-      investigationUntilHours: base.clock.hours + 72,
+      investigations: { [homeC]: base.clock.hours + 72 },
     };
 
     // Slower decay: after the same hour, the investigated run stays hotter.
-    expect(decayHeat(open, 5).heat).toBeGreaterThan(decayHeat(base, 5).heat);
+    expect(heatOf(decayHeat(open, 5), homeC)).toBeGreaterThan(heatOf(decayHeat(base, 5), homeC));
 
     // Raised raid odds, by exactly the disclosed multiplier (small-p regime).
     const calm = raidChance(base, 1);
@@ -555,8 +576,10 @@ describe('B4 — a self-run interdiction is an arrest: post bond or serve the se
     expect(posted.ok).toBe(true);
     expect(posted.paid).toBe(bond);
     expect(posted.state.cleanCash).toBe(state.cleanCash - bond);
-    expect(posted.state.heat).toBeCloseTo(
-      Math.min(100, state.heat + state.config.transport.ARREST_BOND_HEAT),
+    // The bond's heat is context-free — it lands on the hottest country.
+    const target = hottestCountry(state);
+    expect(heatOf(posted.state, target)).toBeCloseTo(
+      Math.min(100, heatOf(state, target) + state.config.transport.ARREST_BOND_HEAT),
       6,
     );
     expect(posted.state.pendingChoices.some((c) => c.kind === ARREST_CHOICE_KIND)).toBe(false);
@@ -680,7 +703,6 @@ describe('v14 → v15 migration — drops the transaction-heat knobs, seizes not
         },
         heat: strip(current.config.heat, [
           'SHIPMENT_LAUNCH_HEAT_FACTOR',
-          'CONCENTRATION_UNITS_THRESHOLD',
           'PATTERN_ODDS_PER_USE',
           'INVESTIGATION_HOURS',
           'EMPIRE_HEAT_PER_SIZE_HOUR',
@@ -735,17 +757,17 @@ describe('v14 → v15 migration — drops the transaction-heat knobs, seizes not
 describe('heat pressure: a sprawling operation runs measurably hotter than a mid-size one', () => {
   it('the passive per-hour term separates the two bands', () => {
     const base = createInitialState('band');
-    const threshold = base.config.heat.CONCENTRATION_UNITS_THRESHOLD;
 
-    // Mid-size: one modest stash under the line, a couple of hands.
+    // Mid-size: one modest stash, a couple of hands — inside the ambient allowance.
     const mid: GameState = {
-      ...seedHome(base, { inventory: { weed: Math.floor(threshold / 2) } }),
+      ...seedHome(base, { inventory: { weed: 75 } }),
       crew: [spawnCrew('deon')],
     };
 
-    // Sprawling: a fat stash, a wide roster, fronts everywhere.
-    let sprawl = seedHome(base, { inventory: { cocaine: threshold + 200 } });
-    sprawl = withStashIn(sprawl, 'miami', { inventory: { cocaine: threshold + 50 } });
+    // Sprawling: footholds, a wide roster, fronts everywhere. (The product on the
+    // shelves is cold — the FOOTPRINT is what draws eyes.)
+    let sprawl = seedHome(base, { inventory: { cocaine: 350 } });
+    sprawl = withStashIn(sprawl, 'miami', { inventory: { cocaine: 200 } });
     sprawl = {
       ...sprawl,
       crew: [spawnCrew('deon'), spawnCrew('marco'), spawnCrew('yolanda'), spawnCrew('tpopz')],

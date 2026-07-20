@@ -129,7 +129,7 @@ describe('beats — plateaus space out escalation (design/05 §3)', () => {
       stashes: [...base.stashes, { ...base.stashes[0]!, id: 'stash-2' }],
       fronts: [{ id: 'front-cash-front', type: 'cash-front', level: 1 }],
       cleanCash: 20_000_000,
-      heat: 80, // CIA tier
+      countryHeat: { [base.world.startingCountry.id]: 80 }, // CIA tier
       highScore: { ...base.highScore, peakNetWorth: 20_000_000 },
       flags: { [DEAL_WIN_FLAG]: true },
     };

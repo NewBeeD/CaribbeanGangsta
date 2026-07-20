@@ -49,7 +49,7 @@ import {
   type WorldWithLegacyBoards,
 } from '@/engine/world';
 import { tierForHeat, type LeTier } from '@/engine/heat';
-import { foldStashesOnePerSpot } from '@/engine/storage';
+import { capRaidScenes, foldStashesOnePerSpot } from '@/engine/storage';
 import { STARTING_STASH_TYPE } from '@/engine/config/stashes';
 import { hydrateLegacyCrew } from '@/engine/crew';
 import { hydrateLegacyOfficial } from '@/engine/corruption';
@@ -113,7 +113,10 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
   // off; the acknowledged tier is derived from stored heat so a migrated run
   // never self-telegraphs an escalation it was already sitting inside.
   2: (env) => {
+    // Pre-v30 saves carry the old single global `heat` meter (the 29 → 30 step
+    // below folds it into the per-country map at the end of the chain).
     const legacy = env.state as GameState & {
+      heat?: number;
       lyingLow?: boolean;
       leTierAck?: LeTier;
     };
@@ -123,7 +126,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
       state: {
         ...legacy,
         lyingLow: legacy.lyingLow ?? false,
-        leTierAck: legacy.leTierAck ?? tierForHeat(legacy.heat),
+        leTierAck: legacy.leTierAck ?? tierForHeat(legacy.heat ?? 0),
       },
     };
   },
@@ -668,6 +671,66 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
         markets,
         inventory: fill(legacy.inventory),
         stashes: legacy.stashes.map((s) => ({ ...s, inventory: fill(s.inventory) })),
+      },
+    };
+  },
+  // 28 → 29: raid-scene cap (user request — a hot run's feed was a wall of
+  // near-identical "they raided…" lines). `raidStep` now keeps at most
+  // `RAID_SCENE_LIMIT` raid scenes queued; apply the same cap to the pile older
+  // saves already carry, keeping only the newest. A pure notification prune (raid
+  // scenes are never consequential — dropping one is exactly a dismissal): nothing
+  // the player holds changes — no cash, holdings, config, or RNG movement.
+  28: (env) => {
+    const legacy = env.state as GameState;
+    const pendingChoices = capRaidScenes(legacy.pendingChoices);
+    if (pendingChoices === legacy.pendingChoices) return { ...env, schemaVersion: 29 };
+    return { ...env, schemaVersion: 29, state: { ...legacy, pendingChoices } };
+  },
+  // 29 → 30: the PER-COUNTRY heat map (heat redesign "B", user-chosen). The single
+  // global `heat` meter becomes `countryHeat` + slow global `notoriety`; `lyingLow`
+  // becomes per-country `lyingLowCountries`; `investigationUntilHours` becomes the
+  // per-country `investigations` map. Behavior-preserving, never punitive: the old
+  // meter's value is COPIED to every presence country (each corridor reads the same
+  // heat it did before), notoriety starts at 0, and a global lie-low/investigation
+  // maps onto every presence country. The saved heat/transport config groups gain
+  // the new notoriety + odds-weight knobs from the default (saved tuning wins).
+  // Nothing the player holds changes — no cash, holdings, or RNG movement.
+  29: (env) => {
+    const legacy = env.state as GameState & {
+      heat?: number;
+      lyingLow?: boolean;
+      investigationUntilHours?: number;
+    };
+    const {
+      heat: oldHeat = 0,
+      lyingLow = false,
+      investigationUntilHours,
+      ...rest
+    } = legacy;
+    // Presence = stash countries (every run holds at least the home stash); the
+    // starting country anchors a save that somehow lost them all.
+    const presence = [...new Set(legacy.stashes.map((s) => s.countryId))].sort();
+    if (presence.length === 0) presence.push(legacy.world.startingCountry.id);
+    const countryHeat: Record<string, number> = {};
+    if (oldHeat > 0) for (const c of presence) countryHeat[c] = oldHeat;
+    const investigations: Record<string, number> = {};
+    if (investigationUntilHours !== undefined) {
+      for (const c of presence) investigations[c] = investigationUntilHours;
+    }
+    return {
+      ...env,
+      schemaVersion: 30,
+      state: {
+        ...rest,
+        config: {
+          ...legacy.config,
+          heat: { ...DEFAULT_GAME_CONFIG.heat, ...legacy.config.heat },
+          transport: { ...DEFAULT_GAME_CONFIG.transport, ...legacy.config.transport },
+        },
+        countryHeat,
+        notoriety: 0,
+        lyingLowCountries: lyingLow ? presence : [],
+        investigations,
       },
     };
   },

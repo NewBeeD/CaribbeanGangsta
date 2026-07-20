@@ -309,7 +309,9 @@ const SPIRAL_ORDER: readonly SpiralStage[] = [
  */
 export function auditOfflineFreeze(before: GameState, after: GameState): OfflineFreezeAudit {
   const owedDelta = debtOwed(after.debt) - debtOwed(before.debt);
-  const heatDelta = after.heat - before.heat;
+  const totalHeat = (s: GameState) =>
+    Object.values(s.countryHeat).reduce((sum, h) => sum + h, 0) + s.notoriety;
+  const heatDelta = totalHeat(after) - totalHeat(before);
   const dirtyCashDelta = totalDirtyCash(after) - totalDirtyCash(before);
   const unitsDelta = totalUnits(after) - totalUnits(before);
   const cleanCashDelta = after.cleanCash - before.cleanCash;

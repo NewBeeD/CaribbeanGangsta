@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  heatOf,
   COUNTRIES,
   SCHEMA_VERSION,
   addStash,
@@ -60,11 +61,12 @@ function warReady(seed = 'turf'): {
 describe('openTurfWar', () => {
   it('opens a war over a held country, taking ignition heat and a telegraph', () => {
     const { state, rivalId, countryId } = warReady();
-    const before = state.heat;
+    const before = heatOf(state, countryId);
     const r = openTurfWar(state, countryId, rivalId, 'rival');
     expect(r.war).toBeDefined();
     expect(warForCountry(r.state, countryId)?.rivalId).toBe(rivalId);
-    expect(r.state.heat).toBeGreaterThan(before);
+    // The ignition heat lands on the contested country (per-country heat, v30).
+    expect(heatOf(r.state, countryId)).toBeGreaterThan(before);
     expect(r.state.pendingChoices.length).toBeGreaterThan(state.pendingChoices.length);
   });
 
@@ -159,14 +161,14 @@ describe('resolveBattle', () => {
     const s0 = { ...state, reputation: { ...state.reputation, street: 50 } };
     const s = openTurfWar(s0, countryId, rivalId, 'rival').state;
     const warId = s.turfWars[0]!.id;
-    const heatBefore = s.heat;
+    const heatBefore = heatOf(s, countryId);
     const r = resolveBattle(s, warId, commit, fixedRng(1)); // draw 1 ≥ winChance → loss
     const war = warForCountry(r.state, countryId)!;
     expect(r.won).toBe(false);
     expect(war.pressure).toBeGreaterThan(0);
     expect(war.lossCount).toBe(1);
     expect(war.tributeActive).toBe(true);
-    expect(r.state.heat).toBeGreaterThan(heatBefore);
+    expect(heatOf(r.state, countryId)).toBeGreaterThan(heatBefore);
     expect(r.state.reputation.street).toBeLessThan(50);
   });
 
@@ -231,7 +233,7 @@ describe('declareWar', () => {
     const r = declareWar(state, countryId, rivalId);
     expect(r.war?.initiatedBy).toBe('player');
     expect(r.state.cleanCash).toBe(state.cleanCash - cost);
-    expect(r.state.heat).toBeGreaterThan(state.heat);
+    expect(heatOf(r.state, countryId)).toBeGreaterThan(heatOf(state, countryId));
   });
 
   it('rejects without mutating when the player cannot afford it', () => {

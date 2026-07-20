@@ -328,8 +328,9 @@ export function addStash(
   };
 
   if (opening) {
-    // Expansion draws attention (one-time heat) and telegraphs the exposure.
-    next = addHeat(next, state.config.territory.TERRITORY_TAKEOVER_HEAT, 'territory-open');
+    // Expansion draws attention (one-time heat IN the opened country) and
+    // telegraphs the exposure.
+    next = addHeat(next, state.config.territory.TERRITORY_TAKEOVER_HEAT, 'territory-open', target);
     const exposed: PendingChoice = {
       id: `territory-exposed-${stash.id}-${state.clock.hours}`,
       kind: 'territory-exposed',
@@ -688,6 +689,24 @@ export function resolveRaid(state: GameState, raid: RaidEvent, rng: Rng): RaidRe
 }
 
 /**
+ * At most this many raid scenes stay queued (user request — a hot run's feed was
+ * a wall of near-identical "they raided…" lines). Raid scenes are plain
+ * notifications (never consequential — state.ts `isConsequentialChoice`), so
+ * dropping the oldest beyond this cap is exactly a dismissal, nothing more.
+ */
+export const RAID_SCENE_LIMIT = 3;
+
+/** Keep only the newest `RAID_SCENE_LIMIT` raid scenes; every other kind is untouched. */
+export function capRaidScenes(
+  pendingChoices: readonly PendingChoice[],
+): readonly PendingChoice[] {
+  const raids = pendingChoices.filter((c) => c.kind === 'raid');
+  if (raids.length <= RAID_SCENE_LIMIT) return pendingChoices;
+  const drop = new Set(raids.slice(0, raids.length - RAID_SCENE_LIMIT));
+  return pendingChoices.filter((c) => !drop.has(c));
+}
+
+/**
  * Raid tick step (registered active-only in clock.ts): roll whether/where a raid
  * fires over `dtHours` (heat.ts `rollRaid`), and if one does, resolve the seizure
  * (`resolveRaid`) and queue the loss as a scene `PendingChoice` (design/09 A.4 —
@@ -705,7 +724,12 @@ export function raidStep(state: GameState, dtHours: number): GameState {
     // came, they missed, and now they're sore — the scene below discloses it.
     result = {
       ...result,
-      state: addHeat(result.state, state.config.heat.RAID_SURVIVED_HEAT, 'raid.survived'),
+      state: addHeat(
+        result.state,
+        state.config.heat.RAID_SURVIVED_HEAT,
+        'raid.survived',
+        raid.countryId,
+      ),
     };
   }
   const stash = findStash(state, raid.targetStashId);
@@ -731,5 +755,8 @@ export function raidStep(state: GameState, dtHours: number): GameState {
     summary,
     createdAtHours: state.clock.hours,
   };
-  return { ...result.state, pendingChoices: [...result.state.pendingChoices, scene] };
+  return {
+    ...result.state,
+    pendingChoices: capRaidScenes([...result.state.pendingChoices, scene]),
+  };
 }

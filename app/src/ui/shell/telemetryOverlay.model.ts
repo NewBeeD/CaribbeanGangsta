@@ -5,7 +5,13 @@
  * is a window, never a hand on the wheel.
  */
 
-import { cleanCashRate, evaluateSpiral, type GameState, type SpiralStage } from '@/engine';
+import {
+  cleanCashRate,
+  evaluateSpiral,
+  hottestHeat,
+  type GameState,
+  type SpiralStage,
+} from '@/engine';
 import {
   fairnessReport,
   type AnyTelemetryEvent,
@@ -169,7 +175,7 @@ export function telemetryOverlayModel(
     // the law is verified in aggregate (design/01 §0.3).
     fairness: fairnessReport(events),
     idleRatePerHour: state ? cleanCashRate(state) : 0,
-    heat: state ? state.heat : 0,
+    heat: state ? hottestHeat(state) : 0,
     spiralStage: state ? evaluateSpiral(state).stage : 'stable',
     log: [...events]
       .slice(-30)

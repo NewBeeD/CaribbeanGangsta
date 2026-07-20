@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { withHomeHeat } from './heatTestUtils';
 import {
   ARREST_CHOICE_KIND,
   COURIER_CUT_PCT,
@@ -9,6 +10,7 @@ import {
   TRANSPORTS,
   applyIntent,
   createInitialState,
+  heatOf,
   emptyInventory,
   getMarketPrice,
   getProduct,
@@ -340,7 +342,7 @@ describe('travelStep — the fairness law on the water (GDD §8)', () => {
   it('a seizure takes only that cargo, and a consigned bust heats you far less than a solo one', () => {
     const seizureHeatDelta = (courierIds: readonly string[]): number => {
       let { state, intent } = fixture('travel-seize');
-      state = { ...state, heat: 10, crew: [spawnCrew('deon')] };
+      state = { ...withHomeHeat(state, 10), crew: [spawnCrew('deon')] };
       intent = { ...intent, qty: 5, courierIds };
       const launched = ship(state, intent);
       expect(launched.ok).toBe(true);
@@ -360,7 +362,8 @@ describe('travelStep — the fairness law on the water (GDD §8)', () => {
           expect(home(resolved).inventory.cocaine).toBe(35);
           expect(home(resolved).dirtyCash).toBe(home(launched.state).dirtyCash);
           expect(resolved.shipments).toHaveLength(0);
-          return resolved.heat - trial.heat;
+          // The spike lands on the DESTINATION country (per-country heat, v30).
+          return heatOf(resolved, 'miami') - heatOf(trial, 'miami');
         }
         rngState = resolved.rngState;
       }
@@ -433,7 +436,8 @@ describe('offline — in-flight cargo is frozen, never resolved away (GDD §6)',
     const away = settleOffline(launched.state, 1_000);
 
     expect(away.state.shipments).toEqual(launched.state.shipments);
-    expect(away.state.heat).toBe(launched.state.heat);
+    expect(away.state.countryHeat).toEqual(launched.state.countryHeat);
+    expect(away.state.notoriety).toBe(launched.state.notoriety);
     const dest = away.state.stashes.find((s) => s.id === 'stash-miami')!;
     expect(dest.inventory.cocaine).toBe(0); // never arrived while away
     expect(

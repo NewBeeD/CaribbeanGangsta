@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { homeHeat } from './heatTestUtils';
 import {
   STREET_SALE_PER_CREW_PER_DAY,
   bookStreetStock,
@@ -26,7 +27,7 @@ describe('street teams — the crack corner drip (design/12 Item 5d; Prompt 34)'
     const next = streetStep(state, 24, 'active'); // one in-game day
     expect(next.streetStock.units).toBe(100 - rate);
     expect(homeCash(next)).toBe(cashBefore + rate * 1000);
-    expect(next.heat).toBeGreaterThan(state.heat); // corners are loud
+    expect(homeHeat(next)).toBeGreaterThan(homeHeat(state)); // corners are loud (home turf)
   });
 
   it('sells through to empty and clears the booked price', () => {

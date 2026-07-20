@@ -23,6 +23,8 @@ export type LeTier = 'local' | 'dea' | 'cia';
 /** The heat meter runs on a fixed 0–100 scale. */
 export const HEAT_MIN = 0;
 export const HEAT_MAX = 100;
+/** Below this, a decaying meter is treated as stone cold (its map entry drops). */
+export const HEAT_EPSILON = 0.01;
 
 export interface HeatTierConfig {
   readonly id: LeTier;
@@ -48,6 +50,24 @@ export const HEAT_TIERS: readonly HeatTierConfig[] = [
 
 /** How the Heat wireframe draws the meter: N dots, filled ∝ heat (design/07 §5). */
 export const HEAT_DOTS_TOTAL = 10;
+
+// --- Notoriety (heat redesign "B": the per-country map's global carrier) -------
+//
+// Heat is PER-COUNTRY now — each country's meter is fed by what you do THERE and
+// cools on its own. Notoriety is the global scalar that carries your name across
+// borders: every heat gain anywhere feeds a slice of itself in, and every
+// country's EFFECTIVE heat (the number tiers/raids/odds read) is
+// `local + NOTORIETY_HEAT_WEIGHT × notoriety`.
+
+/** Fraction of every local heat gain that also feeds global notoriety. */
+export const NOTORIETY_SHARE = 0.15;
+/** Notoriety's own decay rate per ACTIVE hour — far slower than local heat
+ * (~0.5%/hr vs ~5%/hr): a long quiet stretch can mostly clear your name, but it
+ * takes real played time. */
+export const NOTORIETY_DECAY_RATE_PER_HOUR = 0.005;
+/** How hard notoriety weighs on a country's EFFECTIVE heat: at weight 0.5, a
+ * notoriety of 40 makes even a stone-cold port read 20 on the meter. */
+export const NOTORIETY_HEAT_WEIGHT = 0.5;
 
 // --- Decay (design/01 §4: "~5%/hour, faster lying low, slower at higher size") --
 
@@ -123,11 +143,11 @@ export const RAID_EMPIRE_FACTOR = 0.1;
 export const SHIPMENT_LAUNCH_HEAT_FACTOR = 0.1;
 export const SHIPMENT_LANDING_HEAT_FACTOR = 0.1;
 
-// (2) Storage concentration — an ACTIVE-only passive term per stash holding
-// units above the threshold: `(units − threshold) × per-unit rate` heat/hour.
-// Fat stashes hum before they're raided; spreading out quiets them.
-export const CONCENTRATION_UNITS_THRESHOLD = 150;
-export const CONCENTRATION_HEAT_PER_UNIT_HOUR = 0.01;
+// (2) Storage concentration — RETIRED. Holding product is COLD: sitting on
+// inventory adds zero heat (only moving it does — see the shipment factors
+// above). Concentration still matters, but as raid EXPOSURE (one raid takes
+// the lot), never as a passive heat hum. The old knobs are gone; saved configs
+// that still carry them are simply ignored by the engine.
 
 // (3) Repeated patterns — per-origin-port `recentUse` counters, decayed over
 // ACTIVE hours. Re-running the same port inside the window adds a DISCLOSED

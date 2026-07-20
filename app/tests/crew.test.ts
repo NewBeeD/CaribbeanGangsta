@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { homeHeat, withHomeHeat } from './heatTestUtils';
 import { IDBFactory } from 'fake-indexeddb';
 import {
   createInitialState,
@@ -255,17 +256,21 @@ describe('betrayal — a telegraphed story beat, not a dice roll (design/02 §4)
 describe('wires → heat (design/02 §4; Prompt 05/09)', () => {
   it('a flipped crew member feeds passive heat while online', () => {
     const flipped = spawnCrew('marco', { loyalty: 0, isWire: true });
-    const state: GameState = { ...createInitialState('wire'), crew: [flipped], heat: 10 };
+    const state: GameState = { ...withHomeHeat(createInitialState('wire'), 10), crew: [flipped] };
     expect(wireHeatPerHour(state)).toBe(WIRE_HEAT_PER_HOUR);
     const after = applyWireHeat(state, 10);
-    expect(after.heat).toBeCloseTo(10 + WIRE_HEAT_PER_HOUR * 10, 6);
+    // Wire heat is context-free — it lands on the hottest country (home here).
+    expect(homeHeat(after)).toBeCloseTo(10 + WIRE_HEAT_PER_HOUR * 10, 6);
   });
 
   it('a wire never raises heat while the player is away (offline is safe, GDD §6)', () => {
     const flipped = spawnCrew('marco', { loyalty: 0, isWire: true });
-    const state: GameState = { ...createInitialState('wire-off'), crew: [flipped], heat: 30 };
+    const state: GameState = {
+      ...withHomeHeat(createInitialState('wire-off'), 30),
+      crew: [flipped],
+    };
     const { state: after } = settleOffline(state, 48);
-    expect(after.heat).toBe(30);
+    expect(homeHeat(after)).toBe(30);
   });
 });
 

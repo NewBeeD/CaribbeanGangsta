@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createInitialState,
+  heatOf,
   applyIntent,
   basePriceAt,
   emptyInventory,
@@ -41,7 +42,9 @@ function seed(
   };
   return {
     ...state,
-    heat: opts.heat ?? state.heat,
+    ...(opts.heat !== undefined
+      ? { countryHeat: opts.heat > 0 ? { [home.countryId]: opts.heat } : {}, notoriety: 0 }
+      : {}),
     stashes: [nextHome, ...state.stashes.slice(1)],
   };
 }
@@ -138,7 +141,8 @@ describe('computeBustProbability — clamp and fairness', () => {
       crew: [spawnCrew('deon', { id: 'c1', loyalty: 100 })],
     };
     expect(computeBustProbability(calm, 'weed', 1, 'marigot-bay')).toBe(BUST_MIN);
-    const hot = seed(createInitialState('ceil'), { heat: 100 });
+    // Heat is per-country (v30) — the DEAL's country must be the hot one.
+    const hot: GameState = { ...createInitialState('ceil'), countryHeat: { miami: 100 } };
     expect(computeBustProbability(hot, 'arms', 500, 'miami')).toBe(BUST_MAX);
   });
 });
@@ -332,7 +336,8 @@ describe('resolveDeal — sell (fairness law, GDD §8)', () => {
     expect(seized.dirtyCash).toBe(5000); // stored dirty cash is UNTOUCHED (B2)
     expect(seized.inventory.cocaine).toBe(150); // 200 − 50 moved product lost
     expect(home).toEqual(homeBefore); // the other location is not touched
-    expect(bust.state.heat).toBeGreaterThan(50); // heat spikes on a bust
+    // The spike lands where the table was — Miami, not home (per-country heat, v30).
+    expect(heatOf(bust.state, 'miami')).toBeGreaterThan(heatOf(base, 'miami'));
     expect(bust.cashDelta).toBe(0); // nothing but the table walked
   });
 
@@ -349,7 +354,8 @@ describe('resolveDeal — sell (fairness law, GDD §8)', () => {
       rngState = bust.state.rngState;
     }
     expect(bust.outcome).toBe('bust');
-    expect(bust.state.investigationUntilHours).toBe(
+    // The file opens where the bust landed — Miami (per-country windows, v30).
+    expect(bust.state.investigations['miami']).toBe(
       bust.state.clock.hours + bust.state.config.heat.INVESTIGATION_HOURS,
     );
     const line = bust.state.pendingChoices.find((c) => c.kind === 'investigation');

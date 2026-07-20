@@ -27,6 +27,7 @@ import { computeBustProbability } from '@/engine/deals';
 import { tick } from '@/engine/clock';
 import { MIGRATIONS } from '@/store/persistence';
 import { runBatchSim } from '@/telemetry/simulation';
+import { homeHeat, withHomeHeat } from './heatTestUtils';
 
 describe('GameConfig — the single typed balance surface (Prompt 26)', () => {
   it('is plain, JSON-cloneable data (it lives on GameState and must save/load)', () => {
@@ -95,11 +96,11 @@ describe('injection — two tunings, identical seeds, different outcomes', () =>
 
   it('ticking the same seed under two tunings diverges; same tuning does not', () => {
     const hotDecay = tunedConfig({ heat: { HEAT_DECAY_RATE_PER_HOUR: 0.5 } });
-    const a = tick({ ...createInitialState('tick-seed'), heat: 50 }, 12);
-    const b = tick({ ...createInitialState('tick-seed'), heat: 50 }, 12);
-    const c = tick({ ...createInitialState('tick-seed', hotDecay), heat: 50 }, 12);
-    expect(b.heat).toBe(a.heat);
-    expect(c.heat).toBeLessThan(a.heat); // heat sheds 10× faster under the alt tuning
+    const a = tick(withHomeHeat(createInitialState('tick-seed'), 50), 12);
+    const b = tick(withHomeHeat(createInitialState('tick-seed'), 50), 12);
+    const c = tick(withHomeHeat(createInitialState('tick-seed', hotDecay), 50), 12);
+    expect(homeHeat(b)).toBe(homeHeat(a));
+    expect(homeHeat(c)).toBeLessThan(homeHeat(a)); // heat sheds 10× faster under the alt tuning
   });
 
   it('the batch sim runs alternate tunings with no code changes (Prompt 25 × 26)', () => {

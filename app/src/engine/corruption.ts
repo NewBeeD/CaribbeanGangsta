@@ -30,7 +30,7 @@
  */
 
 import { restoreRng } from './rng';
-import { addHeat } from './heat';
+import { addHeat, effectiveHeat, hottestHeat } from './heat';
 import { HEAT_MAX } from './config/heat';
 import {
   OFFICIAL_LOYALTY_MAX,
@@ -168,7 +168,8 @@ export function quoteBribe(
 ): BribeQuote {
   const cfg = state.config.corruption;
   const value = Math.max(0, shipmentValue);
-  const heat = clamp(state.heat / HEAT_MAX, 0, 1);
+  // The port's OWN effective heat prices the ask — a hot port knows its leverage.
+  const heat = clamp(effectiveHeat(state, portId) / HEAT_MAX, 0, 1);
   const fraction = clamp(
     cfg.PORT_BRIBE_BASE_FRACTION,
     cfg.PORT_BRIBE_MIN_FRACTION,
@@ -442,6 +443,55 @@ export function hire(
 }
 
 /**
+ * Move a customs chief's standing paid port to a different port country — the
+ * reassign follow-up to the hire-time pick (design/09 B.2). The old standing
+ * entry (no expiry) lapses, the new port becomes standing, and the move is
+ * remembered at zero loyalty delta (a routine order, not a grievance — it never
+ * feeds the flip arc). Free: the weekly retainer is what pays for the coverage.
+ * No-op for an unknown id, an official whose benefit isn't the standing port,
+ * or a port already standing.
+ */
+export function reassignCustomsPort(
+  state: GameState,
+  officialId: string,
+  portId: string,
+): GameState {
+  const tie = findTie(state, officialId);
+  if (!tie) return state;
+  if (findOfficial(tie.officialId)?.benefit !== 'port-seizure-floor') return state;
+  if (
+    state.corruption.paidPorts.some(
+      (p) => p.portId === portId && p.paidUntilHours === undefined,
+    )
+  ) {
+    return state;
+  }
+
+  const standing: PaidPort = {
+    portId,
+    seizurePct: state.config.corruption.PORT_PAID_SEIZURE,
+    paidAtHours: state.clock.hours,
+    // No `paidUntilHours` — standing while the customs chief is on payroll.
+  };
+  // Drop the old standing entry (expiring one-off bribes survive), then add the new.
+  const paidPorts = upsertPaidPort(
+    state.corruption.paidPorts.filter((p) => p.paidUntilHours !== undefined),
+    standing,
+  );
+  const next: GameState = {
+    ...state,
+    corruption: { ...state.corruption, paidPorts },
+  };
+  return applyOfficialLoyalty(
+    next,
+    officialId,
+    0,
+    'port-reassigned',
+    `You moved ${tie.name}'s coverage to a new port.`,
+  );
+}
+
+/**
  * Remove an official from the payroll — the violent/clean-break path (design/09
  * B.2 "remove them"). Drops any STANDING paid port they were maintaining (a
  * customs chief's port reverts to base seizure). No-op for an unknown id.
@@ -512,7 +562,7 @@ function businessLevel(state: GameState): number {
  * bar to actually be asked.
  */
 export function computeRaiseAsk(state: GameState, official: OfficialTie): number {
-  const heat = clamp(state.heat / HEAT_MAX, 0, 1);
+  const heat = clamp(hottestHeat(state) / HEAT_MAX, 0, 1);
   const raw =
     official.retainerPerWeek *
     (1 + businessLevel(state)) *
@@ -718,7 +768,7 @@ export function officialFlipTarget(
 ): BetrayalStage | 'none' {
   if (official.isWire) return 'flipped';
   const crew = state.config.crew;
-  const heatOverComfort = state.heat > official.comfortHeat;
+  const heatOverComfort = hottestHeat(state) > official.comfortHeat;
   if (!officialHasGrievance(official) && !heatOverComfort) return 'none';
   const L = official.loyalty;
   if (L < crew.BETRAYAL_FLIP_LOYALTY) return 'flipped';

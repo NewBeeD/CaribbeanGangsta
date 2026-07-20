@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { homeHeat, withHomeHeat } from './heatTestUtils';
 import {
   createInitialState,
   emptyCrewSkills,
+  heatOf,
+  hottestCountry,
   // beats
   BEAT_TRIGGERS,
   // cards — engine surface
@@ -110,7 +113,9 @@ describe('cards — applyChoice applies declared effects through reducers, deter
     const base = createInitialState('riv');
     const after = applyChoice(base, 'RIV-01', 0);
     expect(after.reputation.street).toBe(base.reputation.street + 2);
-    expect(after.heat).toBe(base.heat + 6);
+    // Card heat is context-free — it lands on the hottest country (fallback rule).
+    const target = hottestCountry(base);
+    expect(heatOf(after, target)).toBe(heatOf(base, target) + 6);
     expect(after.flags[SILVIO_HOSTILE_FLAG]).toBe(true);
     // firesCard queues the next scene in the chain.
     expect(after.pendingChoices.some((p) => p.id.startsWith('card-RIV-02-'))).toBe(true);
@@ -143,9 +148,9 @@ describe('cards — applyEffect routes each effect kind through its reducer', ()
   });
 
   it('heat clamps at the meter ceiling via addHeat', () => {
-    const base = { ...createInitialState('heat'), heat: 98 };
+    const base = withHomeHeat(createInitialState('heat'), 98);
     const after = applyEffect(base, { kind: 'heat', amount: 50 });
-    expect(after.heat).toBe(100);
+    expect(homeHeat(after)).toBe(100);
   });
 
   it('inventory never drops below zero', () => {

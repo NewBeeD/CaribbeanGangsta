@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { totalHeat, withHomeHeat } from './heatTestUtils';
 import {
   createInitialState,
   tick,
@@ -35,9 +36,8 @@ import { migrateEnvelope } from '@/store';
 function borrower(seed: string, streetRep = 100): GameState {
   const base = createInitialState(seed);
   return {
-    ...base,
+    ...withHomeHeat(base, 0),
     clock: { ...base.clock, hours: 24, day: 2 },
-    heat: 0,
     reputation: { ...base.reputation, street: streetRep },
   };
 }
@@ -269,7 +269,7 @@ describe('default ladder advances one readable rung past due, each a beat (guara
     for (let day = 3; day <= 7; day++) {
       s = setDay(s, day);
       const rng = restoreRng(s.rngState);
-      const heatBefore = s.heat;
+      const heatBefore = totalHeat(s);
       s = { ...defaultLadder(s, rng), rngState: rng.getState() };
       rungs.push(s.debt.ladderRung);
       stashCounts.push(s.stashes.length);
@@ -277,7 +277,7 @@ describe('default ladder advances one readable rung past due, each a beat (guara
         expect(s.debt.rate).toBeCloseTo(rate + LADDER_VIG_RATE_INCREASE, 5); // rung 1 = vig
         vigApplied = true;
       }
-      if (s.debt.ladderRung === 2) expect(s.heat).toBe(heatBefore); // rung 2 visit is heat-free
+      if (s.debt.ladderRung === 2) expect(totalHeat(s)).toBe(heatBefore); // rung 2 visit is heat-free
       rate = s.debt.rate;
     }
 

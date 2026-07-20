@@ -18,7 +18,7 @@
  * deposited.
  */
 
-import { addHeat } from './heat';
+import { addHeat, homeCountryId } from './heat';
 import { effectiveCapacity, stashUnits } from './storage';
 import { productionLieutenantBonus } from './crew';
 import {
@@ -136,7 +136,8 @@ export function productionStep(state: GameState, dtHours: number, mode: TickMode
       }),
     };
   }
-  return heat > 0 ? addHeat(next, heat, 'production.op') : next;
+  // Ops yield into the home stash — the lab's hum is HOME-country noise.
+  return heat > 0 ? addHeat(next, heat, 'production.op', homeCountryId(state)) : next;
 }
 
 // --- Op operations ------------------------------------------------------------

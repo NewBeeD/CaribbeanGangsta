@@ -3,6 +3,7 @@ import {
   createInitialState,
   applyIntent,
   dismissAllPendingChoices,
+  heatOf,
   isConsequentialChoice,
   netWorth,
   totalDirtyCash,
@@ -30,7 +31,10 @@ describe('createInitialState', () => {
     expect(state.stashes).toHaveLength(1);
     expect(totalDirtyCash(state)).toBe(state.world.startingCountry.startingCash);
     expect(state.cleanCash).toBe(0);
-    expect(state.heat).toBe(state.world.startingCountry.heatBaseline);
+    expect(heatOf(state, state.world.startingCountry.id)).toBe(
+      state.world.startingCountry.heatBaseline,
+    );
+    expect(state.notoriety).toBe(0);
     // One rival-relationship entry per world rival.
     expect(state.rivals.map((r) => r.id)).toEqual(state.world.rivals.map((r) => r.id));
     expect(state.highScore.peakNetWorth).toBe(netWorth(state));

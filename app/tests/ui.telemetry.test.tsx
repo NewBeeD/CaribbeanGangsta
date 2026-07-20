@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { createInitialState } from '@/engine';
+import { withHomeHeat } from './heatTestUtils';
 import type { AnyTelemetryEvent, TelemetryEventMap, TelemetryEventName } from '@/telemetry';
 import { TelemetryPanel } from '@/ui/shell/TelemetryOverlay';
 import { describeEvent, telemetryOverlayModel } from '@/ui/shell/telemetryOverlay.model';
@@ -81,7 +82,7 @@ describe('telemetryOverlayModel — the live funnel (Prompt 25; design/06)', () 
 
   it('reads the live state for idle rate, heat and the spiral stage', () => {
     const state = createInitialState('overlay-state');
-    const m = telemetryOverlayModel([], { ...state, heat: 37 }, 0);
+    const m = telemetryOverlayModel([], withHomeHeat(state, 37), 0);
     expect(m.heat).toBe(37);
     expect(m.spiralStage).toBe('stable');
   });

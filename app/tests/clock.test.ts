@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialState, tick, settleOffline, type GameState } from '@/engine';
+import { totalHeat } from './heatTestUtils';
 
 describe('tick — clock advancement', () => {
   it('accumulates in-game hours and derives day/week', () => {
@@ -88,7 +89,7 @@ describe('settleOffline — frozen/safe (GDD §6; design/10 §4.2)', () => {
       expect(settled.runStatus).not.toBe('dead');
       expect(settled.runStatus).not.toBe('prison');
       // Frozen: heat never rises while away.
-      expect(settled.heat).toBeLessThanOrEqual(base.heat);
+      expect(totalHeat(settled)).toBeLessThanOrEqual(totalHeat(base));
     }
   });
 

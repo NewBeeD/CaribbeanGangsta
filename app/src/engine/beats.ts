@@ -24,7 +24,7 @@
  */
 
 import { hasBankedWin } from './deals';
-import { tierForHeat } from './heat';
+import { currentTier } from './heat';
 import { lifelineOffer } from './debt';
 import { evaluateSpiral } from './endgame';
 import {
@@ -199,7 +199,7 @@ export const BEAT_TRIGGERS: readonly BeatTrigger[] = [
     major: true,
     negative: false,
     summary: 'Heat crosses the line. The task force hunting you gets a name and a face — this is personal now.',
-    when: (s) => tierForHeat(s.heat, s.config.heat.HEAT_TIERS) === 'cia',
+    when: (s) => currentTier(s) === 'cia',
   },
   {
     beatId: 'beat.official-flip',

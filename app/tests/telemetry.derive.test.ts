@@ -298,7 +298,7 @@ describe('auditOfflineFreeze — absence never punishes (design/10 §6; GDD §6)
 
   it('flags any movement against the player', () => {
     const base = createInitialState('freeze-violation');
-    const punished: GameState = { ...base, heat: base.heat + 10 };
+    const punished: GameState = { ...base, notoriety: base.notoriety + 10 };
     expect(auditOfflineFreeze(base, punished).violation).toBe(true);
 
     const robbed: GameState = {

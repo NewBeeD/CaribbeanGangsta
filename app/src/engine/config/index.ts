@@ -48,6 +48,9 @@ import {
 } from './deals';
 import {
   HEAT_TIERS,
+  NOTORIETY_SHARE,
+  NOTORIETY_DECAY_RATE_PER_HOUR,
+  NOTORIETY_HEAT_WEIGHT,
   HEAT_DECAY_RATE_PER_HOUR,
   LIE_LOW_DECAY_MULTIPLIER,
   EMPIRE_DECAY_SLOWDOWN,
@@ -60,8 +63,6 @@ import {
   RAID_EMPIRE_FACTOR,
   SHIPMENT_LAUNCH_HEAT_FACTOR,
   SHIPMENT_LANDING_HEAT_FACTOR,
-  CONCENTRATION_UNITS_THRESHOLD,
-  CONCENTRATION_HEAT_PER_UNIT_HOUR,
   PATTERN_DECAY_PER_HOUR,
   PATTERN_HEAT_PER_USE,
   PATTERN_ODDS_PER_USE,
@@ -220,6 +221,8 @@ import {
   CARGO_HEAT_WEIGHT,
   DEST_RISK_WEIGHT,
   PORT_PROTECTION_WEIGHT,
+  ORIGIN_HEAT_ODDS_WEIGHT,
+  DEST_HEAT_ODDS_WEIGHT,
   PAID_PORT_RELIEF,
   CARGO_HEAT_FULL_RISK,
   MIN_LEG_DISTANCE,
@@ -400,6 +403,10 @@ export interface DealsTuning {
 /** Heat & law enforcement (design/01 §4; design/07 §5). */
 export interface HeatTuning {
   readonly HEAT_TIERS: readonly HeatTierConfig[];
+  /** The per-country heat map's global carrier (heat redesign "B"). */
+  readonly NOTORIETY_SHARE: number;
+  readonly NOTORIETY_DECAY_RATE_PER_HOUR: number;
+  readonly NOTORIETY_HEAT_WEIGHT: number;
   readonly HEAT_DECAY_RATE_PER_HOUR: number;
   readonly LIE_LOW_DECAY_MULTIPLIER: number;
   readonly EMPIRE_DECAY_SLOWDOWN: number;
@@ -413,8 +420,6 @@ export interface HeatTuning {
   /** The six-source heat model (design/13 B5; Prompt 44). */
   readonly SHIPMENT_LAUNCH_HEAT_FACTOR: number;
   readonly SHIPMENT_LANDING_HEAT_FACTOR: number;
-  readonly CONCENTRATION_UNITS_THRESHOLD: number;
-  readonly CONCENTRATION_HEAT_PER_UNIT_HOUR: number;
   readonly PATTERN_DECAY_PER_HOUR: number;
   readonly PATTERN_HEAT_PER_USE: number;
   readonly PATTERN_ODDS_PER_USE: number;
@@ -593,6 +598,9 @@ export interface TransportTuning {
   readonly CARGO_HEAT_WEIGHT: number;
   readonly DEST_RISK_WEIGHT: number;
   readonly PORT_PROTECTION_WEIGHT: number;
+  /** Origin/destination effective-heat weights on the odds (heat redesign "B"). */
+  readonly ORIGIN_HEAT_ODDS_WEIGHT: number;
+  readonly DEST_HEAT_ODDS_WEIGHT: number;
   readonly PAID_PORT_RELIEF: number;
   readonly CARGO_HEAT_FULL_RISK: number;
   readonly MIN_LEG_DISTANCE: number;
@@ -825,6 +833,9 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   },
   heat: {
     HEAT_TIERS,
+    NOTORIETY_SHARE,
+    NOTORIETY_DECAY_RATE_PER_HOUR,
+    NOTORIETY_HEAT_WEIGHT,
     HEAT_DECAY_RATE_PER_HOUR,
     LIE_LOW_DECAY_MULTIPLIER,
     EMPIRE_DECAY_SLOWDOWN,
@@ -837,8 +848,6 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     RAID_EMPIRE_FACTOR,
     SHIPMENT_LAUNCH_HEAT_FACTOR,
     SHIPMENT_LANDING_HEAT_FACTOR,
-    CONCENTRATION_UNITS_THRESHOLD,
-    CONCENTRATION_HEAT_PER_UNIT_HOUR,
     PATTERN_DECAY_PER_HOUR,
     PATTERN_HEAT_PER_USE,
     PATTERN_ODDS_PER_USE,
@@ -987,6 +996,8 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
     CARGO_HEAT_WEIGHT,
     DEST_RISK_WEIGHT,
     PORT_PROTECTION_WEIGHT,
+    ORIGIN_HEAT_ODDS_WEIGHT,
+    DEST_HEAT_ODDS_WEIGHT,
     PAID_PORT_RELIEF,
     CARGO_HEAT_FULL_RISK,
     MIN_LEG_DISTANCE,

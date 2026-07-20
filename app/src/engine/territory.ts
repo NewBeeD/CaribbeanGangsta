@@ -181,12 +181,17 @@ export function expansionOnCooldown(state: GameState): boolean {
 // --- Heat ceiling (heat gate) ------------------------------------------------
 
 /**
- * Whether the run is too HOT to open a new country: heat at or above
+ * Whether the run is too HOT to open a new country: the HOTTEST country's
+ * effective heat (local + weighted notoriety — inlined here to keep this module
+ * free of a `heat.ts` import, see the header) at or above
  * `TERRITORY_MAX_HEAT_TO_EXPAND` (0–100 meter). Expansion is loud — cool down
  * first. Reinforcing an already-held country is never blocked by this.
  */
 export function heatBlocksExpansion(state: GameState): boolean {
-  return state.heat >= state.config.territory.TERRITORY_MAX_HEAT_TO_EXPAND;
+  const cfg = state.config.heat;
+  const peakLocal = Object.values(state.countryHeat).reduce((max, h) => Math.max(max, h), 0);
+  const hottest = Math.min(100, peakLocal + cfg.NOTORIETY_HEAT_WEIGHT * state.notoriety);
+  return hottest >= state.config.territory.TERRITORY_MAX_HEAT_TO_EXPAND;
 }
 
 // --- Cross-region capital floor (net-worth gate) -----------------------------

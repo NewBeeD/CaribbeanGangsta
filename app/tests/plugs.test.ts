@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  heatOf,
   COUNTRIES,
   PLUG_MEETING_HEAT,
   applyIntent,
@@ -60,7 +61,8 @@ describe('buyPlug — a pure money gate, never a roll or a time lock', () => {
     expect(result.cost).toBe(cost);
     expect(result.state.cleanCash).toBe(500);
     expect(hasPlug(result.state, 'colombia')).toBe(true);
-    expect(result.state.heat).toBe(state.heat + PLUG_MEETING_HEAT);
+    // The meeting's heat lands on the plug's country (per-country heat, v30).
+    expect(heatOf(result.state, 'colombia')).toBe(heatOf(state, 'colombia') + PLUG_MEETING_HEAT);
     expect(plugQuote(result.state, 'colombia')?.connected).toBe(true);
   });
 

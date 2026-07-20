@@ -6,8 +6,9 @@
  *
  *  1. **Shipment volume & route risk** — launch/landing heat scaled by the
  *     interdiction quote's own inputs (`travel.ts` calls `shipmentLegHeat`).
- *  2. **Storage concentration** — an ACTIVE-only passive term per stash holding
- *     units above the config'd threshold (this module's tick step).
+ *  2. **Storage concentration** — RETIRED: holding product is COLD. Sitting on
+ *     inventory adds zero heat; only MOVING it draws attention (source 1), so
+ *     lying low on a full warehouse actually cools you down.
  *  3. **Repeated patterns** — per-origin-port `recentUse` counters that decay
  *     over active hours; reuse inside the window surcharges heat AND odds
  *     (`travel.ts` reads `recentUseOf`; this step decays the counters).
@@ -28,41 +29,33 @@
  * offline neither hums, decays a pattern, nor burns an investigation hour.
  */
 
-import { addHeat } from './heat';
-import { stashUnits } from './storage';
+import { addNotoriety } from './heat';
+import { findCountry } from './config/countries';
 import type { GameState, PendingChoice } from './state';
 
-// --- Passive terms (sources 2 + 6): the itemization IS the application --------
+// --- Passive terms (source 6): the itemization IS the application -------------
 
 /** One passive heat source line — what the Heat screen shows per source. */
 export interface PassiveHeatTerm {
-  /** Stable id (`concentration:<stashId>` | `empire-size`). */
+  /** Stable id (`empire-size`). */
   readonly id: string;
-  /** Readable label ("Fat stash — Home Stash (120 over)"). */
+  /** Readable label ("Empire footprint — size 12 keeps your name warm"). */
   readonly label: string;
-  /** Heat points added per ACTIVE hour — the number the tick step applies. */
+  /** NOTORIETY points added per ACTIVE hour — the number the tick step applies. */
   readonly perHour: number;
 }
 
 /**
- * Every ACTIVE passive heat term right now (design/13 B5.2/B5.6): a line per
- * stash holding units above `CONCENTRATION_UNITS_THRESHOLD`, plus the empire-
- * size term once the operation is big enough to register. This is the SAME list
- * the `heat-sources` tick step sums — shown = applied.
+ * Every ACTIVE passive heat term right now (design/13 B5.6): the empire-size
+ * term once the operation is big enough to register. Since the per-country
+ * rework (v30) this hum feeds global NOTORIETY, not any one port — overall
+ * footprint is about your NAME. Stored product adds NOTHING here — storage is
+ * cold (the retired B5.2 concentration hum). This is the SAME list the
+ * `heat-sources` tick step sums — shown = applied.
  */
 export function passiveHeatTerms(state: GameState): readonly PassiveHeatTerm[] {
   const cfg = state.config.heat;
   const terms: PassiveHeatTerm[] = [];
-
-  for (const stash of state.stashes) {
-    const over = stashUnits(stash) - cfg.CONCENTRATION_UNITS_THRESHOLD;
-    if (over <= 0) continue;
-    terms.push({
-      id: `concentration:${stash.id}`,
-      label: `Fat stash — ${stash.name} (${Math.floor(over)} units over the line)`,
-      perHour: over * cfg.CONCENTRATION_HEAT_PER_UNIT_HOUR,
-    });
-  }
 
   const size = state.stashes.length + state.fronts.length + state.crew.length;
   // The first EMPIRE_HEAT_FREE_SIZE units are ambient — a fresh run never hums.
@@ -70,7 +63,7 @@ export function passiveHeatTerms(state: GameState): readonly PassiveHeatTerm[] {
   if (empirePerHour > 0) {
     terms.push({
       id: 'empire-size',
-      label: `Empire footprint — size ${size} draws eyes`,
+      label: `Empire footprint — size ${size} keeps your name warm`,
       perHour: empirePerHour,
     });
   }
@@ -78,7 +71,7 @@ export function passiveHeatTerms(state: GameState): readonly PassiveHeatTerm[] {
   return terms;
 }
 
-/** Sum of every passive term, heat/hour — the rate the tick step applies. */
+/** Sum of every passive term, notoriety/hour — the rate the tick step applies. */
 export function passiveHeatPerHour(state: GameState): number {
   return passiveHeatTerms(state).reduce((sum, t) => sum + t.perHour, 0);
 }
@@ -120,28 +113,35 @@ function decayRecentUse(state: GameState, dtHours: number): GameState {
 // --- Investigation window (source 5) --------------------------------------------
 
 /**
- * Open the post-bust INVESTIGATION window if this bust was MAJOR — its heat
- * spike at or above `INVESTIGATION_SPIKE_THRESHOLD` (amount- and type-scaled by
- * construction, since the spike is `heatPerUnit × qty × multiplier`). Disclosed
- * the moment it opens: a feed line names the slower decay, the raised raid odds,
- * and the ACTIVE hours on the clock. Re-opening extends an already-open window
- * (the fresh bust restarts the clock; never stacks multipliers).
+ * Open the post-bust INVESTIGATION window in `countryId` if this bust was MAJOR
+ * — its heat spike at or above `INVESTIGATION_SPIKE_THRESHOLD` (amount- and
+ * type-scaled by construction, since the spike is `heatPerUnit × qty ×
+ * multiplier`). Per-country since v30: the file opens where the bust landed.
+ * Disclosed the moment it opens: a feed line names the country, the slower
+ * decay, the raised raid odds, and the ACTIVE hours on the clock. Re-opening
+ * extends an already-open window (the fresh bust restarts that country's clock;
+ * never stacks multipliers).
  */
-export function maybeOpenInvestigation(state: GameState, spike: number): GameState {
+export function maybeOpenInvestigation(
+  state: GameState,
+  spike: number,
+  countryId: string,
+): GameState {
   const cfg = state.config.heat;
   if (spike < cfg.INVESTIGATION_SPIKE_THRESHOLD) return state;
   const until = state.clock.hours + cfg.INVESTIGATION_HOURS;
+  const name = findCountry(countryId)?.name ?? countryId;
   const line: PendingChoice = {
-    id: `investigation-${state.clock.hours}`,
+    id: `investigation-${countryId}-${state.clock.hours}`,
     kind: 'investigation',
     summary:
-      `That bust opened a file. For the next ${cfg.INVESTIGATION_HOURS} played hours ` +
-      `heat cools slower and raids run ×${cfg.INVESTIGATION_RAID_MULTIPLIER} likely.`,
+      `That bust opened a file in ${name}. For the next ${cfg.INVESTIGATION_HOURS} played hours ` +
+      `heat there cools slower and raids run ×${cfg.INVESTIGATION_RAID_MULTIPLIER} likely.`,
     createdAtHours: state.clock.hours,
   };
   return {
     ...state,
-    investigationUntilHours: until,
+    investigations: { ...state.investigations, [countryId]: until },
     pendingChoices: [...state.pendingChoices, line],
   };
 }
@@ -150,14 +150,14 @@ export function maybeOpenInvestigation(state: GameState, spike: number): GameSta
 
 /**
  * The `heat-sources` tick step (registered ACTIVE-only in clock.ts, right before
- * `heat-decay`): apply the passive terms' summed heat over `dtHours`, then decay
- * the repeated-pattern counters. Deterministic — no randomness, so it never
- * touches the RNG stream. Offline never runs it (GDD §6): a fat stash doesn't
- * hum while you're away, and a pattern doesn't cool either.
+ * `heat-decay`): apply the passive terms' summed NOTORIETY over `dtHours`, then
+ * decay the repeated-pattern counters. Deterministic — no randomness, so it
+ * never touches the RNG stream. Offline never runs it (GDD §6): the empire
+ * doesn't hum while you're away, and a pattern doesn't cool either.
  */
 export function heatSourcesStep(state: GameState, dtHours: number): GameState {
   if (dtHours <= 0) return state;
-  const heat = passiveHeatPerHour(state) * dtHours;
-  const heated = heat > 0 ? addHeat(state, heat, 'heat.passive') : state;
+  const hum = passiveHeatPerHour(state) * dtHours;
+  const heated = hum > 0 ? addNotoriety(state, hum) : state;
   return decayRecentUse(heated, dtHours);
 }
